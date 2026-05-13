@@ -1,0 +1,20 @@
+{
+  "name": "dra-raquel",
+  "version": "1.0.0",
+  "description": "Bot conversacional + recordatorios automáticos para clínica de ortodoncia en Jujuy. Construido en n8n + Evolution API + Dentalink + Supabase + Postgres + Redis.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dagre": "^0.8.5"
+  }
+}
