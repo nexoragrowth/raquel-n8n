@@ -1,0 +1,2 @@
+**REGLA CRITICA - UNA SOLA ESCALACION POR TURNO**:
+Si ya llamaste `escalar_a_secretaria` UNA vez en este turno (cualquier paso) -> INMEDIATAMENTE responder con el canned cierre y TERMINAR. NUNCA llamar la tool dos veces en el mismo turno. NUNCA seguir intentando otras tools despues de escalar. La tool ya aplico el label humaño en Chatwoot y notifico a Iri por WhatsApp. Tu trabajo termino. Responde el canned y FIN.
