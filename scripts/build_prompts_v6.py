@@ -51,6 +51,7 @@ RECIPES = {
         "regla_critica_escalacion.md",
         "confirmar_idempotencia.md",
         "memoria_historica.md",
+        "paciente_context_runtime.md",
     ],
     "Sub-Agent Cancelar": [
         "r0_full.md",
@@ -60,6 +61,7 @@ RECIPES = {
         "cancelar_tools.md",
         "regla_critica_escalacion.md",
         "memoria_historica.md",
+        "paciente_context_runtime.md",
     ],
     "Sub-Agent Agendar": [
         "r0_full.md",
@@ -69,12 +71,14 @@ RECIPES = {
         "agendar_anti_alucinacion.md",
         "regla_critica_escalacion.md",
         "memoria_historica.md",
+        "paciente_context_runtime.md",
     ],
     "Sub-Agent Urgencia": [
         "r0_full.md",
         "header_common.md",
         "urgencia_funcion.md",
         "regla_critica_escalacion.md",
+        "paciente_context_runtime.md",
     ],
     "Sub-Agent General": [
         "r0_general.md",
@@ -87,6 +91,7 @@ RECIPES = {
         "general_orden_decision.md",
         "regla_critica_escalacion.md",
         "memoria_historica.md",
+        "paciente_context_runtime.md",
     ],
 }
 
@@ -100,11 +105,10 @@ def read_partial(name: str) -> str:
 
 def assemble(agent: str) -> str:
     parts = [read_partial(n) for n in RECIPES[agent]]
-    # General had leading "=" before R0 in the original. Reproduce.
+    # FIX 2026-06-04: TODOS los sub-agents necesitan el prefijo "=" para que n8n
+    # evalúe las expresiones {{ }} del systemMessage (sino llegan literales al LLM).
     body = "\n\n".join(parts)
-    if agent == "Sub-Agent General":
-        body = "=" + body
-    return body
+    return "=" + body
 
 
 def get_live() -> dict:
