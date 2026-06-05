@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Bot Áurea — Arquitectura completa</title>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#ede9fe',
+      primaryBorderColor: '#7c3aed',
+      primaryTextColor: '#1e1b4b',
+      lineColor: '#94a3b8',
+      fontSize: '14px',
+      fontFamily: '-apple-system, "Segoe UI", Roboto, sans-serif',
+    },
+    flowchart: { curve: 'basis', padding: 20 },
+  });
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1f2937;
+    line-height: 1.6;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 32px 28px;
+    background: #fafaf9;
+  }
+  h1 {
+    font-size: 30px;
+    color: #0f172a;
+    margin: 0 0 4px;
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    color: #64748b;
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+  h2 {
+    font-size: 22px;
+    color: #0f172a;
+    margin: 44px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e2e8f0;
+  }
+  h3 { font-size: 17px; color: #1e293b; margin: 24px 0 10px; }
+  p { margin: 10px 0; }
+  ul { margin: 10px 0; padding-left: 22px; }
+  li { margin: 5px 0; }
+  code {
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+  }
+  .badge.gpt5 { background: #ddd6fe; color: #5b21b6; }
+  .badge.mini { background: #bbf7d0; color: #14532d; }
+  .badge.nano { background: #fef3c7; color: #92400e; }
+  .badge.deterministic { background: #e0e7ff; color: #312e81; }
+  .badge.tool { background: #fce7f3; color: #9d174d; }
+  .badge.storage { background: #cffafe; color: #155e75; }
+
+  .callout {
+    background: #fff;
+    border-left: 4px solid #7c3aed;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .callout.warn { border-left-color: #f59e0b; background: #fffbeb; }
+  .callout.ok { border-left-color: #10b981; background: #ecfdf5; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card h4 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: #0f172a;
+  }
+  .card .meta {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+  .card p { font-size: 14px; margin: 6px 0; }
+
+  .mermaid {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 24px;
+    margin: 20px 0;
+    text-align: center;
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+  }
+  th {
+    background: #f8fafc;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #475569;
+    font-weight: 600;
+  }
+  td { padding: 10px 14px; font-size: 14px; border-top: 1px solid #f1f5f9; }
+  tr:hover td { background: #fafaf9; }
+
+  .toc {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px 22px;
+    margin: 20px 0 36px;
+  }
+  .toc a {
+    color: #5b21b6;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .toc a:hover { text-decoration: underline; }
+  .toc ul { list-style: none; padding-left: 0; }
+  .toc li { padding: 4px 0; font-size: 14px; }
+  .toc li::before { content: "→ "; color: #94a3b8; }
+
+  .label { font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+</head>
+<body>
+
+<h1>Bot Áurea — Arquitectura completa</h1>
+<div class="subtitle">Sistema de agente conversacional para Áurea Odontología Estética · Dra. Raquel Rodríguez · San Salvador de Jujuy</div>
+
+<div class="callout">
+<strong>En una línea:</strong> el bot recibe mensajes de WhatsApp, los entiende, decide si tiene que <em>agendar</em>, <em>confirmar</em>, <em>cancelar</em>, <em>responder info</em> o <em>derivar a una persona</em>, y ejecuta la acción contra el sistema de turnos (Dentalink) — todo en menos de 6 segundos.
+</div>
+
+<div class="toc">
+  <div class="label">Índice</div>
+  <ul>
+    <li><a href="#overview">Vista de 10.000 metros</a></li>
+    <li><a href="#flujo">Flujo de un mensaje, paso a paso</a></li>
+    <li><a href="#agents">Los 6 agentes de IA</a></li>
+    <li><a href="#tools">Las 9 herramientas (qué puede hacer)</a></li>
+    <li><a href="#storage">Dónde se guarda todo</a></li>
+    <li><a href="#crons">Los procesos automáticos</a></li>
+    <li><a href="#safety">Las 3 capas de seguridad</a></li>
+    <li><a href="#stack">Stack técnico</a></li>
+  </ul>
+</div>
+
+<!-- ============================================ -->
+<h2 id="overview">Vista de 10.000 metros</h2>
+
+<div class="mermaid">
+graph LR
+  P[Paciente WhatsApp] --> E[Evolution API]
+  E --> N[n8n: workflow v6]
+  N --> D[Dentalink<br/>turnos]
+  N --> S[Supabase<br/>pacientes + memoria]
+  N --> R[Redis<br/>kill-switch]
+  N --> CW[Chatwoot<br/>takeover humano]
+  N -.->|escala| G[Grupo Iri+Dra+Lucas]
+  N --> P
+  style P fill:#fef3c7,stroke:#92400e
+  style E fill:#dbeafe,stroke:#1e40af
+  style N fill:#ede9fe,stroke:#7c3aed
+  style D fill:#fce7f3,stroke:#9d174d
+  style S fill:#cffafe,stroke:#155e75
+  style R fill:#fee2e2,stroke:#991b1b
+  style CW fill:#d1fae5,stroke:#065f46
+  style G fill:#fef3c7,stroke:#92400e
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h4>El bot SÍ hace</h4>
+    <ul>
+      <li>Agendar turnos nuevos</li>
+      <li>Mandar recordatorios 24h y 72h antes</li>
+      <li>Confirmar / cancelar / reprogramar turnos</li>
+      <li>Responder info canned: precio, horarios, dirección, alias</li>
+      <li>Detectar urgencias y derivarlas</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>El bot NUNCA hace</h4>
+    <ul>
+      <li>Diagnóstico ni opinión médica</li>
+      <li>Instrucciones operativas tipo "guardá", "tomá X"</li>
+      <li>Invitar al paciente con "venite ahora"</li>
+      <li>Validar comprobantes de pago (los recibe y deriva)</li>
+      <li>Cualquier cosa fuera de las 5 funciones de arriba</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<h2 id="flujo">Flujo de un mensaje, paso a paso</h2>
+
+<p>Cada vez que un paciente escribe, esto es lo que pasa por dentro:</p>
+
+<div class="mermaid">
+graph TD
+  M[Paciente escribe en WhatsApp] --> EV[Evolution recibe]
+  EV --> WH[Webhook a n8n v6]
+  WH --> VAL[Validador de payload<br/>shape + secret]
+  VAL --> KILL{¿Bot apagado?<br/>Redis kill-switch}
+  KILL -- sí --> END1[Fin: silencio]
+  KILL -- no --> LH{¿Label humano<br/>activo en Chatwoot?}
+  LH -- sí --> END2[Fin: humano contesta]
+  LH -- no --> BUF[Buffer 8s<br/>junta mensajes rápidos]
+  BUF --> GETP[Buscar paciente<br/>en Supabase + resumen historial]
+  GETP --> CTX[Build Router Context<br/>últimos 6 mensajes filtrados]
+  CTX --> ROUTER[Router AI clasifica intent]
+  ROUTER --> SUB{¿Qué intent?}
+  SUB -->|confirmar| SA1[Sub-Agent Confirmar]
+  SUB -->|cancelar| SA2[Sub-Agent Cancelar]
+  SUB -->|agendar| SA3[Sub-Agent Agendar]
+  SUB -->|urgencia| SA4[Sub-Agent Urgencia]
+  SUB -->|info / otro| SA5[Sub-Agent General]
+  SA1 --> FMT[Formatting Agent<br/>limpia formato WhatsApp]
+  SA2 --> FMT
+  SA3 --> FMT
+  SA4 --> FMT
+  SA5 --> FMT
+  FMT --> BAN{Banlist Validator<br/>regex de frases prohibidas}
+  BAN -- frase prohibida --> ESC[Escalar a grupo + label humano]
+  BAN -- ok --> SEND[Evolution: envía a WhatsApp]
+  SEND --> MEM[Guardar mensaje en memoria<br/>Postgres + Supabase]
+  ESC --> MEM
+  MEM --> END3[Fin]
+  style ROUTER fill:#bbf7d0,stroke:#14532d
+  style SA1 fill:#ddd6fe,stroke:#5b21b6
+  style SA2 fill:#ddd6fe,stroke:#5b21b6
+  style SA3 fill:#ddd6fe,stroke:#5b21b6
+  style SA4 fill:#bbf7d0,stroke:#14532d
+  style SA5 fill:#bbf7d0,stroke:#14532d
+  style FMT fill:#ddd6fe,stroke:#5b21b6
+  style BAN fill:#fee2e2,stroke:#991b1b
+  style ESC fill:#fef3c7,stroke:#92400e
+  style KILL fill:#f1f5f9,stroke:#475569
+  style LH fill:#f1f5f9,stroke:#475569
+</div>
+
+<p class="label">Cómo leer los colores:</p>
+<ul style="font-size:14px;">
+  <li><span class="badge gpt5">gpt-5</span> nodos morados — modelos más capaces (manejan tools de Dentalink)</li>
+  <li><span class="badge mini">gpt-5-mini</span> nodos verdes — modelos económicos (clasificación e info canned)</li>
+  <li><span class="badge deterministic">determinístico</span> nodos grises — código JS sin LLM (validaciones y switches)</li>
+</ul>
+
+<!-- ============================================ -->
+<h2 id="agents">Los 6 agentes de IA</h2>
+
+<p>El bot no es un solo modelo gigante: son <strong>6 agentes especializados</strong>. Uno decide a quién mandar el mensaje (Router), 5 hacen el trabajo, y un Formatting Agent post-procesa el output antes de mandarlo a WhatsApp.</p>
+
+<table>
+<thead>
+  <tr><th>Agente</th><th>Modelo</th><th>Función</th><th>Tools</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td><strong>Router</strong></td>
+    <td><span class="badge mini">gpt-5-mini</span></td>
+    <td>Lee el mensaje + contexto y decide a cuál de los 5 sub-agents mandar</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><strong>Sub-Agent Confirmar</strong></td>
+    <td><span class="badge gpt5">gpt-5</span></td>
+    <td>Confirma turnos cuando el paciente responde a un recordatorio (sí/dale/👍)</td>
+    <td>7 tools Dentalink + Supabase</td>
+  </tr>
+  <tr>
+    <td><strong>Sub-Agent Cancelar</strong></td>
+    <td><span class="badge gpt5">gpt-5</span></td>
+    <td>Cancela o reprograma turnos. Detecta multi-fichas (familias) y resuelve por contexto</td>
+    <td>8 tools incluyendo cancelar_turno + ver_turnos</td>
+  </tr>
+  <tr>
+    <td><strong>Sub-Agent Agendar</strong></td>
+    <td><span class="badge gpt5">gpt-5</span></td>
+    <td>Agenda turnos nuevos. Identifica al paciente, ofrece slots, reserva en Dentalink</td>
+    <td>7 tools incluyendo buscar_horarios + reservar_turno</td>
+  </tr>
+  <tr>
+    <td><strong>Sub-Agent Urgencia</strong></td>
+    <td><span class="badge mini">gpt-5-mini</span></td>
+    <td>Detecta dolor / aparato roto / sangrado → deriva al grupo</td>
+    <td>escalar_a_secretaria</td>
+  </tr>
+  <tr>
+    <td><strong>Sub-Agent General</strong></td>
+    <td><span class="badge mini">gpt-5-mini</span></td>
+    <td>Info canned: precio, horarios, dirección, alias bancario. Y silenciar lo no operativo</td>
+    <td>KB + escalar</td>
+  </tr>
+  <tr>
+    <td><strong>Formatting Agent</strong></td>
+    <td><span class="badge gpt5">gpt-5</span></td>
+    <td>Recibe el texto del sub-agent y lo deja listo para WhatsApp (formato hs, split, emojis)</td>
+    <td>—</td>
+  </tr>
+</tbody>
+</table>
+
+<div class="callout">
+<strong>Por qué dividir en 6 agentes y no uno solo:</strong> cada sub-agente tiene un system prompt enfocado en SU función. Eso reduce alucinaciones (Confirmar no sabe agendar, así que no inventa horarios), permite usar modelos más baratos donde no hace falta razonar tools (mini en Router y General), y hace que cada bug se aísle al agente correspondiente.
+</div>
+
+<!-- ============================================ -->
+<h2 id="tools">Las 9 herramientas (qué puede hacer)</h2>
+
+<p>Los sub-agents no escriben respuestas mágicas: para actuar sobre el mundo real necesitan <em>tools</em>. Cada tool es una función concreta que llama a un sistema externo.</p>
+
+<div class="grid-2">
+  <div class="card">
+    <h4>🔍 buscar_paciente_dentalink <span class="badge tool">read</span></h4>
+    <div class="meta">GET Dentalink /pacientes</div>
+    <p>Busca al paciente por los últimos 10 dígitos del celular o por apellido. Detecta multi-fichas (familias con un mismo número).</p>
+  </div>
+  <div class="card">
+    <h4>📅 buscar_horarios <span class="badge tool">read</span></h4>
+    <div class="meta">GET Dentalink /citas</div>
+    <p>Busca slots disponibles para una fecha. Lee y solo informa — no agenda nada por sí solo.</p>
+  </div>
+  <div class="card">
+    <h4>📋 ver_turnos_paciente <span class="badge tool">read</span></h4>
+    <div class="meta">GET Dentalink /citas?id_paciente=X</div>
+    <p>Trae los turnos de un paciente. Se usa para evitar doble-booking y para resolver "el de julio".</p>
+  </div>
+  <div class="card">
+    <h4>✅ reservar_turno <span class="badge tool">write</span></h4>
+    <div class="meta">POST Dentalink /citas</div>
+    <p>Crea el turno en Dentalink (estado PRE-reservado). Solo después de read-back y confirmación del paciente.</p>
+  </div>
+  <div class="card">
+    <h4>📌 confirmar_turno <span class="badge tool">write</span></h4>
+    <div class="meta">PUT Dentalink /citas/{id} estado=18</div>
+    <p>Marca el turno como "Confirmado por WhatsApp". Lo llama Sub-Agent Confirmar tras un recordatorio.</p>
+  </div>
+  <div class="card">
+    <h4>❌ cancelar_turno <span class="badge tool">write</span></h4>
+    <div class="meta">PUT Dentalink /citas/{id} estado=1</div>
+    <p>Anula el turno en Dentalink. Body solo acepta <code>{"id_estado": 1}</code>, otros params devuelven 400.</p>
+  </div>
+  <div class="card">
+    <h4>👤 crear_paciente_dentalink <span class="badge tool">write</span></h4>
+    <div class="meta">POST Dentalink /pacientes</div>
+    <p>Crea ficha nueva. Solo si las búsquedas fallaron Y el paciente confirmó nombre + DNI.</p>
+  </div>
+  <div class="card">
+    <h4>📚 buscar_conocimiento <span class="badge tool">read</span></h4>
+    <div class="meta">Vector search en Supabase KB</div>
+    <p>RAG sobre la base de conocimiento de la clínica (34 entradas: tratamientos, FAQ, horarios). Solo lo usa el Sub-Agent General.</p>
+  </div>
+  <div class="card">
+    <h4>📢 escalar_a_secretaria <span class="badge tool">write</span></h4>
+    <div class="meta">Webhook → Evolution → grupo WhatsApp</div>
+    <p>Manda un resumen del caso al grupo de Iri + Dra + Lucas para que un humano se encargue.</p>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<h2 id="storage">Dónde se guarda todo</h2>
+
+<div class="mermaid">
+graph LR
+  N[n8n v6] --> S1[(Supabase<br/>pacientes 262)]
+  N --> S2[(Supabase<br/>conversaciones 1334)]
+  N --> S3[(Supabase<br/>knowledge_base 34)]
+  N --> S4[(Supabase<br/>recordatorios_enviados)]
+  N --> PG[(Postgres<br/>n8n_chat_histories 1733)]
+  N --> RD[(Redis<br/>kill-switch + buffer)]
+  N --> DL[(Dentalink<br/>citas + pacientes)]
+  style S1 fill:#cffafe,stroke:#155e75
+  style S2 fill:#cffafe,stroke:#155e75
+  style S3 fill:#cffafe,stroke:#155e75
+  style S4 fill:#cffafe,stroke:#155e75
+  style PG fill:#fce7f3,stroke:#9d174d
+  style RD fill:#fee2e2,stroke:#991b1b
+  style DL fill:#fef3c7,stroke:#92400e
+</div>
+
+<table>
+<thead><tr><th>Storage</th><th>Qué guarda</th><th>Para qué</th></tr></thead>
+<tbody>
+  <tr><td><span class="badge storage">Supabase · pacientes</span></td><td>Master de pacientes con flags (human_takeover, resumen_clinico, chatwoot_ids)</td><td>Identidad + estado conversacional</td></tr>
+  <tr><td><span class="badge storage">Supabase · conversaciones</span></td><td>Log persistente de TODOS los mensajes (paciente, bot, secretaria)</td><td>Memoria larga (&gt;3 días), cruzar canales</td></tr>
+  <tr><td><span class="badge storage">Supabase · knowledge_base</span></td><td>Embeddings de info de la clínica</td><td>RAG para el Sub-Agent General</td></tr>
+  <tr><td><span class="badge storage">Supabase · recordatorios_enviados</span></td><td>Track de cuándo se mandó cada recordatorio y si fue confirmado</td><td>Evitar mandar el mismo recordatorio 2 veces</td></tr>
+  <tr><td><span class="badge storage">Postgres · n8n_chat_histories</span></td><td>Memoria corta de LangChain (TTL 3 días, últimos 10 mensajes por paciente)</td><td>Contexto del LLM por turno</td></tr>
+  <tr><td><span class="badge storage">Redis</span></td><td>Kill-switch <code>/bot off|on</code>, buffer 8s, rate limit</td><td>Control operativo en caliente</td></tr>
+  <tr><td><span class="badge storage">Dentalink</span></td><td>Turnos reales + fichas (single source of truth)</td><td>Sistema de agenda oficial de la clínica</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================ -->
+<h2 id="crons">Los procesos automáticos</h2>
+
+<table>
+<thead><tr><th>Cron</th><th>Cuándo corre</th><th>Qué hace</th></tr></thead>
+<tbody>
+  <tr>
+    <td><strong>Recordatorios</strong></td>
+    <td>Diario 8:00 AM ARG</td>
+    <td>Lee turnos de Dentalink para hoy +24h y +72h. Manda recordatorios por WhatsApp. Skipea turnos ya confirmados (id_estado=18).</td>
+  </tr>
+  <tr>
+    <td><strong>Resumen Clínico</strong></td>
+    <td>Diario 02:00 AM ARG</td>
+    <td>Toma los últimos 30 mensajes de cada paciente, los resume con gpt-4o-mini, escribe a <code>pacientes.resumen_clinico</code>. Costo: ~$0.10/mes.</td>
+  </tr>
+  <tr>
+    <td><strong>Auto Reactivar Bot</strong></td>
+    <td>Cada 15 min</td>
+    <td>Si pasó 1h desde el último mensaje humano en Chatwoot, reactiva al bot.</td>
+  </tr>
+  <tr>
+    <td><strong>Human Takeover Sync</strong></td>
+    <td>Trigger por evento Chatwoot</td>
+    <td>Cuando Iri o la Dra escriben en Chatwoot, marca <code>pacientes.human_takeover = true</code> y silencia al bot.</td>
+  </tr>
+</tbody>
+</table>
+
+<!-- ============================================ -->
+<h2 id="safety">Las 3 capas de seguridad</h2>
+
+<p>Después del incidente de Mariela (09/05), pusimos defensa en profundidad. Si una capa falla, la siguiente atrapa el problema.</p>
+
+<div class="mermaid">
+graph LR
+  O[Output del sub-agent] --> L1[Capa 1: Prompt rules<br/>R0, banlist en system]
+  L1 --> L2[Capa 2: Banlist Validator<br/>regex post-output]
+  L2 --> L3[Capa 3: Label humano auto<br/>si banlist hit, escalar]
+  L3 --> S[Send WhatsApp]
+  style L1 fill:#ddd6fe,stroke:#5b21b6
+  style L2 fill:#fee2e2,stroke:#991b1b
+  style L3 fill:#fef3c7,stroke:#92400e
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h4>Capa 1 · Prompt rules</h4>
+    <p>Cada sub-agent tiene en su system prompt la regla R0: NO inventes, NO diagnostiques, NO digas "venite". El LLM lo respeta el 95% del tiempo.</p>
+  </div>
+  <div class="card">
+    <h4>Capa 2 · Banlist regex</h4>
+    <p>Después del Formatting, un código JS escanea el output con ~30 regex de frases prohibidas. Si matchea, el output se descarta y el caso se escala.</p>
+  </div>
+  <div class="card">
+    <h4>Capa 3 · Label humano auto</h4>
+    <p>Si la Capa 2 atrapa algo, además de no enviarlo se marca al paciente con label humano en Chatwoot. El bot queda silenciado para ese paciente hasta que la Dra lo desbloquee.</p>
+  </div>
+  <div class="card">
+    <h4>🚧 En desarrollo · Banlist Agent</h4>
+    <p>Sub-agent <span class="badge nano">gpt-5-nano</span> que valida el output con contexto. Captura paráfrasis que el regex no agarra ("diríjase al consultorio"). Arrancará en shadow mode para validar antes de darle autoridad.</p>
+  </div>
+</div>
+
+<div class="callout warn">
+<strong>El incidente Mariela y por qué importan estas capas:</strong> el 09/05/2026 una mamá real recibió del bot "guardá la pieza, venite ahora mismo a Balcarce 37, te esperamos" un sábado con clínica cerrada. La Dra alcanzó a apagar el bot a tiempo. Root cause triple: kill-switch usaba phone del destinatario en lugar del emisor, system prompt enseñaba "Te esperamos" como ejemplo (que contradice la regla R22), y el router no veía memoria. Las 3 capas actuales hacen que un mismo bug nunca pueda repetirse.
+</div>
+
+<!-- ============================================ -->
+<h2 id="stack">Stack técnico</h2>
+
+<table>
+<thead><tr><th>Capa</th><th>Tecnología</th><th>Versión / nota</th></tr></thead>
+<tbody>
+  <tr><td>WhatsApp gateway</td><td>Evolution API v2</td><td>Self-hosted en VPS, instance <code>raquel</code></td></tr>
+  <tr><td>Orquestación</td><td>n8n self-hosted</td><td>Workflow v6, ID <code>O155MqHgOSaNZ9ye</code>, 106 nodos</td></tr>
+  <tr><td>LLM provider</td><td>OpenAI</td><td>gpt-5 / gpt-5-mini / gpt-5-nano (reasoning_effort=minimal)</td></tr>
+  <tr><td>Framework de agentes</td><td>LangChain (vía n8n)</td><td>AI Agent nodes con Postgres Chat Memory</td></tr>
+  <tr><td>Memoria corta</td><td>PostgreSQL</td><td>n8n_chat_histories, TTL 3 días, contextWindowLength=10</td></tr>
+  <tr><td>Memoria larga</td><td>Supabase (Postgres + Vector)</td><td>conversaciones + pacientes.resumen_clinico</td></tr>
+  <tr><td>Sistema de turnos</td><td>Dentalink REST API</td><td>citas + pacientes + profesionales</td></tr>
+  <tr><td>Inbox humana</td><td>Chatwoot</td><td>Para takeover de Iri y la Dra</td></tr>
+  <tr><td>Cache / locks</td><td>Redis</td><td>Kill-switch, buffer 8s, rate limit</td></tr>
+  <tr><td>Deploy</td><td>VPS self-hosted</td><td>Subdominios bajo raquelrodriguez.com.ar</td></tr>
+</tbody>
+</table>
+
+<div class="callout ok">
+<strong>Estado actual (04/06/2026):</strong> bot en producción desde 21/05. ~360 mensajes/día, 0 errores en últimas 24h, costo proyectado ~$0.45/día tras optimización gpt-5-mini + reasoning_effort=minimal. 1 cancelación real exitosa hoy (cita #8200). Cron de recordatorios mandó 8 WhatsApps en su corrida 8 AM.
+</div>
+
+<div style="margin-top: 60px; padding-top: 24px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 12px; text-align: center;">
+  Generado por Claude · Lucas Silva · Nexora · 2026-06-04
+</div>
+
+</body>
+</html>

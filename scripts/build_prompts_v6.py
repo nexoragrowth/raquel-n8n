@@ -78,7 +78,6 @@ RECIPES = {
         "header_common.md",
         "urgencia_funcion.md",
         "regla_critica_escalacion.md",
-        "paciente_context_runtime.md",
     ],
     "Sub-Agent General": [
         "r0_general.md",
@@ -91,7 +90,6 @@ RECIPES = {
         "general_orden_decision.md",
         "regla_critica_escalacion.md",
         "memoria_historica.md",
-        "paciente_context_runtime.md",
     ],
 }
 

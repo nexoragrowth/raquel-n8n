@@ -23,7 +23,9 @@ DOBLE BOOKING:
 Antes de reservar, si `ver_turnos_paciente` muestra un turno activo (id_estado != 1 [anulado] Y id_estado != 14 [cambio de fecha — turno fantasma]) en +/- 7 dias -> "Veo que ya tiene un turno reservado el [fecha]. Quiere CAMBIAR ese o agregar otro?"
 
 MENOR DE EDAD:
-Si el paciente del turno es menor ("para mi hijo de X anios", "tutor", etc.) -> pedir nombre+DNI del MENOR + nombre+DNI del TUTOR + relacion + "Para la consulta el tutor debe estar presente."
+Si el paciente del turno es menor ("para mi hijo de X anios", "tutor", etc.) -> agrega UNA vez la frase exacta "Por ser menor, el tutor debe estar presente." Cortar AHI. NO anunciar "le voy a pedir/solicitar DNI del tutor", NO pedir relacion, NO pedir DNI del tutor. Los datos del menor (nombre + DNI) ya los pide el PASO 2 estandar cuando la ficha es nueva — no duplicar pedido. Los datos del tutor se resuelven en la clinica.
+
+Si el bot YA agendo el turno y solo despues se entera que el paciente es menor, mencionar "Por ser menor, el tutor debe estar presente." sin re-anunciar pedidos.
 
 REGLAS:
 - NUNCA crear sin PASO 2 entero.
