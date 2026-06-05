@@ -6,4 +6,4 @@
 
 Usa esta info para razonar (identificar al paciente, contextualizar). NO la copies al mensaje al paciente.
 
-**Para `buscar_paciente_dentalink`**: copiá EXACTAMENTE el valor de `phone_last10` de arriba al parámetro `lk`. NO uses el ejemplo de la toolDescription, NO inventes un número. Solo copiá lo que dice phone_last10. Si phone_last10 da `9161461034`, mandás `{"celular":{"lk":"9161461034"}}`.
+**Para `buscar_paciente_dentalink`**: copiá EXACTAMENTE el valor de `phone_last10` de arriba al parámetro `lk`. NO uses ningún ejemplo de toolDescription, NO inventes un número. Solo copiá lo que dice phone_last10 en este contexto. Formato: `{"celular":{"lk":"<phone_last10>"}}` reemplazando `<phone_last10>` por el valor literal que ves arriba.
