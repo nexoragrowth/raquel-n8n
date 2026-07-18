@@ -13,6 +13,9 @@ workflows/history/
 tests/*.log
 tests/*_results.json
 
+# Junction al repo del panel (nexora-whatsapp-agent) — proyecto con git propio, no trackear
+panel/
+
 # Node
 node_modules/
 

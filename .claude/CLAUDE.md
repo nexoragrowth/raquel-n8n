@@ -71,6 +71,16 @@ Datos clave para tener a mano (NO secretos):
 - Grupo de derivaciones (destino escalaciones): `120363407321448469@g.us` ("WhatsApp Clinica Raquel"). Miembros: Lucas + Dra. Raquel.
 - Admin phones whitelisted para `/bot off|on|status`: Lucas `5491161461034`, Irina `5493885786946`, Dra. Raquel `5493513976787`.
 
+## Proyecto hermano: el PANEL (dashboard)
+
+`C:\Users\not\Desktop\proyectos\nexora-whatsapp-agent` — Next.js 16, panel del bot
+(chat, citas, métricas, KB editable). Repo y deploy PROPIOS (GitHub nexoragrowth +
+Vercel); NO moverlo adentro de este repo (decisión 18/7: producto multi-cliente).
+Se trabaja desde sesiones de raquel-n8n igual — plan vigente y fases en
+`docs/plan-dashboard-2026-07-18.md`; estado en `memory/current-state.md`.
+Preview viejo vivo: nexora-whatsapp-agent.vercel.app (Vercel de Valentino, espejo).
+Regla: los datos del bot los lee DIRECTO del Supabase v3 (dual-cliente, sin espejo).
+
 ## Fuentes externas a este repo (siempre cargar)
 
 - **Vault context**: `C:/Users/Lucas/Documents/.vault/life/02 - Areas/Claude/projects/dra-raquel-n8n.md` (notas persistentes con todas las lecciones aprendidas, IDs, accesos, evolucion del workflow).
