@@ -34,6 +34,33 @@ decisión recomendada = dual-Supabase SIN espejo (auth propio + lectura directa 
 fases F1(solo-lectura)→F2(interacción+webhooks n8n)→F3(KB editable con re-embed)→
 F4(weekly learning).
 
+**PANEL F1-F4 COMPLETO (18/7 noche)** — commits en el repo del panel (git propio):
+`c7b0617` F1-F3+chat premium · `3e9803d` F4 métricas · `bf173df` limpieza código muerto.
+Todo andando en localhost:3000 (admin/admin), typecheck 0 errores, smoke de las 6 páginas OK.
+- **Chat WhatsApp Web 2.0**: multimedia (chips + lightbox), tildes de visto (listo para ACKs),
+  emoji picker, buscador in-chat, scroll-to-bottom, timestamps relativos.
+- **Diferenciación**: paciente gris (izq) · Asiri verde · Dra. Raquel azul (der) — CSS
+  `--chat-bubble-human` nuevo. Avatares con foto real de WhatsApp (`lib/evolution.ts` +
+  `/api/foto/[telefono]`, cae a iniciales con color; la mayoría de pacientes no tienen foto
+  pública → iniciales). Credenciales Evolution en panel `.env.local`.
+- **Menú click-derecho** en la lista: marcar leído/no-leído (`marcarLeido/NoLeidoAction`),
+  modo humano, abrir.
+- **F3**: `/conocimiento` (KB editable + re-embedding con `lib/embeddings.ts`), `/servicios`
+  (preset de la KB, constantes en `lib/servicios.ts` — módulo neutro, NO exportar valores
+  desde un "use client" a un server component → rompe).
+- **F4**: dashboard con % autonomía + no-shows evitados + tendencia escalaciones; página
+  `/aprendizaje` (motivos de escalación → link a cargar KB — el loop que pidió la Dra).
+- **Nombre real**: pushName de WhatsApp en vez de "Paciente WhatsApp" (`displayName` en phone.ts).
+- **B4**: borrado el código muerto del producto viejo (117→62 archivos): lib/agent,
+  lib/whatsapp, lib/google, lib/events, chatwoot, mirror, crypto, constants, supabase auth
+  viejo. Se conservó dentalink + database.types (AppointmentStatus).
+- **Pendiente panel**: (a) OPENAI_API_KEY para re-embed real de F3; (b) DENTALINK_TOKEN para
+  /citas (n8n → Credentials → "Header Auth account 3" = `HJCckoNH...`); (c) foto de Raquel
+  para mensajes salientes; (d) **B2 backend**: webhooks n8n `panel-toggle-bot`/`panel-send-human`
+  (gate REAL = label Chatwoot 'humano', patrón Human Takeover) + ingest de ACKs para el visto.
+
+**F1 vieja (rama panel-v3-f1) quedó absorbida en main del panel.**
+
 **F1 CONSTRUIDA (18/7 tarde, workflow 4 agentes)** en la rama **`panel-v3-f1`** del
 panel — SIN COMMITEAR, esperando review + prueba en vivo. Diff: 8 archivos, +530/−597
 (se fue el espejo). Piezas: `lib/supabase/v3.ts` + `lib/v3/database.types.ts` (base,
@@ -76,6 +103,32 @@ Validado" `GuDQ9VmKWZvQnerV` (legítimo, lo llama Agendar).
 **Bloqueado en Lucas**: solo el DENTALINK_TOKEN en `.env.local` del panel (línea
 CHANGEME_LUCAS) para encender /citas. Entrar al panel: localhost:3000 → admin/admin.
 Pendiente próximo: repo GitHub nuevo + push; F2 (webhooks n8n toggle/send).
+
+## Optimización auditoría (18/7 tarde) — Track A
+
+**A1 APLICADO Y VERIFICADO** (batch, backups en workflows/history/*_a1_*):
+- URGENTE: Weekly Learning `B7IS4EVvxUAnGDXi` (contaminaba KB el domingo, cred PG borrada)
+  y Cleanup `En0A5lXd3Whb5yFy` (full-scan borra 0 filas) → DESACTIVADOS con backup.
+- 5 workflows parcheados: Helper (bug funcional #1: escalaciones de cancelar no silenciaban
+  al bot), Sub-WF Cancelar (parse tolerante Step 0b), Buscar Horarios (TZ Jujuy), Recordatorio
+  (INSERT parametrizado + webhook onReceived + skip item inválido), v6 (guard DDL fuera de
+  Check Session Age, Banlist Shadow early-return en NO_REPLY, buscar_horarios anti-sondeo,
+  confirmar_turno placeholder). Scripts: `apply_audit_a1_satelites.py` + `apply_audit_a1_v6.py`.
+- SQL: índice único conversaciones.chat_history_id asegurado + drop idx_nch_session_created huérfano.
+- Verificado: v6 0 errores/30 execs, kill-switch PASS, E2E 5/5 (el "fail" de cuota es correcto:
+  desambigua antes de dar $70k). 120 nodos, webhook intacto.
+
+**A2 PREPARADO PERO BLOQUEADO POR EL CLASIFICADOR** (necesita OK explícito de Lucas):
+`scripts/apply_audit_a2_get_paciente.py` — desactiva "Get Paciente Context" (query muerta que
+corre por cada webhook, resumen_clinico vacío garantizado; ahorra ~100-200 queries/día) +
+reemplaza su expresión por texto estático en los 3 Sub-Agents. El clasificador lo frenó por
+tocar los systemMessage del v6 (zona sensible del incidente). Para aplicar: correr el script
+con OK de Lucas. Resto de A2 (dedup Logger, Sub-Agent Cancelar huérfano, Health Check alertas,
+barrido token Chatwoot que necesita VPS) documentado, sin aplicar.
+
+**A3 solo-propuesta** (no aplicar): Clear Old Memory no-op, Gate Humano doble-disparo, Health
+Check "Check Supabase" (el ALTO más valioso), pooler transaction-mode :6543. Detalle en el
+output de la auditoría (workflow wwros9tph).
 
 **Próximos pasos (nada urgente)**:
 1. Reportero v2 "aprendizaje semanal" (P1) — diseño pactado: leer escalaciones_log +
