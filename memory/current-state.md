@@ -1,6 +1,36 @@
 # Estado actual — raquel-n8n
 
-_Última actualización: 2026-07-18 ~14:30 ART — ✅ SISTEMA 100% OPERATIVO sobre Supabase v3_
+_Última actualización: 2026-07-19 ART — panel cockpit + control de recordatorios (diseño)_
+
+## Sesión 19/7 — Panel: chat cockpit + sección Recordatorios escalable
+
+**Chat (`nexora-whatsapp-agent`, commits `ff102ec`):**
+- Card de turno **inline** en el hilo, justo donde el bot reserva (híbrido WhatsApp+Dentalink):
+  detecta el mensaje de reserva (parse fecha/hora), matchea la cita real y muestra card
+  accionable (confirmar/anular en Dentalink, confirmación en 2 pasos). Dark+light legible.
+- Dentalink ahora agrega turnos de **todas las fichas** del celular (antes solo la 1ra → el
+  turno nuevo caía en otra ficha y no se veía). `pacientesByCelular` nuevo.
+- Sacado el wallpaper doodle del chat (plano, `--chat-surface`).
+- Tiempo real: `force-dynamic` en /conversaciones + polling propio de la lista (8s).
+
+**Recordatorios — diseño escalable (commit panel `49e01ed`):**
+- Mandato de Lucas: "nunca más saturación de requests/infra/DB — pensalo como ingeniero".
+- **Arquitectura**: el calendario de suspensiones es DATO leído 1 vez por la corrida diaria
+  que YA ocurre (cero timers nuevos). Suspender un día = fecha en `dias_suspendidos`; al día
+  siguiente ya no está → corre solo (auto-resume). 1 SELECT/día, fail-open.
+- **v3**: tabla `recordatorios_config` (fila única id=1) — `scripts/recordatorios_config.sql`
+  (PENDIENTE aplicar en SQL editor v3).
+- **Panel**: nueva sección `/recordatorios` (on/off + hora vía n8n API ya funciona; suspender
+  día/rango escribe a v3). Degrada con aviso si la tabla no existe.
+- **Gate del workflow** (`7RqTApkvVavRmq3R`): 2 nodos + rewire de 1 conexión — script
+  `scripts/apply_recordatorios_gate.py` (preview OK, POST propuesto validado: +3 nodos, 0
+  nodos viejos mutados, webhookId preservado, flujo normal intacto). **PENDIENTE OK de Lucas
+  para `--apply`** (regla #1: no PUT al workflow sin OK). Semántica `suspender` fail-open:
+  fila faltante o PG caído → corre igual.
+
+---
+
+_Actualización previa: 2026-07-18 ~14:30 ART — ✅ SISTEMA 100% OPERATIVO sobre Supabase v3_
 
 ## ✅ FASE 2 COMPLETADA (18/7 ~14:15): sistema completo, nada pendiente de la migración
 
@@ -54,12 +84,37 @@ Todo andando en localhost:3000 (admin/admin), typecheck 0 errores, smoke de las 
 - **B4**: borrado el código muerto del producto viejo (117→62 archivos): lib/agent,
   lib/whatsapp, lib/google, lib/events, chatwoot, mirror, crypto, constants, supabase auth
   viejo. Se conservó dentalink + database.types (AppointmentStatus).
-- **Pendiente panel**: (a) OPENAI_API_KEY para re-embed real de F3; (b) DENTALINK_TOKEN para
-  /citas (n8n → Credentials → "Header Auth account 3" = `HJCckoNH...`); (c) foto de Raquel
-  para mensajes salientes; (d) **B2 backend**: webhooks n8n `panel-toggle-bot`/`panel-send-human`
-  (gate REAL = label Chatwoot 'humano', patrón Human Takeover) + ingest de ACKs para el visto.
+- **F5 Control** (19/7): página `/control` — prende/apaga bot + recordatorios y cambia el
+  horario desde el panel (server-side vía API de n8n; `lib/n8n.ts`). Salvaguardas del
+  incidente: confirmación al apagar el bot + banner rojo persistente cuando el bot está
+  apagado. Env nuevas en panel: N8N_API_BASE/KEY + N8N_WF_BOT/RECORDATORIOS.
+- **/citas ENCENDIDO** (19/7): token de Dentalink resuelto. NO era extraíble (n8n write-only;
+  el store del dashboard viejo se borró con su Supabase). Login Dentalink real:
+  `aureaodontologiaestetica.dentalink.cl`. Lucas sacó el token con el workflow reflector
+  (httpbin) que armé y ejecutó él. Probado contra la API (`Authorization: Token <t>`, base
+  `api.dentalink.healthatom.com`) → 200. En panel `.env.local` (gitignored). Panel habla
+  DIRECTO con Dentalink (cero infra n8n ongoing). Token rotable en Dentalink si se quiere.
+  **Lección**: n8n NO devuelve valores de credenciales (ni API 405, ni UI = `__n8n_BLANK_VALUE_`);
+  se recuperan reflejando la credencial en un httpRequest a httpbin, o desde la fuente original.
+- **Pendiente panel** (menor): (a) OPENAI_API_KEY para re-embed real de F3 (editar KB funciona,
+  solo el re-embed al guardar espera la key); (b) foto de Raquel para mensajes salientes;
+  (c) **webhooks n8n `panel-toggle-bot`/`panel-send-human`** para el toggle POR CONVERSACIÓN
+  del chat y el "responder como staff" (hoy degradan con aviso; el toggle GLOBAL del bot ya
+  anda por /control). Gate real = label Chatwoot 'humano' (patrón Human Takeover).
 
 **F1 vieja (rama panel-v3-f1) quedó absorbida en main del panel.**
+
+**COCKPIT — Dentalink en el chat (19/7)**: cada conversación muestra los turnos del
+paciente en Dentalink (card colapsable "Turnos en Dentalink": fecha/hora/tratamiento/
+profesional/estado con color) + **acciones Confirmar/Cancelar** que escriben en Dentalink
+(`PUT /citas/{id}` id_estado 1=Anulado/22=Confirmado) con modal de confirmación. Cliente:
+`pacienteIdByCelular` (celular Dentalink = telefono v3, match directo) + `/pacientes/{id}/citas`
+(id_paciente NO es filtrable en /citas) + `updateCitaEstado` + `CITA_ESTADO`. Endpoint de
+estados: `/api/v1/citas/estados`. El PUT NO se pudo autoprobar (clasificador bloquea escrituras
+a Dentalink) — la escritura ocurre al click del staff. Commits panel: 48a2b4a (turnos read) +
+6b041ef (acciones). **Foto de Raquel** (public/raquel.png) en sidebar + sus mensajes del chat.
+**Visión "cockpit" (siguiente)**: cards inline en el punto del chat donde el bot agendó/escaló;
+ficha del paciente arriba; toda acción del agente con rastro visible.
 
 **F1 CONSTRUIDA (18/7 tarde, workflow 4 agentes)** en la rama **`panel-v3-f1`** del
 panel — SIN COMMITEAR, esperando review + prueba en vivo. Diff: 8 archivos, +530/−597

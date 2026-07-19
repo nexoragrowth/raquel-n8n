@@ -11,6 +11,14 @@
 - [ ] Lunes 20/7 08:00 ART: vigilar la primera corrida real del Recordatorio contra v3
       (y que las confirmaciones de los 13 backfilleados matcheen).
 
+## P1 — BUG agendar prematuro (detectado 19/7 por Lucas)
+- [ ] **El bot RESERVA el turno sin confirmación explícita del paciente ni pago.** Caso real:
+      el paciente eligió una fecha y preguntó el PRECIO (frenillo → "valor $50.000") pero NUNCA
+      dijo "sí, reservá" ni mandó comprobante — y el bot igual reservó en Dentalink. Debe:
+      (a) NO reservar hasta confirmación explícita de intención de agendar; (b) para tratamientos
+      que requieren seña/pago, no reservar hasta comprobante (o dejar "pre-reserva"). Fix en el
+      prompt del Sub-Agent Agendar del v6 + posible gate determinístico. SENSIBLE (toca el v6).
+
 ## P1 — post-incidente
 - [x] 2026-07-18 Backfill recordatorios 16/7 + 17/7 (13 filas en v3, con wa_message_id).
 - [x] 2026-07-18 Fila envenenada Sub-WF Cancelar: muerta con v2 (v3 limpia + JSONB NOT NULL).

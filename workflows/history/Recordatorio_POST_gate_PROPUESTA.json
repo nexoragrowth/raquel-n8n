@@ -1,0 +1,1311 @@
+{
+  "updatedAt": "2026-07-18T16:23:50.213Z",
+  "createdAt": "2026-04-04T02:31:46.541Z",
+  "id": "7RqTApkvVavRmq3R",
+  "name": "Recordatorio de Turno 48HS - Dra. Raquel",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 13 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "trigger-24h",
+      "name": "Diario 9AM Arg (cron 0 14 UTC)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Override desde Webhook Manual Recordatorios ===\nlet whBody = null;\ntry {\n  const whItems = $('Webhook Manual Recordatorios').all();\n  if (whItems && whItems.length > 0) {\n    whBody = whItems[0].json?.body || whItems[0].json;\n  }\n} catch (e) {\n  // El nodo Webhook Manual no se ejecuto en esta corrida (vino del cron)\n}\nif (whBody && whBody.fecha_target) {\n  const filter = Array.isArray(whBody.id_paciente_filter) ? whBody.id_paciente_filter : [];\n  return [{ json: { fecha_target: whBody.fecha_target, tipo_recordatorio: \"manual_override\", id_paciente_filter: filter } }];\n}\n\n// Recordatorio 48h hábiles\n// El workflow puede correr todos los días, incluidos sábados y domingos.\n// La fecha objetivo se calcula sumando 2 días hábiles, contando solo lunes a viernes.\n\nconst now = new Date();\n\n// Ajuste horario Argentina UTC-3\nconst argTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));\n\nfunction addBusinessDays(date, days) {\n  const result = new Date(date);\n  let addedDays = 0;\n\n  while (addedDays < days) {\n    result.setDate(result.getDate() + 1);\n\n    const day = result.getDay();\n    const isWeekend = day === 0 || day === 6; // domingo = 0, sábado = 6\n\n    if (!isWeekend) {\n      addedDays++;\n    }\n  }\n\n  return result;\n}\n\nfunction formatDateYYYYMMDD(date) {\n  const year = date.getFullYear();\n  const month = String(date.getMonth() + 1).padStart(2, \"0\");\n  const day = String(date.getDate()).padStart(2, \"0\");\n\n  return `${year}-${month}-${day}`;\n}\n\nconst targetDate = addBusinessDays(argTime, 2);\n\nreturn [\n  {\n    json: {\n      fecha_target: formatDateYYYYMMDD(targetDate),\n      tipo_recordatorio: \"48h_habiles\",\n      id_paciente_filter: []\n    }\n  }\n];"
+      },
+      "id": "date-24h",
+      "name": "Fecha Mañana",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.dentalink.healthatom.com/api/v1/sucursales/1/citas",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={\"fecha\":{\"eq\":\"{{ $json.fecha_target }}\"},\"id_estado\":{\"neq\":1}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-3",
+      "name": "GET Citas por fecha",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TwN6eBWsydjMdsCM",
+          "name": "Header Auth account 3"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "node-4",
+      "name": "Split Citas",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        704,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.estado_anulacion }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "condition-2-skip-confirmados",
+              "leftValue": "={{ $json.id_estado }}",
+              "rightValue": 18,
+              "operator": {
+                "type": "number",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "condition-3-paciente-filter",
+              "leftValue": "={{ ($('Fecha Mañana').first().json.id_paciente_filter || []).length === 0 || ($('Fecha Mañana').first().json.id_paciente_filter || []).includes($json.id_paciente) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "condition-3-skip-cambio-fecha",
+              "leftValue": "={{ $json.id_estado }}",
+              "rightValue": 14,
+              "operator": {
+                "type": "number",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-5",
+      "name": "Solo citas activas",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        928,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.dentalink.healthatom.com/api/v1/pacientes/{{ $json.id_paciente }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "node-6",
+      "name": "GET Paciente (celular)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1152,
+        -96
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TwN6eBWsydjMdsCM",
+          "name": "Header Auth account 3"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// === MODO PRODUCTIVO ===\nconst TEST_MODE = false;\nconst TEST_PHONE = \"5491161461034\";\n\nconst paciente = $input.item.json;\nconst cita = $(\"Solo citas activas\").all()[$itemIndex]?.json || {};\n\nconst pData = paciente.data || paciente;\nconst nombre = (pData.nombre || \"paciente\").trim();\nlet celular = pData.celular || \"\";\n\nconst fecha = cita.fecha || \"\";\nconst hora = (cita.hora_inicio || \"\").substring(0, 5);\nconst dentista = (cita.nombre_dentista || \"Rodríguez Raquel\").replace(/\\s+/g, \" \").trim();\n\n// Inferir tipo_recordatorio por días hasta la cita\nconst today = new Date();\nconst argNow = new Date(today.getTime() - (3 * 60 * 60 * 1000));\nargNow.setHours(0, 0, 0, 0);\nconst fechaCita = new Date(fecha + \"T00:00:00\");\nconst daysDiff = Math.round((fechaCita - argNow) / (1000 * 60 * 60 * 24));\nconst tipo_recordatorio = daysDiff <= 1 ? \"24h\" : \"72h\";\n\n// Naturalización fecha\nconst dias = [\"domingo\", \"lunes\", \"martes\", \"miércoles\", \"jueves\", \"viernes\", \"sábado\"];\nconst meses = [\"enero\",\"febrero\",\"marzo\",\"abril\",\"mayo\",\"junio\",\"julio\",\"agosto\",\"septiembre\",\"octubre\",\"noviembre\",\"diciembre\"];\nconst diaSemana = dias[fechaCita.getDay()];\nconst diaSemanaCap = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);\nconst diaNum = fechaCita.getDate();\nconst mes = meses[fechaCita.getMonth()];\nconst anio = fechaCita.getFullYear();\n\n// Género heurístico por terminación del primer nombre\nconst primerNombre = nombre.split(\" \")[0];\nconst ult = primerNombre.slice(-1).toLowerCase();\nconst tratamiento = ult === \"a\" ? \"Estimada\" : ult === \"o\" ? \"Estimado\" : \"Estimado/a\";\nconst verboObj    = ult === \"a\" ? \"la esperamos\" : ult === \"o\" ? \"lo esperamos\" : \"le esperamos\";\n\n// === Normalización celular: SIEMPRE termina como 549XXXXXXXXXX (13 dígitos)\ncelular = celular.replace(/[^0-9]/g, \"\");\nif (!celular) {\n  return { json: { phone: \"\", remoteJid: \"\", message: \"\", nombre, cita_id: cita.id || \"\", tipo_recordatorio } };\n}\nif (celular.startsWith(\"549\") && celular.length === 13) {\n  // ok, ya está perfecto\n} else if (celular.startsWith(\"54\") && celular.length === 12) {\n  // 54 + 10 dígitos sin 9 -> agregar 9\n  celular = \"549\" + celular.substring(2);\n} else if (celular.length === 10) {\n  // sólo 10 dígitos (sin código país ni 9)\n  celular = \"549\" + celular;\n} else if (celular.length === 11 && celular.startsWith(\"15\")) {\n  // formato local \"15XXXXXXXX\" -> agregar 549 quitando el 15\n  celular = \"549\" + celular.substring(2);\n} else if (!celular.startsWith(\"54\")) {\n  // cualquier otra cosa que no empiece con 54: prepender 549\n  celular = \"549\" + celular;\n}\n\n// === TEMPLATES OFICIALES ===\nlet realMessage;\nif (tipo_recordatorio === \"72h\") {\n  realMessage =\n    \"✨ ÁUREA ODONTOLOGÍA ESTÉTICA ✨\\n\\n\" +\n    tratamiento + \" \" + nombre + \",\\n\" +\n    \"Le recordamos su turno con la Dra. Rodríguez Raquel:\\n\\n\" +\n    \"📅 \" + diaSemanaCap + \" \" + diaNum + \" de \" + mes + \" de \" + anio + \"\\n\" +\n    \"🕔 \" + hora + \" hs\\n\" +\n    \"📍 Balcarce Nº37, 2º piso\\n\\n\" +\n    \"Le pedimos confirmar su asistencia respondiendo a este mensaje para conservar su turno.\\n\\n\" +\n    \"⚠️ Importante:\\n\" +\n    \"* Si su turno está confirmado y no asiste al mismo, de igual manera deberá abonar el control.\\n\" +\n    \"* Para cancelar o reprogramar, solicitamos avisar con un mínimo de 48 hs de anticipación.\\n\\n\" +\n    \"Esperamos su confirmación, gracias por elegirnos 💙\";\n} else {\n  realMessage =\n    \"Hola, \" + nombre + \" 😊 le recordamos que mañana \" + verboObj + \" a las \" + hora +\n    \" hs para su atención con la Dra. Raquel Rodríguez en nuestra Clínica Áurea Odontología Estética. Saludos ✨\";\n}\n\nconst finalPhone = TEST_MODE ? TEST_PHONE : celular;\nconst finalJid = finalPhone + \"@s.whatsapp.net\";\nconst finalMessage = TEST_MODE ? \"[TEST \" + tipo_recordatorio + \"] Para: \" + nombre + \" (\" + celular + \")\\n\\n\" + realMessage : realMessage;\n\nreturn {\n  json: {\n    phone: finalPhone,\n    remoteJid: finalJid,\n    message: finalMessage,\n    nombre,\n    cita_id: cita.id || \"\",\n    id_paciente: pData.id || cita.id_paciente || \"\",\n    fecha,\n    hora,\n    tipo_recordatorio,\n    dentista\n  }\n};"
+      },
+      "id": "node-7",
+      "name": "Preparar mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-2",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-8",
+      "name": "Tiene celular?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "raquel",
+        "remoteJid": "={{ $json.remoteJid }}",
+        "messageText": "={{ $json.message }}",
+        "options_message": {}
+      },
+      "id": "node-9",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -208
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "4sAc6U57qV9jpeRy",
+          "name": "Evolution account 2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {},
+      "id": "node-10",
+      "name": "Sin celular (skip)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FORMATO LANGCHAIN v0.3 (flat, sin wrapper 'data')\n// FIX 2026-06-02: strings literales con \\n sin escapar rompian el parse JS.\n// FIX 2026-06-03: el codigo solo procesaba el primer item. Ahora itera items[].\nconst dias = [\"domingo\", \"lunes\", \"martes\", \"miércoles\", \"jueves\", \"viernes\", \"sábado\"];\nconst meses = [\"enero\",\"febrero\",\"marzo\",\"abril\",\"mayo\",\"junio\",\"julio\",\"agosto\",\"septiembre\",\"octubre\",\"noviembre\",\"diciembre\"];\n\nconst results = [];\nfor (const item of items) {\n  const prep = item.json;\n  const phone = prep.phone;\n  const message = prep.message;\n  if (!phone || !message) {\n    continue;\n  }\n  const cita_id = prep.cita_id || '';\n  const fecha = prep.fecha || '';\n  const hora = prep.hora || '';\n  const tipo = prep.tipo_recordatorio || '';\n  const nombre = prep.nombre || '';\n  const dentista = prep.dentista || 'Rodríguez Raquel';\n  const idPaciente = prep.id_paciente || '';\n\n  let fechaNatural = fecha;\n  if (fecha) {\n    const f = new Date(fecha + 'T00:00:00');\n    fechaNatural = dias[f.getDay()] + ' ' + f.getDate() + ' de ' + meses[f.getMonth()] + ' de ' + f.getFullYear();\n  }\n\n  // Mensaje 1: el recordatorio tal cual se envio al paciente, tageado como AI con source reminder_note\n  const msgRecordatorio = JSON.stringify({\n    type: 'ai',\n    content: message,\n    tool_calls: [],\n    additional_kwargs: { source: 'reminder_note' },\n    response_metadata: {},\n    invalid_tool_calls: []\n  });\n\n  // Mensaje 2: NOTA INTERNA con datos estructurados del turno (para que el bot tenga contexto sin pedir)\n  const internalNote = `[NOTA INTERNA - contexto del último recordatorio enviado, NO mencionar al paciente]\nAcabo de enviar un recordatorio ${tipo} del siguiente turno:\n- Cita Dentalink ID: ${cita_id}\n- ID Paciente: ${idPaciente}\n- Paciente: ${nombre}\n- Fecha: ${fechaNatural}\n- Hora: ${hora}\n- Profesional: Dra. ${dentista}\nSi el paciente responde sobre este turno, ya conocés todos los datos. NO le pidas que repita fecha/hora/profesional.`;\n\n  const msgInternal = JSON.stringify({\n    type: 'ai',\n    content: internalNote,\n    tool_calls: [],\n    additional_kwargs: { source: 'reminder_note' },\n    response_metadata: {},\n    invalid_tool_calls: []\n  });\n\n  results.push({ json: { session_id: phone, message_json: msgRecordatorio, saved: true } });\n  results.push({ json: { session_id: phone, message_json: msgInternal, saved: true } });\n}\nreturn results;\n"
+      },
+      "id": "save-reminder-memory-01",
+      "name": "Guardar en Chat Memory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        304
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb)",
+        "options": {
+          "queryReplacement": "={{ $json.session_id }},={{ $json.message_json }}"
+        }
+      },
+      "id": "pg-insert-memory-01",
+      "name": "Postgres - Insert Memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1600,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "TpYhZX4UT61xAKSV",
+          "name": "Postgres Supabase Nexora v3"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "recordatorios_enviados",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefono": "={{ $('Preparar mensaje').item.json.phone }}",
+            "chat_remote_jid": "={{ $('Preparar mensaje').item.json.remoteJid }}",
+            "id_cita_dentalink": "={{ $('Preparar mensaje').item.json.cita_id }}",
+            "id_paciente_dentalink": "={{ $('Preparar mensaje').item.json.id_paciente }}",
+            "nombre_paciente": "={{ $('Preparar mensaje').item.json.nombre }}",
+            "fecha_turno": "={{ $('Preparar mensaje').item.json.fecha }}",
+            "hora_turno": "={{ $('Preparar mensaje').item.json.hora }}",
+            "tipo": "={{ $('Preparar mensaje').item.json.tipo_recordatorio }}",
+            "workflow_execution_id": "={{ $execution.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_remote_jid",
+              "displayName": "chat_remote_jid",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "id_cita_dentalink",
+              "displayName": "id_cita_dentalink",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "id_paciente_dentalink",
+              "displayName": "id_paciente_dentalink",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_paciente",
+              "displayName": "nombre_paciente",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_turno",
+              "displayName": "fecha_turno",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hora_turno",
+              "displayName": "hora_turno",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflow_execution_id",
+              "displayName": "workflow_execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2032,
+        -208
+      ],
+      "id": "insert-recordatorios-uuid-001",
+      "name": "Insert recordatorios_enviados",
+      "credentials": {
+        "postgres": {
+          "id": "TpYhZX4UT61xAKSV",
+          "name": "Postgres Supabase Nexora v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trigger-recordatorios-manual",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        208
+      ],
+      "id": "wh-manual-recordatorios-001",
+      "name": "Webhook Manual Recordatorios",
+      "webhookId": "trigger-recordatorios-manual"
+    },
+    {
+      "id": "51d9e35b-dc4e-4ea5-b809-9037b3ffa92e",
+      "name": "Gate - Leer config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        208,
+        192
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(bool_or(\n    (NOT c.activo)\n    OR ((now() AT TIME ZONE 'America/Argentina/Jujuy')::date = ANY(c.dias_suspendidos))\n    OR (c.suspender_desde IS NOT NULL\n        AND (now() AT TIME ZONE 'America/Argentina/Jujuy')::date\n            BETWEEN c.suspender_desde AND c.suspender_hasta)\n  ), false) AS suspender\nFROM public.recordatorios_config c\nWHERE c.id = 1;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "TpYhZX4UT61xAKSV",
+          "name": "Postgres Supabase Nexora v3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "65fce73a-f3a8-460d-9a6d-6cfddb147405",
+      "name": "Gate - ¿Suspendido hoy?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        432,
+        192
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "gate-suspender",
+              "leftValue": "={{ $json.suspender }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fb21e686-0bb1-49e8-a39a-1b7e0ba90f2a",
+      "name": "Suspendido hoy",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        656,
+        320
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "GET Citas por fecha": {
+      "main": [
+        [
+          {
+            "node": "Split Citas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Citas": {
+      "main": [
+        [
+          {
+            "node": "Solo citas activas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solo citas activas": {
+      "main": [
+        [
+          {
+            "node": "GET Paciente (celular)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GET Paciente (celular)": {
+      "main": [
+        [
+          {
+            "node": "Preparar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar mensaje": {
+      "main": [
+        [
+          {
+            "node": "Tiene celular?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Guardar en Chat Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tiene celular?": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sin celular (skip)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fecha Mañana": {
+      "main": [
+        [
+          {
+            "node": "GET Citas por fecha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Insert recordatorios_enviados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en Chat Memory": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Insert Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diario 9AM Arg (cron 0 14 UTC)": {
+      "main": [
+        [
+          {
+            "node": "Gate - Leer config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert recordatorios_enviados": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook Manual Recordatorios": {
+      "main": [
+        [
+          {
+            "node": "Fecha Mañana",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate - Leer config": {
+      "main": [
+        [
+          {
+            "node": "Gate - ¿Suspendido hoy?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate - ¿Suspendido hoy?": {
+      "main": [
+        [
+          {
+            "node": "Suspendido hoy",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fecha Mañana",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:Diario 9AM": {
+      "recurrenceRules": []
+    },
+    "node:Diario 7AM Arg (cron 0 12 UTC)": {
+      "recurrenceRules": []
+    },
+    "node:Diario 9AM Arg (cron 0 14 UTC)": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "1576a439-a5ae-4439-b8cb-2cddfd06cd7e",
+  "activeVersionId": "1576a439-a5ae-4439-b8cb-2cddfd06cd7e",
+  "versionCounter": 166,
+  "triggerCount": 2,
+  "shared": [
+    {
+      "updatedAt": "2026-04-04T02:31:46.543Z",
+      "createdAt": "2026-04-04T02:31:46.543Z",
+      "role": "workflow:owner",
+      "workflowId": "7RqTApkvVavRmq3R",
+      "projectId": "ZgsXjnNxdGQnfW3S",
+      "project": {
+        "updatedAt": "2026-03-28T21:09:20.740Z",
+        "createdAt": "2026-03-27T16:01:14.506Z",
+        "id": "ZgsXjnNxdGQnfW3S",
+        "name": "Lucas Ezequiel Silva <luxassilva@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "76826d6a-a1cc-46a7-9022-d00280029573"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-07-18T16:23:50.214Z",
+    "createdAt": "2026-07-18T16:23:50.214Z",
+    "versionId": "1576a439-a5ae-4439-b8cb-2cddfd06cd7e",
+    "workflowId": "7RqTApkvVavRmq3R",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 13 * * 1-5"
+              }
+            ]
+          }
+        },
+        "id": "trigger-24h",
+        "name": "Diario 9AM Arg (cron 0 14 UTC)",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// === Override desde Webhook Manual Recordatorios ===\nlet whBody = null;\ntry {\n  const whItems = $('Webhook Manual Recordatorios').all();\n  if (whItems && whItems.length > 0) {\n    whBody = whItems[0].json?.body || whItems[0].json;\n  }\n} catch (e) {\n  // El nodo Webhook Manual no se ejecuto en esta corrida (vino del cron)\n}\nif (whBody && whBody.fecha_target) {\n  const filter = Array.isArray(whBody.id_paciente_filter) ? whBody.id_paciente_filter : [];\n  return [{ json: { fecha_target: whBody.fecha_target, tipo_recordatorio: \"manual_override\", id_paciente_filter: filter } }];\n}\n\n// Recordatorio 48h hábiles\n// El workflow puede correr todos los días, incluidos sábados y domingos.\n// La fecha objetivo se calcula sumando 2 días hábiles, contando solo lunes a viernes.\n\nconst now = new Date();\n\n// Ajuste horario Argentina UTC-3\nconst argTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));\n\nfunction addBusinessDays(date, days) {\n  const result = new Date(date);\n  let addedDays = 0;\n\n  while (addedDays < days) {\n    result.setDate(result.getDate() + 1);\n\n    const day = result.getDay();\n    const isWeekend = day === 0 || day === 6; // domingo = 0, sábado = 6\n\n    if (!isWeekend) {\n      addedDays++;\n    }\n  }\n\n  return result;\n}\n\nfunction formatDateYYYYMMDD(date) {\n  const year = date.getFullYear();\n  const month = String(date.getMonth() + 1).padStart(2, \"0\");\n  const day = String(date.getDate()).padStart(2, \"0\");\n\n  return `${year}-${month}-${day}`;\n}\n\nconst targetDate = addBusinessDays(argTime, 2);\n\nreturn [\n  {\n    json: {\n      fecha_target: formatDateYYYYMMDD(targetDate),\n      tipo_recordatorio: \"48h_habiles\",\n      id_paciente_filter: []\n    }\n  }\n];"
+        },
+        "id": "date-24h",
+        "name": "Fecha Mañana",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://api.dentalink.healthatom.com/api/v1/sucursales/1/citas",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={\"fecha\":{\"eq\":\"{{ $json.fecha_target }}\"},\"id_estado\":{\"neq\":1}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-3",
+        "name": "GET Citas por fecha",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          480,
+          0
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "TwN6eBWsydjMdsCM",
+            "name": "Header Auth account 3"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "fieldToSplitOut": "data",
+          "options": {}
+        },
+        "id": "node-4",
+        "name": "Split Citas",
+        "type": "n8n-nodes-base.splitOut",
+        "typeVersion": 1,
+        "position": [
+          704,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "condition-1",
+                "leftValue": "={{ $json.estado_anulacion }}",
+                "rightValue": 1,
+                "operator": {
+                  "type": "number",
+                  "operation": "notEquals"
+                }
+              },
+              {
+                "id": "condition-2-skip-confirmados",
+                "leftValue": "={{ $json.id_estado }}",
+                "rightValue": 18,
+                "operator": {
+                  "type": "number",
+                  "operation": "notEquals"
+                }
+              },
+              {
+                "id": "condition-3-paciente-filter",
+                "leftValue": "={{ ($('Fecha Mañana').first().json.id_paciente_filter || []).length === 0 || ($('Fecha Mañana').first().json.id_paciente_filter || []).includes($json.id_paciente) }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              },
+              {
+                "id": "condition-3-skip-cambio-fecha",
+                "leftValue": "={{ $json.id_estado }}",
+                "rightValue": 14,
+                "operator": {
+                  "type": "number",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-5",
+        "name": "Solo citas activas",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          928,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.dentalink.healthatom.com/api/v1/pacientes/{{ $json.id_paciente }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "options": {}
+        },
+        "id": "node-6",
+        "name": "GET Paciente (celular)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1152,
+          -96
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "TwN6eBWsydjMdsCM",
+            "name": "Header Auth account 3"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "// === MODO PRODUCTIVO ===\nconst TEST_MODE = false;\nconst TEST_PHONE = \"5491161461034\";\n\nconst paciente = $input.item.json;\nconst cita = $(\"Solo citas activas\").all()[$itemIndex]?.json || {};\n\nconst pData = paciente.data || paciente;\nconst nombre = (pData.nombre || \"paciente\").trim();\nlet celular = pData.celular || \"\";\n\nconst fecha = cita.fecha || \"\";\nconst hora = (cita.hora_inicio || \"\").substring(0, 5);\nconst dentista = (cita.nombre_dentista || \"Rodríguez Raquel\").replace(/\\s+/g, \" \").trim();\n\n// Inferir tipo_recordatorio por días hasta la cita\nconst today = new Date();\nconst argNow = new Date(today.getTime() - (3 * 60 * 60 * 1000));\nargNow.setHours(0, 0, 0, 0);\nconst fechaCita = new Date(fecha + \"T00:00:00\");\nconst daysDiff = Math.round((fechaCita - argNow) / (1000 * 60 * 60 * 24));\nconst tipo_recordatorio = daysDiff <= 1 ? \"24h\" : \"72h\";\n\n// Naturalización fecha\nconst dias = [\"domingo\", \"lunes\", \"martes\", \"miércoles\", \"jueves\", \"viernes\", \"sábado\"];\nconst meses = [\"enero\",\"febrero\",\"marzo\",\"abril\",\"mayo\",\"junio\",\"julio\",\"agosto\",\"septiembre\",\"octubre\",\"noviembre\",\"diciembre\"];\nconst diaSemana = dias[fechaCita.getDay()];\nconst diaSemanaCap = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);\nconst diaNum = fechaCita.getDate();\nconst mes = meses[fechaCita.getMonth()];\nconst anio = fechaCita.getFullYear();\n\n// Género heurístico por terminación del primer nombre\nconst primerNombre = nombre.split(\" \")[0];\nconst ult = primerNombre.slice(-1).toLowerCase();\nconst tratamiento = ult === \"a\" ? \"Estimada\" : ult === \"o\" ? \"Estimado\" : \"Estimado/a\";\nconst verboObj    = ult === \"a\" ? \"la esperamos\" : ult === \"o\" ? \"lo esperamos\" : \"le esperamos\";\n\n// === Normalización celular: SIEMPRE termina como 549XXXXXXXXXX (13 dígitos)\ncelular = celular.replace(/[^0-9]/g, \"\");\nif (!celular) {\n  return { json: { phone: \"\", remoteJid: \"\", message: \"\", nombre, cita_id: cita.id || \"\", tipo_recordatorio } };\n}\nif (celular.startsWith(\"549\") && celular.length === 13) {\n  // ok, ya está perfecto\n} else if (celular.startsWith(\"54\") && celular.length === 12) {\n  // 54 + 10 dígitos sin 9 -> agregar 9\n  celular = \"549\" + celular.substring(2);\n} else if (celular.length === 10) {\n  // sólo 10 dígitos (sin código país ni 9)\n  celular = \"549\" + celular;\n} else if (celular.length === 11 && celular.startsWith(\"15\")) {\n  // formato local \"15XXXXXXXX\" -> agregar 549 quitando el 15\n  celular = \"549\" + celular.substring(2);\n} else if (!celular.startsWith(\"54\")) {\n  // cualquier otra cosa que no empiece con 54: prepender 549\n  celular = \"549\" + celular;\n}\n\n// === TEMPLATES OFICIALES ===\nlet realMessage;\nif (tipo_recordatorio === \"72h\") {\n  realMessage =\n    \"✨ ÁUREA ODONTOLOGÍA ESTÉTICA ✨\\n\\n\" +\n    tratamiento + \" \" + nombre + \",\\n\" +\n    \"Le recordamos su turno con la Dra. Rodríguez Raquel:\\n\\n\" +\n    \"📅 \" + diaSemanaCap + \" \" + diaNum + \" de \" + mes + \" de \" + anio + \"\\n\" +\n    \"🕔 \" + hora + \" hs\\n\" +\n    \"📍 Balcarce Nº37, 2º piso\\n\\n\" +\n    \"Le pedimos confirmar su asistencia respondiendo a este mensaje para conservar su turno.\\n\\n\" +\n    \"⚠️ Importante:\\n\" +\n    \"* Si su turno está confirmado y no asiste al mismo, de igual manera deberá abonar el control.\\n\" +\n    \"* Para cancelar o reprogramar, solicitamos avisar con un mínimo de 48 hs de anticipación.\\n\\n\" +\n    \"Esperamos su confirmación, gracias por elegirnos 💙\";\n} else {\n  realMessage =\n    \"Hola, \" + nombre + \" 😊 le recordamos que mañana \" + verboObj + \" a las \" + hora +\n    \" hs para su atención con la Dra. Raquel Rodríguez en nuestra Clínica Áurea Odontología Estética. Saludos ✨\";\n}\n\nconst finalPhone = TEST_MODE ? TEST_PHONE : celular;\nconst finalJid = finalPhone + \"@s.whatsapp.net\";\nconst finalMessage = TEST_MODE ? \"[TEST \" + tipo_recordatorio + \"] Para: \" + nombre + \" (\" + celular + \")\\n\\n\" + realMessage : realMessage;\n\nreturn {\n  json: {\n    phone: finalPhone,\n    remoteJid: finalJid,\n    message: finalMessage,\n    nombre,\n    cita_id: cita.id || \"\",\n    id_paciente: pData.id || cita.id_paciente || \"\",\n    fecha,\n    hora,\n    tipo_recordatorio,\n    dentista\n  }\n};"
+        },
+        "id": "node-7",
+        "name": "Preparar mensaje",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1360,
+          -96
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "condition-2",
+                "leftValue": "={{ $json.phone }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-8",
+        "name": "Tiene celular?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1584,
+          -96
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "messages-api",
+          "instanceName": "raquel",
+          "remoteJid": "={{ $json.remoteJid }}",
+          "messageText": "={{ $json.message }}",
+          "options_message": {}
+        },
+        "id": "node-9",
+        "name": "Enviar WhatsApp",
+        "type": "n8n-nodes-evolution-api.evolutionApi",
+        "typeVersion": 1,
+        "position": [
+          1808,
+          -208
+        ],
+        "credentials": {
+          "evolutionApi": {
+            "id": "4sAc6U57qV9jpeRy",
+            "name": "Evolution account 2"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {},
+        "id": "node-10",
+        "name": "Sin celular (skip)",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          1808,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// FORMATO LANGCHAIN v0.3 (flat, sin wrapper 'data')\n// FIX 2026-06-02: strings literales con \\n sin escapar rompian el parse JS.\n// FIX 2026-06-03: el codigo solo procesaba el primer item. Ahora itera items[].\nconst dias = [\"domingo\", \"lunes\", \"martes\", \"miércoles\", \"jueves\", \"viernes\", \"sábado\"];\nconst meses = [\"enero\",\"febrero\",\"marzo\",\"abril\",\"mayo\",\"junio\",\"julio\",\"agosto\",\"septiembre\",\"octubre\",\"noviembre\",\"diciembre\"];\n\nconst results = [];\nfor (const item of items) {\n  const prep = item.json;\n  const phone = prep.phone;\n  const message = prep.message;\n  if (!phone || !message) {\n    continue;\n  }\n  const cita_id = prep.cita_id || '';\n  const fecha = prep.fecha || '';\n  const hora = prep.hora || '';\n  const tipo = prep.tipo_recordatorio || '';\n  const nombre = prep.nombre || '';\n  const dentista = prep.dentista || 'Rodríguez Raquel';\n  const idPaciente = prep.id_paciente || '';\n\n  let fechaNatural = fecha;\n  if (fecha) {\n    const f = new Date(fecha + 'T00:00:00');\n    fechaNatural = dias[f.getDay()] + ' ' + f.getDate() + ' de ' + meses[f.getMonth()] + ' de ' + f.getFullYear();\n  }\n\n  // Mensaje 1: el recordatorio tal cual se envio al paciente, tageado como AI con source reminder_note\n  const msgRecordatorio = JSON.stringify({\n    type: 'ai',\n    content: message,\n    tool_calls: [],\n    additional_kwargs: { source: 'reminder_note' },\n    response_metadata: {},\n    invalid_tool_calls: []\n  });\n\n  // Mensaje 2: NOTA INTERNA con datos estructurados del turno (para que el bot tenga contexto sin pedir)\n  const internalNote = `[NOTA INTERNA - contexto del último recordatorio enviado, NO mencionar al paciente]\nAcabo de enviar un recordatorio ${tipo} del siguiente turno:\n- Cita Dentalink ID: ${cita_id}\n- ID Paciente: ${idPaciente}\n- Paciente: ${nombre}\n- Fecha: ${fechaNatural}\n- Hora: ${hora}\n- Profesional: Dra. ${dentista}\nSi el paciente responde sobre este turno, ya conocés todos los datos. NO le pidas que repita fecha/hora/profesional.`;\n\n  const msgInternal = JSON.stringify({\n    type: 'ai',\n    content: internalNote,\n    tool_calls: [],\n    additional_kwargs: { source: 'reminder_note' },\n    response_metadata: {},\n    invalid_tool_calls: []\n  });\n\n  results.push({ json: { session_id: phone, message_json: msgRecordatorio, saved: true } });\n  results.push({ json: { session_id: phone, message_json: msgInternal, saved: true } });\n}\nreturn results;\n"
+        },
+        "id": "save-reminder-memory-01",
+        "name": "Guardar en Chat Memory",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1408,
+          304
+        ],
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb)",
+          "options": {
+            "queryReplacement": "={{ $json.session_id }},={{ $json.message_json }}"
+          }
+        },
+        "id": "pg-insert-memory-01",
+        "name": "Postgres - Insert Memory",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1600,
+          304
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "TpYhZX4UT61xAKSV",
+            "name": "Postgres Supabase Nexora v3"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "schema": {
+            "__rl": true,
+            "value": "public",
+            "mode": "list"
+          },
+          "table": {
+            "__rl": true,
+            "value": "recordatorios_enviados",
+            "mode": "list"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "telefono": "={{ $('Preparar mensaje').item.json.phone }}",
+              "chat_remote_jid": "={{ $('Preparar mensaje').item.json.remoteJid }}",
+              "id_cita_dentalink": "={{ $('Preparar mensaje').item.json.cita_id }}",
+              "id_paciente_dentalink": "={{ $('Preparar mensaje').item.json.id_paciente }}",
+              "nombre_paciente": "={{ $('Preparar mensaje').item.json.nombre }}",
+              "fecha_turno": "={{ $('Preparar mensaje').item.json.fecha }}",
+              "hora_turno": "={{ $('Preparar mensaje').item.json.hora }}",
+              "tipo": "={{ $('Preparar mensaje').item.json.tipo_recordatorio }}",
+              "workflow_execution_id": "={{ $execution.id }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "telefono",
+                "displayName": "telefono",
+                "required": true,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "chat_remote_jid",
+                "displayName": "chat_remote_jid",
+                "required": true,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "id_cita_dentalink",
+                "displayName": "id_cita_dentalink",
+                "required": true,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "id_paciente_dentalink",
+                "displayName": "id_paciente_dentalink",
+                "required": true,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "nombre_paciente",
+                "displayName": "nombre_paciente",
+                "required": true,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "fecha_turno",
+                "displayName": "fecha_turno",
+                "required": true,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "hora_turno",
+                "displayName": "hora_turno",
+                "required": true,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "tipo",
+                "displayName": "tipo",
+                "required": true,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "workflow_execution_id",
+                "displayName": "workflow_execution_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [
+          2032,
+          -208
+        ],
+        "id": "insert-recordatorios-uuid-001",
+        "name": "Insert recordatorios_enviados",
+        "credentials": {
+          "postgres": {
+            "id": "TpYhZX4UT61xAKSV",
+            "name": "Postgres Supabase Nexora v3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "trigger-recordatorios-manual",
+          "responseMode": "onReceived",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          208
+        ],
+        "id": "wh-manual-recordatorios-001",
+        "name": "Webhook Manual Recordatorios",
+        "webhookId": "trigger-recordatorios-manual"
+      }
+    ],
+    "connections": {
+      "GET Citas por fecha": {
+        "main": [
+          [
+            {
+              "node": "Split Citas",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split Citas": {
+        "main": [
+          [
+            {
+              "node": "Solo citas activas",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Solo citas activas": {
+        "main": [
+          [
+            {
+              "node": "GET Paciente (celular)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "GET Paciente (celular)": {
+        "main": [
+          [
+            {
+              "node": "Preparar mensaje",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar mensaje": {
+        "main": [
+          [
+            {
+              "node": "Tiene celular?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Guardar en Chat Memory",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tiene celular?": {
+        "main": [
+          [
+            {
+              "node": "Enviar WhatsApp",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Sin celular (skip)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fecha Mañana": {
+        "main": [
+          [
+            {
+              "node": "GET Citas por fecha",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar WhatsApp": {
+        "main": [
+          [
+            {
+              "node": "Insert recordatorios_enviados",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Guardar en Chat Memory": {
+        "main": [
+          [
+            {
+              "node": "Postgres - Insert Memory",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Diario 9AM Arg (cron 0 14 UTC)": {
+        "main": [
+          [
+            {
+              "node": "Fecha Mañana",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert recordatorios_enviados": {
+        "main": [
+          []
+        ]
+      },
+      "Webhook Manual Recordatorios": {
+        "main": [
+          [
+            {
+              "node": "Fecha Mañana",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Lucas Ezequiel Silva",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-07-18T16:23:50.276Z",
+        "id": 2023,
+        "workflowId": "7RqTApkvVavRmq3R",
+        "versionId": "1576a439-a5ae-4439-b8cb-2cddfd06cd7e",
+        "event": "activated",
+        "userId": "76826d6a-a1cc-46a7-9022-d00280029573"
+      },
+      {
+        "createdAt": "2026-07-18T16:23:50.255Z",
+        "id": 2022,
+        "workflowId": "7RqTApkvVavRmq3R",
+        "versionId": "1576a439-a5ae-4439-b8cb-2cddfd06cd7e",
+        "event": "deactivated",
+        "userId": "76826d6a-a1cc-46a7-9022-d00280029573"
+      }
+    ]
+  }
+}
