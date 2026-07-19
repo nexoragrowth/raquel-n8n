@@ -30,6 +30,18 @@ _Última actualización: 2026-07-19 ART — panel cockpit + control de recordato
 - Cron recordatorios = lun-vie (`0 H * * 1-5`): suspender un finde es no-op; la sección
   del panel lo marca ("finde · no aplica") para no confundir a la secretaria.
 
+**KB + Agente (commits panel `a47f3f0`, `929710b`):**
+- **OPENAI_API_KEY** de Lucas cargada en `nexora-whatsapp-agent/.env.local` (gitignored) →
+  el panel re-embebe de verdad al guardar en /conocimiento. **Lucas la pegó en el chat →
+  conviene rotarla.** Modelo text-embedding-3-small, 1536 dims (mismo que el bot).
+- **Bug arreglado**: guardar KB sin key ponía `embedding=NULL` (el bot dejaba de encontrar la
+  entrada). Ahora si no se puede re-embeddar, se OMITE la columna (preserva el vector). Fila
+  id 28 "menores" re-embebida (`scripts/reembed_kb_nulls.py`) → 0 NULL; sale #1 (sim 0.765)
+  para "¿atienden niños?". KB = 100% real (auditoría panel: 0 datos de negocio hardcodeados).
+- **Sección `/agente`** (nueva): lee el v6 EN VIVO de n8n y muestra Recepción (router) + 5
+  especialistas + Estilo WhatsApp con modelo, tools e instrucción (systemMessage) VERBATIM.
+  UI simple para secre/doctora, read-only (editar prompts = sensible, causó el incidente).
+
 ---
 
 _Actualización previa: 2026-07-18 ~14:30 ART — ✅ SISTEMA 100% OPERATIVO sobre Supabase v3_
