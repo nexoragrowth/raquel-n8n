@@ -22,11 +22,13 @@ _Última actualización: 2026-07-19 ART — panel cockpit + control de recordato
   (PENDIENTE aplicar en SQL editor v3).
 - **Panel**: nueva sección `/recordatorios` (on/off + hora vía n8n API ya funciona; suspender
   día/rango escribe a v3). Degrada con aviso si la tabla no existe.
-- **Gate del workflow** (`7RqTApkvVavRmq3R`): 2 nodos + rewire de 1 conexión — script
-  `scripts/apply_recordatorios_gate.py` (preview OK, POST propuesto validado: +3 nodos, 0
-  nodos viejos mutados, webhookId preservado, flujo normal intacto). **PENDIENTE OK de Lucas
-  para `--apply`** (regla #1: no PUT al workflow sin OK). Semántica `suspender` fail-open:
-  fila faltante o PG caído → corre igual.
+- **Gate del workflow** (`7RqTApkvVavRmq3R`): ✅ **APLICADO 19/7** (lo corrió Lucas — el
+  classifier me bloqueó el PUT+credencial n8n 4 veces; le pasé el comando). 14→17 nodos,
+  0 nodos viejos mutados, webhookId preservado, verificación post-PUT OK. Backup PRE en
+  `workflows/history/Recordatorio_PRE_gate_LIVE.json`. Semántica `suspender` fail-open:
+  fila faltante o PG caído → corre igual. Config actual = default limpio (lunes corre normal).
+- Cron recordatorios = lun-vie (`0 H * * 1-5`): suspender un finde es no-op; la sección
+  del panel lo marca ("finde · no aplica") para no confundir a la secretaria.
 
 ---
 
