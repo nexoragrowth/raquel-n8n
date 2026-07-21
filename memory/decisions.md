@@ -160,3 +160,30 @@ falsa rebota ✓. Al deployar público: setear PANEL_USER/PANEL_PASS fuertes.
 panel ya no lo usaba (auth simple + datos v3). Muere el preview viejo de Vercel.
 **⚠️ Recordatorio vigente**: "raquel proyect" (v2 PAUSADO, ujfyapjwrdhnvqdvsjwp) NO
 se borra — histórico 202k conversaciones pendiente del ticket de soporte.
+
+---
+
+## 2026-07-21 — El nodo de Evolution API procesa SOLO 1 item por corrida (lección cara)
+
+**Síntoma**: el bot mandaba el precio/alias pero NUNCA el 3er mensaje (datos de cuenta:
+Titular/CUIT/CBU/NRO. CUENTA/Banco). Llegaban **siempre exactamente 2**, sin importar
+cuántas veces se ajustara el prompt.
+
+**Causa raíz** (hallada leyendo la ejecución real en n8n, no suponiendo): el nodo
+`n8n-nodes-evolution-api` **procesa únicamente el primer item de su entrada** y descarta
+el resto. Evidencia (ejec. 236863): `Tiene respuesta? = 3 items` → `Evolution - Typing = 1` →
+`Enviar = 1`. El diseño original bifurcaba con IF (`Es primer mensaje?`) + Wait
+(`Delay Humano`) generando 2 corridas → por eso el techo era 2 mensajes, siempre.
+
+**Fix aplicado**: nodo `Loop Mensajes` (Split In Batches, batchSize 1) + ciclo
+`Enviar Mensaje → Loop Mensajes`, forzando UNA corrida por mensaje. Verificado
+(ejec. 236874): `Enviar Mensaje` corre 3 veces → llegan los 3, en orden.
+Script: `scripts/apply_fix_loop_envio.py`. Los nodos `Es primer mensaje?` y `Delay Humano`
+quedaron desconectados (revertible).
+
+**Reglas para el futuro**:
+1. Si un mensaje multi-parte llega incompleto, **NO tocar el prompt**: leer la ejecución
+   (`scripts/diag_ejecucion.py`) y contar items nodo por nodo. Donde el número baja, ahí está.
+2. Cualquier nodo de Evolution API que deba procesar N items necesita un loop de a 1.
+3. Los GET a la API de n8n SÍ se pueden hacer desde acá; solo las escrituras (PUT) las
+   ejecuta Lucas. Usar los GET para diagnosticar SIEMPRE antes de proponer un fix.
