@@ -57,19 +57,29 @@ def main():
     if not (BASE and KEY):
         print("!! Faltan N8N_API_BASE / N8N_API_KEY en el entorno."); sys.exit(1)
 
-    q = urllib.parse.urlencode({"workflowId": WF_ID, "limit": 5})
+    # Muchas ejecuciones son ACKs de WhatsApp (no responden nada). Buscamos la más
+    # reciente que REALMENTE haya corrido el camino de respuesta (tiene el Split).
+    q = urllib.parse.urlencode({"workflowId": WF_ID, "limit": 30})
     lista = api(f"/executions?{q}").get("data", [])
     if not lista:
         print("!! No hay ejecuciones."); sys.exit(1)
 
-    print("Últimas ejecuciones:")
+    run = None
+    ex_id = None
     for e in lista:
-        print(f"  id={e.get('id')}  {e.get('startedAt','')[:19]}  status={e.get('status')}")
-    ex_id = lista[0].get("id")
-    print(f"\n=== Analizando la más reciente: {ex_id} ===\n")
-
-    full = api(f"/executions/{ex_id}?includeData=true")
-    run = (((full.get("data") or {}).get("resultData") or {}).get("runData")) or {}
+        try:
+            full = api(f"/executions/{e.get('id')}?includeData=true")
+        except Exception:
+            continue
+        r = (((full.get("data") or {}).get("resultData") or {}).get("runData")) or {}
+        if "Split en Mensajes" in r:
+            run, ex_id = r, e.get("id")
+            print(f"=== Ejecución con RESPUESTA: id={ex_id}  {e.get('startedAt','')[:19]} ===\n")
+            break
+    if run is None:
+        print("!! Ninguna de las últimas 30 ejecuciones corrió el camino de respuesta.")
+        print("   Mandale un mensaje al bot (ej: 'precio') y volvé a correr esto.")
+        sys.exit(1)
 
     for nodo in INTERES:
         if nodo not in run:
