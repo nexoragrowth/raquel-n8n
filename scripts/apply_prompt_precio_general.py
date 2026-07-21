@@ -32,17 +32,25 @@ BASE = (os.environ.get("N8N_API_BASE") or "").rstrip("/")
 KEY = os.environ.get("N8N_API_KEY") or ""
 NODO = "Sub-Agent General"
 
-# --- El canned ACTUAL (lo que hay que reemplazar) ---
+# --- El canned ACTUAL (v1, ya aplicado el 21/7) que hay que reemplazar ---
 VIEJO = (
     '- **Precio consulta / 1ra visita**: "El valor de la consulta es de $50.000. '
-    "Trabajamos de manera particular y con turnos programados. Se abona en efectivo o transferencia.\n"
-    'Desea agendar un turno?"'
+    "Si desea ir abonando, puede hacerlo al siguiente alias:\n"
+    "dra.raquel.aurea\n"
+    "Titular: Laura Raquel Rodríguez\n"
+    "CUIT/CUIL: 27316870118\n"
+    "CBU: 1430001713001112680016\n"
+    "NRO. CUENTA: 1300111268001\n"
+    'Banco: BRUBANK"'
 )
 
-# --- El canned NUEVO (lo que pidió la secretaria) ---
+# --- El canned NUEVO (v2): fuerza el bloque COMPLETO en 1 mensaje, sin el split `---`
+# que hacía que cortara en el alias y no llegaran los datos de cuenta. ---
 NUEVO = (
-    '- **Precio consulta / 1ra visita**: "El valor de la consulta es de $50.000. '
-    "Si desea ir abonando, puede hacerlo al siguiente alias:\n"
+    "- **Precio consulta / 1ra visita**: cuando pregunten el PRECIO de la consulta, responder con "
+    "el valor y los datos de pago COMPLETOS, todo en UN SOLO mensaje, SIN usar el formato de `---` "
+    "(no lo dividas ni lo cortes, mandá el bloque entero). Texto exacto:\n"
+    '"El valor de la consulta es de $50.000. Si desea ir abonando, puede hacerlo al siguiente alias:\n'
     "dra.raquel.aurea\n"
     "Titular: Laura Raquel Rodríguez\n"
     "CUIT/CUIL: 27316870118\n"
