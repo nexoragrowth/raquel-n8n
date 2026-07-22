@@ -1,6 +1,71 @@
 # Estado actual — raquel-n8n
 
-_Última actualización: 2026-07-19 ART — panel cockpit + control de recordatorios (diseño)_
+_Última actualización: 2026-07-22 ART — panel DEPLOYADO a producción (VPS Docker+Traefik)_
+
+## Sesión 22/7 — Panel LIVE en producción
+
+**El panel `nexora-whatsapp-agent` está deployado y andando:** https://panel.raquelrodriguez.com.ar
+(login `lucas`/`irina`/`raquel`). Verificado E2E: la API real devolvió 67 conversaciones (auth
+firmada + Supabase v3 OK).
+
+**Infra del VPS (Hostinger KVM2, `187.127.0.110`, Ubuntu 24.04) — descubierto este día:**
+- TODO corre en **Docker detrás de un Traefik** (`n8n-traefik-1`, dueño de :80/:443). Red
+  compartida `n8n_default`. Certs Let's Encrypt vía certresolver `mytlschallenge`. Middleware
+  de seguridad reusable `n8n@docker`.
+- Containers vivos: n8n, 2x evolution-api, chatwoot (rails+sidekiq+pg+redis), waha, growth-engine,
+  redis varios. El bot vive acá → el panel se limita con `mem_limit 512m` para no competir.
+- **Había un panel viejo olvidado** (`dra-raquel-dashboard`, repo `LucasEzequielSilva/dra.raquel-dashboard`,
+  del 20/5, otro código con basic-auth) ocupando `panel.raquelrodriguez.com.ar`. Se **apagó**
+  (no borró) → rollback: `docker start dra-raquel-dashboard` tras `docker stop nexora-panel`.
+
+**Cómo se deployó (aplicado, funciona):**
+- Repo del panel pusheado a **`github.com/LucasEzequielSilva/nexora-whatsapp-agent`** (PRIVADO).
+- Docker: `Dockerfile` multi-stage (pnpm + `output: standalone`) + `docker-compose.yml`
+  (labels Traefik) + `.dockerignore`, todo commiteado. En el VPS: `/opt/nexora-panel/`.
+- `.env.production` en el server (chmod 600, fuera del repo): solo las 15 vars que el código
+  usa + `PANEL_SESSION_SECRET` nuevo. Los valores nunca pasaron por el chat.
+- Swap de 4 GB agregada al VPS (tenía 0) para que el build no arriesgue OOM del bot.
+- Build en el VPS (no había Docker local): `docker compose build` → imagen `nexora-panel:latest`.
+
+**Auth del panel endurecida (commit `2f67529`):** cookie firmada HMAC + scrypt (`PANEL_USERS`),
+vencimiento 7d, `secure` en prod. Reemplazó el `base64(user:pass)` viejo. Detalle del deploy
+en `decisions.md` (entrada 22/7).
+
+**BUG DE PRODUCCIÓN encontrado y arreglado el 22/7 — recordatorios a extranjeros:**
+El resumen diario del 22/7 marcó "4 enviados / 1 error Evolution". Leyendo la ejecución
+real (237284) salió que el nodo `Preparar mensaje` del workflow de Recordatorios asumía que
+TODOS los pacientes son argentinos: su rama catch-all `if (!celular.startsWith("54"))
+celular = "549" + celular` le pegaba 549 a números que YA traían código de país (el `+`
+se perdía en el `replace(/[^0-9]/g,"")` previo). Ejemplo: `+59173327830` (Bolivia, válido)
+→ `54959173327830` → Evolution: "Erro ao enviar mensagem de texto".
+- **Fix aplicado** (`scripts/apply_fix_telefono_internacional.py --apply`): se lee
+  `esInternacional = /^\s*\+/.test(celular)` ANTES del replace + rama nueva que deja el
+  número extranjero TAL CUAL. Verificado post-PUT: activo, 17 nodos, webhookId
+  `trigger-recordatorios-manual` preservado. Backups PRE/POST en `workflows/history/`.
+- **Alcance real** (escaneo de los 649 pacientes de Dentalink): 3 con número extranjero —
+  fichas 269 y 88 (`+59173327830`, Bolivia, mismo número) y 200 (`+34611237936`, España).
+  Jujuy es frontera con Bolivia, así que esto reaparece; el fix cubre cualquier país.
+- **Isabel Sanai** (cita 8529 del 24/7 09:10) no había recibido el recordatorio 72h → se
+  le mandó a mano por Evolution al número correcto. Además su fila en
+  `recordatorios_enviados` (id=26) había quedado con el teléfono roto → se corrigió, si no
+  su "confirmo" no habría matcheado (`consultar_recordatorios_abiertos` busca por teléfono).
+- **Lección**: cuando el resumen diario marque "Errores Evolution: N", leer la ejecución
+  (`/api/v1/executions/<id>?includeData=true`) y contar items nodo por nodo — el error real
+  viene en el item, no en el status del workflow (que dice "success" igual).
+
+**Pendientes de Lucas (no bloquean):**
+- **GitHub Actions trabado por billing**: ningún workflow arranca (`startup_failure` hasta con
+  un `echo hola`). El `.github/workflows/deploy.yml` (build→scp→symlink, con fallback que
+  saltea el deploy si no hay `VPS_HOST`) está listo para cuando se destrabe. Mientras, redeploy
+  manual por SSH. **OJO**: ese deploy.yml es el enfoque systemd/standalone viejo; el deploy
+  real quedó Docker+Traefik. Si se reactiva Actions, reescribir el job a `docker compose`.
+- Rotar token `ghp_p1z37…` filtrado en el git config del panel viejo del server.
+- Cambiar la contraseña del panel (pasó por el chat).
+- SSH: `ssh -i C:\Users\not\.ssh\raquel_vps root@187.127.0.110`.
+
+---
+
+## Sesión 19/7 — Panel: chat cockpit + sección Recordatorios escalable (diseño)
 
 ## Sesión 19/7 — Panel: chat cockpit + sección Recordatorios escalable
 

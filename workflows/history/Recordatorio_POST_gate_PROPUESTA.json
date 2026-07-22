@@ -433,7 +433,7 @@
       "webhookId": "trigger-recordatorios-manual"
     },
     {
-      "id": "51d9e35b-dc4e-4ea5-b809-9037b3ffa92e",
+      "id": "7371893b-dc11-4a01-94e7-98a1c1926e00",
       "name": "Gate - Leer config",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
@@ -455,7 +455,7 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "65fce73a-f3a8-460d-9a6d-6cfddb147405",
+      "id": "44fc3fe1-8bab-42e2-9657-4e68204c4fd2",
       "name": "Gate - ¿Suspendido hoy?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -488,7 +488,7 @@
       }
     },
     {
-      "id": "fb21e686-0bb1-49e8-a39a-1b7e0ba90f2a",
+      "id": "4e6df8b0-39cd-4296-b1b2-229721b712a2",
       "name": "Suspendido hoy",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,

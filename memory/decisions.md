@@ -187,3 +187,31 @@ quedaron desconectados (revertible).
 2. Cualquier nodo de Evolution API que deba procesar N items necesita un loop de a 1.
 3. Los GET a la API de n8n SÍ se pueden hacer desde acá; solo las escrituras (PUT) las
    ejecuta Lucas. Usar los GET para diagnosticar SIEMPRE antes de proponer un fix.
+
+---
+
+## 2026-07-22 — Deploy del panel: Docker+Traefik en el VPS, no systemd/nginx
+
+**Decisión**: el panel `nexora-whatsapp-agent` se deploya como **container Docker detrás del
+Traefik existente** del VPS, reusando el subdominio `panel.raquelrodriguez.com.ar` (DNS+cert
+ya existían de un prototipo viejo). Descartado el plan inicial systemd + nginx + certbot.
+
+**Razón**: el VPS de la clínica corre TODO con Docker+Traefik (n8n, evolution, chatwoot, waha).
+Traefik ya es dueño de :80/:443 → nginx nativo ni podría bindearlos. Sumarse al patrón
+existente (red `n8n_default`, certresolver `mytlschallenge`, middleware `n8n@docker`) es lo
+correcto; pelearlo con otro stack habría sido frágil y redundante.
+
+**Alternativas descartadas**:
+- systemd + standalone + nginx (mi plan original, escrito en `deploy/` y `deploy.yml`): quedó
+  como CI muerto. No aplica a esta caja. Si algún día se migra a un VPS sin Traefik, sirve.
+- Build local + transferir imagen: no hay Docker en la máquina de Lucas. Se buildea en el VPS.
+- Vercel/hosting propio de Nexora: se eligió el VPS de la clienta (pedido explícito de Lucas,
+  "que se autodeploye en el hosting de la clienta en hostinger").
+
+**Salvaguardas aplicadas**: swap 4 GB antes de buildear (el VPS tenía 0, riesgo de OOM-kill
+del bot); `mem_limit 512m` al container; prototipo viejo apagado NO borrado (rollback 1 cmd);
+`.env.production` fuera del repo (chmod 600), secretos nunca por el chat; secret de sesión
+nuevo para prod.
+
+**Revisable**: sí. Si se destraba GitHub Actions (hoy trabado por billing), reescribir el job
+de deploy a `docker compose build && up` por SSH en vez del scp/symlink del `deploy.yml` viejo.
