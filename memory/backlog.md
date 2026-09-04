@@ -34,6 +34,11 @@
       17/7, snapshot en workflows/current/, hoy DESACTIVADO por orden de Lucas).
 
 ## P1
+- [ ] **Extender horarios/precio dinámico a cuota mensual** ($70.000, KB id=36):
+      mismo patrón ya armado 21/8 para horarios (id=20) y precio consulta (id=21)
+      — agregar id=36 a la query de `Get KB Horarios y Precio` + extraer en
+      `Extraer Horarios y Precio` + interpolar en el canned de "Cuota mensual" de
+      Sub-Agent General (hoy sigue con "$70.000" hardcodeado).
 - [ ] **Fase 1 reprogramaciones** (quick wins, esperando OK de Lucas):
       (a) `crear_paciente_dentalink`: agregar `documento`+`id_sucursal` al jsonBody (hoy el
       DNI nunca llega a Dentalink → fichas sin rut, GAP 7);
@@ -48,6 +53,22 @@
       `turno_objetivo` (GAP 5). Test sintético + shadow antes de cutover.
 
 ## P2
+- [ ] **Alias + datos de cuenta dinámicos desde la KB (id=24), en UNA sola pasada para el
+      `Canned Sidecar` Y el prompt de Sub-Agent General**: hoy ambos lo tienen hardcodeado con
+      el MISMO texto (a propósito — ver decisions.md 2/9: dinamizar solo uno haría que Raquel
+      edite `/servicios` y cambie una respuesta y la otra no). La fila ya existe
+      (`knowledge_base` id=24 "Datos de cuenta para transferencia", categoría `pagos`, ya
+      editable desde `/servicios`), así que el trabajo es: extender la query de
+      `Get KB Horarios y Precio` a `IN (20,21,24)`, extraer alias + bloque de cuenta en
+      `Extraer Horarios y Precio`, y apuntar los dos consumidores a esos campos. OJO: si se
+      reescribe el `contenido` de id=24 para que sea texto citable literal (mismo patrón que
+      se aplicó a id=20 el 21/8), re-embeddear esa fila para que `buscar_conocimiento` no
+      quede con el vector viejo. Mismo patrón ya probado el 21/8 para horarios/precio.
+- [ ] **Encender las reglas `horarios`/`direccion` del `Canned Sidecar`** (hoy `enabled:false`
+      a propósito: se arrancó solo con lo que falló de verdad en producción, que fue plata).
+      Es cambiar una palabra por regla. Antes de la de dirección, revisar que no choque con el
+      ban de "Balcarce 37" del Banlist (hoy el Banlist ya la deja pasar SOLO si el paciente
+      preguntó la dirección explícitamente — misma condición que usaría la regla).
 - [ ] **Ajustar reportero semanal**: definición de "escalación" (excluye fromMe/receipts),
       roles mal categorizados, métricas alucinadas ("agregó items al KB" falso). Primero
       auditar de qué fuente lee (¿Logger/Supabase?).
@@ -70,6 +91,30 @@
 - [ ] Renombrar nodo cron "Diario 9AM Arg (cron 0 14 UTC)" — la expresión real es `0 13 * * 1-5`.
 
 ## Done reciente
+- [x] 2026-09-02 **Bug real reportado por las secretarias: el bot "tragaba" el pedido de
+      alias cuando venía pegado a "Confirmo"** (caso Paulina Villanueva 2/9 + otro casi
+      idéntico el 28/8). Causa raíz: Router y Sub-Agent Confirmar se contradecían en vivo
+      sobre quién responde la info canned, y con el buffer mergeando 2 mensajes en un turno
+      no existe el "próximo turno" que Confirmar asumía. Fix estructural: nodo determinístico
+      `Canned Sidecar` en el punto de convergencia de los 7 caminos de salida — ningún
+      sub-agent necesita saber de info canned nunca más. 17/17 tests + 3 E2E reales (la 269291
+      reprodujo el bug en OTRO sub-agent y lo mostró rescatado). Ver current-state y
+      decisions.md 2/9.
+- [x] 2026-09-02 **Bug real: guard de precios bloqueaba guardado legítimo en
+      /conocimiento y /servicios** (Raquel reportó por WhatsApp que no podía
+      guardar "Valor de la primera consulta"). Fix: chequeo por oración en vez
+      de texto completo. Deployado (`173c8b8`) y verificado. Ver current-state 2/9.
+- [x] 2026-08-21 **Horarios y precio de consulta dinámicos desde /servicios**: el
+      bot ahora lee ambos de `knowledge_base` en cada mensaje (no más texto fijo en
+      el prompt) — editar el panel cambia lo que dice el bot al instante, sin tocar
+      n8n. Probado cambiando valores reales en vivo y confirmando que el bot los
+      repite. Ver current-state 21/8.
+- [x] 2026-08-21 Bug real Salvador Mayans (turno nunca creado en Dentalink, mensaje
+      multi-pedido): fix en 2 capas (Router + Sub-Agent General), verificado E2E
+      creando y cancelando una cita real de test. Ver current-state 21/8.
+- [x] 2026-08-21 3 pedidos de contenido de la Dra. (horarios actualizados, wording de
+      pago el día de la consulta, saludo de precio en primer contacto) — probados con
+      mensajes reales.
 - [x] 2026-07-06 Precio consulta $50.000 en prod (testeado E2E).
 - [x] 2026-07-06 Fix LID-safe extracción de teléfono + pushName (5/5 tests PASS).
 - [x] 2026-07-06 Fix crítico kill-switch (backspace U+0008 → `\b`; roto desde 09/05).
@@ -78,13 +123,85 @@
 - [x] 2026-07-06 Snapshot Sub-WF CancelarReprogramar al repo.
 
 ## Reunión Dra. Raquel 2026-07-14 (ver docs/reunion-2026-07-14-dra-raquel.md)
-- [ ] **P1: Triaje de urgencias con videos** — clasificar tipo, preguntas guiadas, pedir foto, enviar video, scoring severidad. BLOQUEADO: Raquel envía videos + fraseo
-- [ ] **P1: Reportero v2 "aprendizaje semanal"** — mapear escalaciones + urgencias, sugerir KB faltante ESPECÍFICA, enviar al grupo nuevo (absorbe el pendiente del reportero que cuenta mal)
-- [ ] P2: Dashboard nexora-whatsapp-agent (`Desktop/proyectos/nexora-whatsapp-agent`): UI WhatsApp-like, leído/no-leído, toggle bot/humano inmediato, métricas Dentalink, servicios/KB editables en UI
-- [ ] P2: Cuando Raquel cree el grupo nuevo (ella+Lucas+Irina): actualizar destino de escalaciones si cambia el group id
-- [ ] P3: Landing page: secciones flujo de tratamiento faltantes + sección Transformaciones (antes/después) post-hero o post-proceso + navbar
-- [x] 2026-07-14: VERIFICADO que el flujo agenda-céntrico YA funciona (cancelado id_estado=1 filtrado en GET; confirmado id_estado=18 filtrado en IF skip-confirmados) → no más on/off manual del workflow, feriados resueltos vía confirmación anticipada. Comunicar a Iri/Raquel
-- [x] Cerrado: "revisar lógica de feriados" — no requiere infra (decisión de la reunión + verificación técnica)
+- [x] 2026-08-11: **P1: Reportero v2 "aprendizaje semanal"** construido y probado con datos
+      reales (ver current-state 11/8). Absorbió el pendiente del reportero que contaba mal.
+      Extensión pedida 15/8: ver bullet nuevo abajo.
+- [x] 18-19/7: **P2: Dashboard nexora-whatsapp-agent** construido y en producción
+      (`panel.raquelrodriguez.com.ar`) — UI WhatsApp-like, leído/no-leído, métricas Dentalink,
+      servicios/KB editables. Demoeado formalmente a Raquel el 15/8. Gap señalado en esa demo:
+      toggle bot/humano no es inmediato (ver bullet nuevo abajo).
+- [ ] P2: Cuando Raquel cree el grupo nuevo (ella+Lucas+Irina): actualizar destino de
+      escalaciones si cambia el group id. **Sigue pendiente del lado de Raquel al 15/8**
+      (pedido primero el 14/7, un mes sin crearse — no es bloqueo técnico).
+- [x] Cerrado: "revisar lógica de feriados" — no requiere infra (decisión de la reunión +
+      verificación técnica). Reafirmado 15/8 tras un incidente recurrente — ver
+      `docs/reunion-2026-08-15-dra-raquel.md` (el gap fue de proceso, no de código: Irina pidió
+      apagar recordatorios en vez de usar la agenda).
+- [ ] P3: Landing page → **movido a `raquel-rodriguez/memory/backlog.md`** (repo propio).
+      Sin material nuevo de Belén al 15/8, mismo pedido que el 14/7.
+
+## Reunión Dra. Raquel 2026-08-15 (seguimiento — ver docs/reunion-2026-08-15-dra-raquel.md)
+- [ ] **P1: Triaje de urgencias con videos** — diseño completo cerrado 2/9 (ver decisions.md
+      y current-state.md 2/9: gate de red flags determinístico antes Y después de clasificar,
+      sin vision (foto = solo respaldo adjunto), aviso pasivo al resolver con video, rollout
+      sombra → piloto 1 tipo → expandir). Raquel está mandando los videos ahora. Bloqueado en:
+      (a) recibir el resto de los videos (2/9: solo llegaron 2, del tipo "alambre pincha" —
+      faltan "bracket suelto", "alambre girado", "ligadura pincha", Raquel avisó que los
+      demás siguen en edición);
+      (b) fraseo exacto de las preguntas guiadas (open-questions.md),
+      (c) confirmar con Raquel la lista de "red flags" que siempre escalan.
+      **Ajuste de diseño (2/9, descubierto al ver los 2 primeros videos)**: NO es 1 video = 1
+      tipo — "alambre pincha" ya trajo 2 videos secuenciales (Opción 1: cera de ortodoncia:
+      Opción 2: reinsertar con pinza, para probar si la 1 no alcanza). El flujo probablemente
+      necesita mandar Opción 1 primero y ofrecer la 2 si el paciente dice que no resolvió, no
+      un solo video fijo por tipo — confirmar este patrón se repite en los otros 3 tipos cuando
+      lleguen.
+      **Build resuelto (2/9): envío de video saliente por Evolution GO YA VERIFICADO en vivo.**
+      `POST /send/media` (existe en el swagger real del VPS, no estaba documentado en el
+      repo) acepta `{number, type:"video", url:<BASE64 CRUDO, sin prefijo data:>, caption,
+      filename}` — mismo apikey que ya usa "Evolution API - Enviar Mensaje" del v6 (sin campo
+      `instance`, igual que `/send/text`). Probado con un video real (3.9MB) mandado a Lucas,
+      200 OK, `Type:"VideoMessage"` confirmado. Script reusable:
+      `scripts/test_evo_go_send_video.py` (no hardcodea el apikey — lo extrae en caliente del
+      nodo vivo vía API de n8n, porque las claves hardcodeadas en scripts de jul/ago ya están
+      vencidas). Ver current-state.md 2/9 para el detalle completo.
+      **Hosting resuelto (2/9)**: bucket público Supabase Storage `urgencias-videos`, ya con
+      `alambre_pincha/opcion1.mp4` y `opcion2.mp4`; `/send/media` acepta la URL directa
+      (verificado E2E). Script: `scripts/upload_urgencia_video_supabase.py`.
+      **Sombra retrospectiva hecha (2/9)**: 30 urgencias reales en 60 días, ~47% resolubles
+      con video, casi todas alambre_pincha (7–8) o bracket_suelto (6); alambre_girado y
+      ligadura_pincha ≈ 0. Piloto recomendado: alambre_pincha (videos ya listos). Video que
+      más falta: bracket_suelto. Candidatos a video 5/6: contención rota, Invisalign. Detalle
+      y revisión manual caso por caso: `docs/analisis-retrospectivo-urgencias-2026-09-02.md`.
+      **FASE 1 (sombra) HECHA Y ACTIVA (3/9)**: workflow satélite `Áurea — Triaje Urgencias
+      (sombra)` (`Gm7ofyGohOJ2bI44`), cada 15 min clasifica las urgencias nuevas de
+      `escalaciones_log` → `triaje_urgencias_log` (tabla nueva). No toca el v6, no manda
+      nada. Gate de red flags en `triaje/gate_red_flags.js` (29/29 tests). Ver con
+      `python scripts/ver_triaje_sombra.py`. Primera corrida real OK (2 casos).
+      **FASE 2 APLICADA AL v6 (4/9) y verificada con 4 E2E reales**: video Opción 1 → Opción 2
+      → escalación determinística → red flag. Piloto activo SOLO para el número de Lucas
+      (`triaje_config.telefonos_piloto`). Diseño: `docs/triaje-fase2-diseno-2026-09-04.md`.
+      Siguiente: (a) demo de Lucas desde su teléfono; (b) textos definitivos de Raquel por
+      UPDATE (hoy borradores); (c) abrir a todos: `create_triaje_config_tables.py --activar
+      --piloto ""`; (d) E2E del cierre; (e) cuando lleguen los videos de bracket_suelto /
+      alambre_girado / ligadura_pincha: `upload_urgencia_video_supabase.py` + UPDATE
+      `triaje_videos` activo=true (sin n8n).
+- [ ] **P1 — BUG preexistente: toda escalación del bot silencia su propia respuesta al
+      paciente** (6/6 casos desde el 30/8, confirmado con ejecuciones reales durante el mapeo
+      del 4/9): `escalar_a_secretaria` → Helper `Chatwoot Apply` aplica label `humano` en
+      forma sincrónica → `Re-check Humano` 1.4 s después suprime el canned ("Recibimos tu
+      mensaje…"). El grupo SÍ recibe el aviso; el paciente escalado no recibe nada. Fix
+      candidato: que `Chatwoot Apply` no se aplique en la misma ejecución que escala, o que
+      el re-check ignore labels aplicados por la propia ejecución. La rama del triaje ya lo
+      esquiva (manda el texto antes del aviso). SENSIBLE (toca v6 o el Helper).
+- [ ] **P1: Scoring de urgencias en el reportero semanal** — extender el reportero ya
+      construido (11/8) para que además mapee las urgencias de la semana (no solo
+      escalaciones generales) y sugiera contenido/video nuevo para casos recurrentes.
+- [ ] P2: Toggle bot/humano **inmediato** en el panel (hoy espera la ventana de verificación de
+      ~30 min; Raquel lo quiere al toque cuando un humano escribe).
+- [ ] P2: Consolidar Dentalink + KB en un formato unificado para que Raquel lo revise.
+- [ ] P3 (exploratorio, sin comprometer): perfil/análisis de personalidad del paciente en la
+      ficha de la agenda, cruzando CRM + Dentalink.
 
 ## Post-incidente 2026-07-08 (nuevos)
 - [x] 2026-07-10: Recordatorio 48HS re-activado (Claude, a pedido de Lucas)

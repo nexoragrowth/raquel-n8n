@@ -20,3 +20,34 @@
   que el arreglo fantasma del Health Check: ¿alguien más toca prod?
 - **¿La dominancia del modo "Humano Atendiendo" es política deliberada o TTLs largos de label?**
   Si el label expira distinto de lo esperado, el bot podría meterse en charlas humanas.
+- **¿Cuándo crea Raquel el grupo de supervisión (ella+Lucas+Irina)?** Pedido el 14/7, repetido
+  el 15/8, sigue sin crearse. Cuando exista, hay que actualizar el JID destino en
+  `Helper - Notify Grupo` (y decidir si reemplaza o se suma al grupo de escalaciones actual
+  `120363407321448469@g.us`).
+- **Fraseo exacto de las preguntas guiadas de triaje de urgencias**: Raquel dijo que lo pasa
+  junto con los 4 videos (ya filmados al 15/8) — sin eso no se puede armar el prompt del
+  Sub-Agent de urgencias. _Actualización 2/9_: diseño completo del triaje ya cerrado
+  (decisions.md 2/9), Raquel empezó a mandar los videos — todavía falta este fraseo y
+  confirmar la lista de "red flags" que siempre escalan sin importar el tipo (borrador en
+  decisions.md 2/9: trauma, sangrado abundante, pieza tragada, hinchazón/dificultad para
+  respirar, fiebre, dolor intenso).
+- **Casos límite del triaje para que Raquel decida** (salieron de la sombra retrospectiva del
+  2/9, `docs/analisis-retrospectivo-urgencias-2026-09-02.md`): (a) arco que se sale *jugando al
+  rugby* — ¿cuenta como golpe/red flag o es alambre_pincha normal?; (b) "me está matando la
+  punta del alambre" — ¿"dolor intenso" es red flag aunque sea hipérbole coloquial? ¿cuál es
+  el criterio?; (c) contención rota/despegada (3 escalaciones en 6 semanas) — ¿video propio,
+  o siempre escala?; (d) Invisalign (alineador partido, attachment suelto: 3 casos) — ¿video o
+  escala?; (e) bracket que irrita sin estar suelto (choca con colmillo, lastima el labio) —
+  ¿se le manda el video de la cera (Opción 1 de alambre) o escala?
+- **¿Qué video prioriza Raquel?** Con datos reales, bracket_suelto es el que más falta (6
+  casos en 6 semanas); alambre_girado y ligadura_pincha tuvieron 0–1 caso cada uno.
+- **Textos definitivos del triaje (4/9)**: los captions, la pregunta guiada, `texto_escalada` y
+  `texto_cierre` que hoy están en `triaje_videos`/`triaje_config` son BORRADORES míos (voz de
+  usted, con "Hola! Soy Asiri…" en la Opción 1). Raquel los reemplaza por UPDATE; después correr
+  `tests/test_triaje_textos_banlist.py --db`.
+- **¿Cuándo abre Lucas el piloto a todos los pacientes?** Hoy `telefonos_piloto={5491161461034}`.
+- **¿Se arregla el auto-silencio post-escalación (6/6) a nivel Helper/Re-check?** Afecta a todos
+  los sub-agents, no solo al triaje. Ver backlog P1.
+- **¿Qué formato quiere Lucas para consolidar Dentalink+KB "en un formato unificado" para que
+  Raquel lo revise?** Mencionado como action item el 15/8, sin definir todavía si es un doc,
+  una vista nueva del panel, o un export.

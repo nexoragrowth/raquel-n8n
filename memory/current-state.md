@@ -1,8 +1,1041 @@
 # Estado actual — raquel-n8n
 
-_Última actualización: 2026-07-22 ART — panel DEPLOYADO a producción (VPS Docker+Traefik)_
+## Sesión 2026-09-04 — Triaje con video: Fase 2 (piloto en el v6) en construcción — Lucas lo necesita completo para vender
+
+**Contexto**: Lucas probó "por su cuenta" escribiéndole al **número real de la clínica** (no al
+webhook aislado de prueba) — "buenas sabes que se me salió el bracket y pincha" (3/9 21:48 UTC).
+Resultado real, confirmado en la base: el v6 hizo lo de siempre (escaló: `escalaciones_log` id
+189, exec 270011) y además NO le respondió el canned porque su chat estaba en modo "humano
+atendiendo" (id 190, exec 270012; su número tuvo un fromMe multimedia `[ATENCION HUMANA]` el
+2/9). No llegó ningún video — esperable: Fase 2 nunca se conectó al v6. Ese mensaje muy
+probablemente avisó al grupo de escalaciones (Raquel incluida). **Pendiente con OK de Lucas**
+(el clasificador de permisos bloqueó el DELETE): borrar las 4 filas de prueba —
+`escalaciones_log` 189 y 190, `conversaciones` 6006 y 6009.
+
+**FASE 2 APLICADA AL v6 Y VERIFICADA EN PRODUCCIÓN (4/9, ~16:20 ART, con OK explícito de
+Lucas).** Proceso: workflow multi-agente de solo lectura (6 lectores mapearon el v6 vivo, 3
+diseños, 3 jueces; la síntesis final la hice a mano porque el 13º agente chocó con el límite
+de sesión) → diseño final en `docs/triaje-fase2-diseno-2026-09-04.md` (análisis completo en
+`docs/triaje-fase2-analisis/`) → `scripts/apply_triaje_fase2_piloto.py` (dry-run con diff →
+`--apply`) → backups `workflows/history/v6_PRE_triaje_fase2_20260904_161803.json` /
+`v6_POST_…` → 4 E2E reales al webhook público con el teléfono de Lucas.
+
+**Qué cambió en el v6** (125 → 146 nodos, prefijo `Triaje: `): `Es cierre?`[1] → `Triaje: Redis
+GET estado` → `Triaje: ¿Seguimiento?` (sin estado = Router, idéntico a hoy) y `Switch sobre
+Intent`[2] (urgencia_dolor) → `Triaje: Cargar Config` (en vez de `Sub-Agent Urgencia`, que
+quedó huérfano — no se borró). Columna: Cargar Config → Evaluar (gate red flags + estado +
+regexes) → Ruta Pre → [Clasificar gpt-5-mini → Merge por posición] → Decidir (re-check humano
+Chatwoot, payloads canned, SQL) → Ruta → video (`/send/media`) / pregunta / cierre
+(`/send/text`) → Persistir (memoria human+ai + log) → Redis SET; silencio → log; escalar →
+texto canned al paciente → notify-grupo (Code, como Gate Pago) → log → Redis SET. Router: +1
+párrafo "CONTINUACION DE URGENCIA CON VIDEO" (2ª capa cuando el estado Redis venció; el Router
+NO tiene partial en `prompts/v6_partials/`, vive solo en n8n). Fuentes únicas de los Code
+nodes en `triaje/*.js` + `triaje/prompt_clasificador.md`; apikey Evolution y token Chatwoot se
+copian de nodos vivos al aplicar.
+
+**Cambios míos sobre el diseño ganador de los jueces** (decisions.md 4/9): escalación
+determinística (sin Sub-Agent Urgencia) porque el mapeo probó que hoy **6/6 escalaciones
+suprimen la respuesta del bot** (el Helper aplica label `humano` sincrónico y `Re-check
+Humano` la corta 1.4 s después) — en la rama nueva el texto canned sale ANTES del aviso al
+grupo; Merge por posición para que Decidir no dependa de `$('Triaje: Evaluar').first()` en
+la doble corrida; re-check humano dentro de Decidir; cierre estricto ("ok pero me duele" no
+cierra, "listo ya me puse la cera" sí); `aviso_pasivo=false` por defecto.
+
+**Config por dato** (`scripts/create_triaje_config_tables.py`): `triaje_config` (activo,
+modo, telefonos_piloto, regex_*, texto_escalada, texto_cierre, aviso_pasivo, TTLs, modelo) y
+`triaje_videos` (alambre_pincha op1/op2 activas con las URLs del bucket; bracket_suelto /
+alambre_girado / ligadura_pincha `activo=false`). **Estado actual: `activo=true,
+telefonos_piloto={5491161461034}`** (solo Lucas). Abrir a todos: `--activar --piloto ""`.
+Kill-switch: `--desactivar` (0 PUT). Rollback de cableado: `apply_… --rollback-wiring`; total:
+`--rollback <PRE.json>`.
+
+**E2E reales en producción (todos OK, `tests/test_e2e_triaje.py`)**: (1) "se me salió el
+alambre de atrás y me pincha el cachete" → `alambre_pincha` alta → **video Opción 1 enviado**
+(log id 5, memoria 6320/6321, 0 escalaciones); (2) "no me sirvió, sigue pinchando" → **Opción
+2 sin LLM** (log 6); (3) "no lo pude meter con la pinza, sigue igual" → escalación
+determinística: texto canned al paciente + aviso al grupo (`escalaciones_log` 200 `[TRIAJE] no
+sirvio sin mas opciones | videos enviados: Opción 1 y 2 | Paciente: «…»`) + label humano; (4)
+"mi hijo se cayó… le sangra mucho la boca" → gate `trauma+sangrado_abundante` → escalación 201
+sin LLM ni video. Cierre ("listo gracias ya me puse la cera") probado solo en unit tests
+(44/44 `tests/test_triaje_nodos.js`), no E2E todavía. Textos canned pasan los 20 regex del
+Banlist vivo (`tests/test_triaje_textos_banlist.py`).
+
+**Retoques post-E2E aplicados** (idempotente, 2º PUT 4/9): filas de memoria en orden human→ai
+(la CTE insertaba en orden indefinido); sombra `Gm7ofyGohOJ2bI44` ignora `motivo LIKE
+'[TRIAJE%'` (no reprocesa las escalaciones del propio triaje).
+
+**Limpieza del número de Lucas** (con su OK): borradas 55 filas de memoria de prueba de la
+sesión `5491161461034`, `escalaciones_log` 189/190, `triaje_urgencias_log` 3, 5 filas de
+`conversaciones` de prueba; label `humano` de conv 272 quitado 2 veces (cada escalación lo
+vuelve a aplicar — para demos, `scripts/limpiar_numero_demo.py --phone … --apply --solo-label`
+después de cada escalación). `scripts/limpiar_numero_demo.py` es nuevo.
+
+**Hallazgo grave aparte (no arreglado, fuera del alcance del PUT)**: el auto-silencio
+post-escalación de TODOS los sub-agents (6/6 desde el 30/8: el paciente escalado nunca recibe
+"Recibimos tu mensaje…"). Ver `docs/triaje-fase2-diseno-2026-09-04.md` §9 y backlog P1.
+
+**Pendiente**: Raquel — textos definitivos (hoy borradores en `triaje_videos`/`triaje_config`),
+videos de los otros 3 tipos (subir + `activo=true`, sin n8n), lista de red flags; E2E del
+cierre; carve-out `[TRIAJE VIDEO]` en el panel si se activa `aviso_pasivo`; abrir el piloto a
+todos los pacientes cuando Lucas lo decida (`--activar --piloto ""`).
+
+## Sesión 2026-09-02 (cont.) — Triaje de urgencias con video: diseño cerrado + primer envío de video real por Evolution GO
+
+**Pedido de Lucas**: Raquel empezó a mandar los 4 videos de triaje de urgencias (alambre
+pincha, bracket suelto, alambre girado, ligadura pincha — filmados desde el 15/8). Pidió
+pensar el diseño completo "más allá del happy path" antes de construir, porque esto expande
+al Sub-Agent Urgencia — hoy su única función es escalar SIEMPRE sin dar ningún consejo
+(`prompts/v6_partials/urgencia_funcion.md`, regla dura post-incidente Mariela) — para que en
+casos NO graves conteste con un video en vez de escalar.
+
+**Diseño acordado, capa por capa** (las 3 decisiones de fondo están en `decisions.md` 2/9):
+
+- **Capa 0 — gate de "red flags" determinístico, ANTES de clasificar tipo.** Igual que el
+  banlist de salida: regex/keywords, no depende del LLM. Borrador (falta confirmar con
+  Raquel): trauma/golpe/accidente, sangrado abundante, pieza tragada, hinchazón/dificultad
+  para respirar o tragar, fiebre, dolor intenso no controlado. Si matchea cualquiera → escala
+  directo, ni entra a clasificar tipo.
+- **Capa 1 — clasificación de tipo** (los 4 de Raquel) + preguntas guiadas para desambiguar.
+  Fraseo exacto pendiente de Raquel (open-questions.md, abierto desde el 15/8).
+- **Capa 2 — foto: SIN vision** (decisión 1 de decisions.md 2/9). Se pide igual, pero solo
+  como respaldo adjunto al log — el bot no la interpreta. Clasificación 100% por texto.
+- **Capa 3 — severidad después de clasificar**: aunque matchee un tipo conocido, si en las
+  respuestas a las preguntas guiadas aparece una red flag de la Capa 0 → igual escala con
+  aviso inmediato (la Capa 0 se re-evalúa con más información, no es un check único).
+- **Capa 4 — sin match claro → escalar, nunca adivinar.** Mismo principio que rige en todo el
+  proyecto ("no inventar precios/horarios").
+- **Capa 5 — salida de emergencia siempre disponible.** El caption que acompaña el video debe
+  ser CANNED (no generado por LLM, mismo principio de defensa en profundidad del resto del
+  proyecto) y dejar explícito que si no mejora, puede pedir la doctora. Falta testear
+  explícitamente que un "no funcionó"/"sigue mal" después del video reescala de verdad (no
+  asumirlo del diseño del Router).
+- **Capa 6 — registro**: todo caso (matcheado o escalado) queda logueado con tipo + si mandó
+  video + severidad — reusar `escalaciones_log` con metadata extra, no revivir `urgencias_log`
+  (se borró en julio por estar vacía). Alimenta el pedido aparte de "scoring de urgencias en
+  el reportero semanal" (backlog P1).
+- **Multi-síntoma en un mismo mensaje**: cualquier red flag presente gana sobre un match de
+  tipo conocido, aunque el mensaje también mencione uno de los 4 tipos (mismo patrón que el
+  bug de Salvador Mayans — un mensaje puede traer 2 señales a la vez).
+- **Rollout**: sombra (el bot clasifica pero sigue escalando TODO como hoy, solo logueando qué
+  hubiera hecho) → piloto en vivo con 1 solo tipo (candidato: "bracket suelto", parece el
+  menos ambiguo) → expandir a los 4. Mismo patrón que TEST_MODE en Reportero/Recordatorios.
+
+**Ajuste de diseño real, descubierto al recibir los primeros videos**: NO es 1 video = 1 tipo.
+Raquel mandó 2 videos para "alambre pincha" (`WhatsApp Video 2026-08-28 at 11.57.38 AM.mp4`,
+3.9MB, y `...12.06.23 PM.mp4`, 5.1MB, ambos H.264/AAC 720x1280 — specs perfectas, muy debajo
+del límite de WhatsApp, no hace falta comprimir): **Opción 1** = colocar cera de ortodoncia en
+la punta del alambre; **Opción 2** = intentar reinsertar el alambre al tubo/bracket con una
+pinza de alicate o de cejas, para probar si la Opción 1 no alcanza. El flujo probablemente
+necesita mandar la Opción 1 primero y ofrecer la 2 si el paciente dice que no resolvió, no un
+video fijo único por tipo — falta confirmar si el mismo patrón se repite en los otros 3 tipos
+cuando lleguen (Raquel avisó que "faltan varios videos que están editando").
+
+**Build resuelto: envío de video saliente por Evolution GO, nunca probado antes en este
+proyecto (05/08 solo se resolvió recepción de media, nunca el envío).** Encontrado por swagger
+real del VPS (`ssh` a `curl http://127.0.0.1:43290/swagger/doc.json`, no documentado en el
+repo hasta hoy): existe `POST /send/media`, mismo patrón que `/send/text` (sin campo
+`instance` — la instancia queda implícita por el apikey del header, un token por-instancia).
+Body: `{number, type:"video", url, caption, filename}` — **`url` acepta BASE64 CRUDO
+directo (sin prefijo `data:video/mp4;base64,`)**, confirmado por prueba real: se mandó
+`WhatsApp Video 2026-08-28 at 11.57.38 AM.mp4` (3.9MB) al número de Lucas
+(`5491161461034`), la API devolvió `200 OK` con `"Type":"VideoMessage"` confirmado en la
+respuesta.
+
+**Nota de higiene de credenciales**: los scripts de prueba de julio/agosto tenían el apikey de
+Evolution GO hardcodeado (`35643EDB-191F-4174-AB1B-42A859468FE5`) — **ya está vencido** (probé
+con él en `/send/text` y en `/send/media`, ambos devolvieron 401 "not authorized"). La clave
+real vigente hoy vive en el nodo "Evolution API - Enviar Mensaje" del v6 vivo. El script nuevo
+`scripts/test_evo_go_send_video.py` NO hardcodea ninguna clave — la extrae en caliente de ese
+nodo vía la API de n8n en cada corrida, para no repetir el mismo problema cuando esta rote de
+nuevo. Se usaron 2 scripts temporales (`_scratch_*.py`) para esta investigación, ya borrados
+junto con el JSON del workflow descargado (contenía el apikey real) — no quedó ningún secreto
+en el repo ni en el scratchpad.
+
+**Hosting resuelto (2/9, decisión en decisions.md)**: `/send/media` acepta también URL https
+(verificado con un mp4 público y después con el path real). Bucket público
+`urgencias-videos` creado en Supabase Storage v3; subidos `alambre_pincha/opcion1.mp4` y
+`alambre_pincha/opcion2.mp4` (URL:
+`https://eoizfjsyejixjzwgzwkt.supabase.co/storage/v1/object/public/urgencias-videos/<path>`).
+Envío real por URL desde el bucket a Lucas: 200 OK, `VideoMessage`. n8n va a pasar solo la
+URL, sin leer ni codificar el archivo. Script: `scripts/upload_urgencia_video_supabase.py`
+(crea bucket idempotente + sube + verifica HEAD + opcional `--send`).
+
+**Modo sombra retrospectivo con datos reales** (`scripts/analisis_retrospectivo_urgencias.py`,
+solo lectura, reporte con revisión manual caso por caso en
+`docs/analisis-retrospectivo-urgencias-2026-09-02.md`): de 183 escalaciones en 60 días
+(88 ruido, 21 comprobantes, 74 señal), **30 son urgencias/aparatología** (~1 cada 2 días).
+Hallazgos que cambian el plan:
+- **~47% (14/30) se hubiera resuelto con video y casi todo cae en 2 tipos**: alambre_pincha
+  (7–8) y bracket_suelto (6). alambre_girado y ligadura_pincha: 0–1 caso cada uno en 6
+  semanas → esos 2 videos casi no se van a usar. **El video que más falta es bracket_suelto.**
+- **Red flags reales: 2/30, los dos "dolor que no cede"** — cero trauma/sangrado/tragado. El
+  criterio difuso es "dolor intenso" (ej. "me está matando la punta del alambre" = hipérbole).
+  Y "fiebre" apareció solo en una CANCELACIÓN de turno (#17) → el gate debe correr solo
+  dentro del camino de urgencias, nunca sobre todos los mensajes.
+- **Sub-temas sin video que se repiten**: contención rota (3 escalaciones/2 pacientes),
+  Invisalign (alineador partido, attachments sueltos: 3), bracket que irrita sin estar suelto
+  (2, la cera aplica igual). Candidatos a videos 5 y 6: contención rota e Invisalign.
+- **Los pacientes re-escalan si no hay respuesta rápida** (4 familias con 2–4 escalaciones
+  por el mismo problema) → el flujo necesita reconocer "mismo problema, segundo mensaje".
+- Piloto recomendado (Fase 2): **alambre_pincha** (ya tenemos los 2 videos, es el tipo con
+  más casos y menos ambiguo: "se salió/pincha el alambre").
+
+**FASE 1 (SOMBRA) CONSTRUIDA Y ACTIVA — madrugada del 3/9, sin tocar el v6.** Lucas dijo
+"seguí" sin esperar a Raquel. Se hizo como SATÉLITE en vez de meter nodos en el v6: cero
+riesgo en producción, y da exactamente los datos que la fase necesita.
+- **Workflow `Áurea — Triaje Urgencias (sombra)` (`Gm7ofyGohOJ2bI44`), activo**, 8 nodos:
+  cron `*/15 * * * *` + webhook manual `POST /webhook/trigger-triaje-sombra-manual`
+  (body opcional `{"horas": 72, "min_edad": 10}` para reprocesar una ventana mayor) →
+  `Params (ventana)` → `Query Urgencias Nuevas` (Postgres: `escalaciones_log` de las
+  últimas 3h con >10 min de edad para que el Logger ya haya sincronizado, mismo pre-filtro
+  señal/urgencia/aparatología que el panel, `NOT EXISTS` contra la tabla de log = dedupe,
+  y sub-select de los últimos 4 mensajes `rol='user'` de `conversaciones` en los 20 min
+  previos) → `Gate Red Flags` (Code, embebe `triaje/gate_red_flags.js` tal cual + arma el
+  body del LLM) → `Clasificar (gpt-5-mini)` (misma credencial OpenAI que el reportero,
+  `response_format: json_object`, neverError) → `Armar INSERT` → `Insert
+  triaje_urgencias_log`. No manda nada a nadie: el paciente sigue recibiendo la escalación
+  de siempre; solo se registra qué HUBIERA hecho el triaje. Script:
+  `scripts/create_triaje_sombra.py` (`--apply` / `--activate <id>`), snapshot en
+  `workflows/history/triaje_sombra_CREADO_Gm7ofyGohOJ2bI44.json`.
+- **Tabla nueva `triaje_urgencias_log`** en Supabase v3 (`scripts/create_triaje_urgencias_log_table.py`,
+  DDL documentado en `rebuild_v3_schema.sql` sección 8b): una fila por urgencia con
+  `escalacion_id` (UNIQUE → dedupe), mensajes crudos, `gate_red_flags` (jsonb, prefijo
+  `gate:`/`llm:` según origen), `gate_escala`, `tipo`, `confianza`, `razon`, `modo`
+  (sombra|piloto|live), `accion` (escalado|video). Tabla propia para NO ensuciar
+  `/aprendizaje` ni el reportero; el futuro "scoring de urgencias" del reportero lee de acá.
+  Verificado de paso: `conversaciones.rol` real es `assistant`/`user`/`system`.
+- **Gate de red flags = `triaje/gate_red_flags.js`, fuente única** (se embebe en n8n al
+  crear el workflow; editar el archivo y redesplegar, nunca editar en n8n). Tests:
+  `node triaje/test_gate.js` — **29/29** sobre 19 mensajes reales de la retrospectiva + 10
+  sintéticos. Bug real encontrado por los tests: `\b` en JS sin flag `u` no trata "ó/á/ñ"
+  como letra → "se cayó" no matcheaba; se reemplazó `\b` por límites Unicode
+  (`(?<![\p{L}\p{N}])` / `(?![\p{L}\p{N}])` con flag `u`). Casos límite documentados en
+  los tests: rugby NO dispara trauma hoy; "me está matando" y "calmantes" SÍ disparan
+  dolor_intenso; "fiebre" dispara aunque sea una cancelación (por eso el gate solo corre
+  en el camino de urgencias).
+- **Primera corrida real** (webhook manual con `horas: 72`, exec `269428`, success, 4.3s):
+  procesó las 2 urgencias reales de las últimas 72h — Abel (31/8) → `alambre_pincha`
+  alta, gate ok; Máxima (2/9) → `bracket_suelto` alta, gate ok. Coincide con la revisión
+  manual de la retrospectiva. Ver estado en cualquier momento:
+  `python scripts/ver_triaje_sombra.py --dias 7`.
+- **Qué mide la sombra de acá en más**: (a) distribución real por tipo, (b) cuántas veces
+  dispara el gate y por qué flag (para calibrar con Raquel), (c) confianza del
+  clasificador con SOLO el primer mensaje, sin preguntas guiadas (si es alta casi siempre,
+  las preguntas guiadas se pueden simplificar). Costo: gpt-5-mini solo cuando hay
+  urgencias nuevas (~1 cada 2 días).
+
+**Pendiente para la FASE 2 (piloto alambre_pincha, sí toca el v6, con diff previo)**: el
+fraseo exacto de las preguntas guiadas y que Raquel confirme la lista de red flags con los
+casos límite (rugby = ¿golpe?, "me está matando" = ¿dolor intenso?, contención rota =
+¿video o escalar?, Invisalign, bracket que irrita). Video de bracket_suelto para la Fase 3.
+Ver `backlog.md` P1 y `open-questions.md`.
+
+---
+
+## Sesión 2026-09-02 — Bug real (reportado por las secretarias): pedido de alias post-confirmación queda sin responder
+
+**Reporte real** (WhatsApp de las secretarias a Lucas, con captura): Asiri mandó el recordatorio
+72h a Paulina Villanueva (turno de su hija, Viernes 4/9 11:10hs), la paciente respondió
+"Confirmo" y en el mismo momento pidió el alias para transferir — el bot confirmó el turno en
+Dentalink pero NUNCA respondió el pedido del alias. La Dra. Raquel tuvo que contestarlo a mano
+1h38 después (9:45 vs 8:07 ART).
+
+**Confirmado con datos reales** (Supabase v3, tabla `conversaciones`, telefono
+`5493884374334`): las dos burbujas de WhatsApp del paciente (mismo minuto, 8:06 ART) llegaron
+al bot como **UNA sola fila** ya mergeadas por el buffer de mensajes: `"Confirmo\nPor favor
+pásame el alias para que te transfiera el costo de la primera consulta"` (id 5747, 11:07:22
+UTC). La respuesta del bot, 16ms después (id 5746): solo el canned de confirmación ("Listo, su
+turno del 4 de Septiembre a las 11:10 hs queda confirmado...") — cero mención del alias. La
+Dra. Raquel lo contestó manual a las 12:45:44 UTC (=9:45 ART, marcado `[ATENCION HUMANA]`),
+exacto el timestamp circulado en la captura.
+
+**Causa raíz**: el prompt de Sub-Agent Confirmar tiene una regla explícita de corte —
+`confirmar_paso0_recordatorios.md` línea 35 ("REGLA CRITICA: si PASO 0 devolvió >=1 filas y
+las confirmaste, NO ejecutes PASO 1/2/3. Ya esta. Solo responder y FIN.") y
+`confirmar_tools.md` línea 52 ("Si el paciente, despues de confirmar, pregunta otra cosa
+(precio, horario, etc.) -> dejar que el flow lo enrute al sub-agent que corresponde en el
+proximo turno."). El diseño asume que un pedido adicional va a llegar en un TURNO NUEVO que el
+Router va a reclasificar — pero cuando el buffer mergea 2 mensajes rápidos del paciente en una
+sola ejecución (mismo minuto), no hay "próximo turno": el pedido queda adentro del turno que ya
+se cerró con el canned de confirmación, y se pierde en silencio. Confirmar NO tiene los
+canned de INFO CANNED (alias/precio/horario) que sí tiene Sub-Agent General — aunque el Router
+lo reclasificara, Confirmar no sabría responderlo solo.
+
+**Es la MISMA clase de bug que el caso Salvador Mayans (21/8, ver sesión de esa fecha)** —
+mensaje con multi-intent (accion + pregunta canned) donde el sub-agent especializado corta
+después de la acción — pero esa vez el fix (`apply_fix_router_continuacion_multi_pedido.py` +
+`apply_fix_subagent_general_os_carveout.py`) solo tocó el path Agendar/General. El path
+Confirmar quedó con el mismo hueco, nunca parchado.
+
+**No es un caso aislado**: se encontró un segundo caso casi idéntico 5 días antes (28-29/8,
+telefono `5493885170679`) — mensaje multilínea del paciente pidiendo el alias
+("...A donde le hago la transferencia?\nQue alias?") sin responder, la Dra. contestando al día
+siguiente apuntando a una imagen ("Ese alias👆"). Mismo patrón sistémico, no un evento único.
+
+**Hallazgo que cambió el fix de "parche" a "decisión estructural"**: el Router y Confirmar se
+contradicen EN PRODUCCIÓN. El fix del 21/8 le dice al Router: "mantené el intent operativo
+(agendar / cancelar / **confirmar_post_recordatorio**) — el sub-agent operativo ya sabe
+responder la info canned ADEMÁS de ejecutar la acción, en la misma respuesta". El prompt vivo
+de Confirmar dice lo opuesto. Cada capa cree que la otra es dueña del alias. No es que el LLM
+"se olvidó": ambos prompts le ordenan no hacerlo.
+
+**FIX APLICADO Y VERIFICADO — `Canned Sidecar`** (decisión completa con alternativas
+descartadas en `decisions.md` 2026-09-02): nodo Code determinístico en el punto donde
+convergen los 7 caminos de salida (`Fallback Output` → **Canned Sidecar** → `Banlist
+Validator`). Lee el texto REAL del paciente, detecta por regex si pidió alias/datos de pago o
+precio, y si la respuesta del sub-agent no lo trae, lo ANEXA. Nunca modifica lo que el
+sub-agent generó. Ningún sub-agent necesita saber de info canned nunca más — Confirmar,
+Cancelar, Urgencia, el flow de comprobante y los 3 sub-agents del refactor futuro lo heredan.
+Script: `scripts/apply_canned_sidecar.py` (idempotente). Backups
+`workflows/history/v6_{PRE,POST}_canned_sidecar_20260902_184041.json`. v6 quedó en 124 nodos.
+
+**Verificación (no solo el diff)**:
+- `tests/test_canned_sidecar.py` — **17/17**. Corre el JS REAL importado del script con node
+  (fuente única: no puede haber drift entre test y producción). Incluye los 2 mensajes reales
+  que fallaron + negativos ("el alias sigue siendo ese" NO dispara, "ya transferí" NO dispara,
+  `[NO_REPLY]` y urgencias passthrough, dedup, precio dinámico, nodo Extraer no ejecutado).
+- **3 ejecuciones E2E reales** por el webhook público con teléfonos sintéticos:
+  - exec 269283 (intent `consulta_general` → Sub-Agent General): General ya contesta el alias
+    solo → **el dedup funcionó, no duplicó** (`canned_sidecar=None`). Cadena completa OK.
+  - exec 269286 (intent `agendar_nuevo` → Sub-Agent Agendar): Agendar también trae el alias en
+    su PASO 8 → dedup otra vez, sin duplicar.
+  - **exec 269291 — la prueba que importa**: mensaje multi-intent real
+    ("Dale, me sirve ese turno del viernes\nRecordame cuanto sale la consulta por favor").
+    Agendar contestó SOLO la acción ("¿me pasás nombre y DNI?") e **ignoró la pregunta de
+    precio — el mismo bug de Confirmar/alias, en otro sub-agent** — y el sidecar lo rescató
+    (`canned_sidecar='precio'`, anexó "El valor de la consulta es de $50.000."). Banlist sin
+    disparar, envío sin error. Confirma que la capa es transversal de verdad.
+- Datos de prueba (2 teléfonos sintéticos) borrados de
+  `conversaciones`/`pacientes`/`n8n_chat_histories`, verificado a 0.
+
+**Decisión de alcance deliberada** (ver `decisions.md`): el alias y el bloque de datos de
+cuenta quedan hardcodeados en el sidecar, idénticos al prompt vivo de Sub-Agent General, en vez
+de leerse de la KB. La fila ya existe (`knowledge_base` id=24, categoría `pagos`, YA editable
+desde `/servicios`) así que dinamizarla era barato — pero hacerlo solo en el sidecar dejaría a
+General hardcodeado y Raquel vería cambiar una respuesta y la otra no. **Dinamismo parcial es
+peor que ninguno**; migrar ambos en una pasada es P2. El precio sí es dinámico en los dos.
+
+**Reglas de horarios/dirección**: escritas en el nodo pero `enabled:false` a propósito — se
+arranca solo con lo que falló de verdad en producción (plata). Encenderlas es cambiar una
+palabra, cuando el patrón se pruebe en vivo.
+
+---
+
+## Sesión 2026-09-02 — Bug real: Raquel no podía guardar en Conocimiento/Servicios (falso positivo del guard de precios)
+
+**Reporte real de la Dra. Raquel (audios de WhatsApp a Lucas)**: al editar "Valor de
+la primera consulta" en `/conocimiento` (y también probó en `/servicios`), el panel
+rechazaba el guardado con "No se publican precios de tratamientos (se evalúan en
+consulta). Consulta y cuota mensual sí." — pese a que el texto que quería guardar
+NO fijaba precio de tratamiento, solo aclaraba que el precio del tratamiento se
+define en consulta (contenido legítimo y correcto).
+
+**Causa raíz**: `pareceTratamientoConPrecio()` en
+`nexora-whatsapp-agent/app/(app)/conocimiento/actions.ts` (la server action que
+usan TANTO `/conocimiento` como `/servicios` — mismo componente `guardarEntrada`)
+implementa la regla dura de la reunión 14/7 ("nunca precio fijo de tratamiento")
+pero chequeaba el TEXTO COMPLETO de la entrada de una: si en cualquier parte
+aparecía una palabra de tratamiento (`bracket|ortodoncia|alineador|invisalign`) Y
+en cualquier otra parte un "$" con número, bloqueaba — sin importar si estaban
+relacionados. El texto real de Raquel decía en una oración "la consulta vale
+$50.000" y en la siguiente "el valor de los tratamientos... se define en consulta"
+— exactamente el patrón que la regla del 14/7 quiere fomentar, pero el regex lo
+interpretaba como violación.
+
+**Fix**: mismo regex y misma regla de negocio, pero el chequeo ahora es por
+ORACIÓN (`split(/[.!?\n]+/)` + `.some(...)`) — solo bloquea si tratamiento y
+precio aparecen juntos en la MISMA oración. Verificado con 3 casos: (1) el texto
+real de Raquel → ya no bloquea; (2) violación real sintética "el bracket cuesta
+$50.000 fijo" (mismo oración) → sigue bloqueando, como debe; (3) cuota mensual
+("...tratamiento ortodóncico es de $70.000") → no bloquea (ya no bloqueaba antes
+tampoco, por el acento en "ortodóncico" no matchea el regex — no se tocó, es
+harmless coincidence, no está en el alcance de este fix).
+
+**Deploy**: commit `173c8b8`, subido a producción con `deploy/redeploy.sh`
+(`panel.raquelrodriguez.com.ar` → HTTP 200 post-deploy, healthcheck OK).
+
+**Pendiente de Lucas**: responder a Raquel con el mensaje armado (3 preguntas
+suyas del mismo hilo de audios, ya confirmadas contra el código):
+1. Cómo crear categoría nueva en la KB → no hay paso aparte, se escribe libre en
+   el campo "Categoría" (datalist con sugeridas, pero acepta cualquier string
+   nuevo).
+2. Si el contenido de la KB es literal o el bot lo interpreta → depende de la
+   sección: horarios/precio de consulta (`prompts/v6_partials/general_funcion.md`
+   PASO 1, "INFO CANNED") se cita TEXTUAL; todo lo demás pasa por
+   `buscar_conocimiento` (RAG) y el bot PARAFRASEA sin inventar
+   (`general_orden_decision.md` PASO 3). Nota: `prompts/v6_partials/` tiene drift
+   con el prompt vivo (P3 backlog, GAP 10) — los VALORES citados en ese archivo
+   ($40.000, horarios viejos) están desactualizados, pero la ESTRUCTURA de
+   decisión (literal vs RAG-parafraseado) sigue vigente y es lo que se usó para
+   responderle.
+3. Si el panel reemplaza "el chatbot" (probablemente Chatwoot) para el día a día
+   → confirmado por código que `/conversaciones` (`chat-view.tsx`,
+   `conversation-list.tsx`) ya tiene toggle bot/humano + enviar mensaje como
+   staff (`app/(app)/conversaciones/actions.ts`, pega a webhooks n8n
+   `panel-toggle-bot`/`panel-send-human`) — consistente con lo demoeado el 15/8
+   (gap conocido: el toggle tarda ~30 min en confirmarse). **No se probó en vivo
+   esta sesión** (solo lectura de código) — si Lucas quiere, confirmar con un
+   toggle real antes de asegurárselo a Raquel como 100% andando.
+
+## Sesión 2026-08-21 (cont.) — Horarios y precio de consulta ahora dinámicos (pedido de Lucas antes de irse)
+
+Lucas pidió explícitamente ("necesitamos buscar la forma de que puedan editar esos
+datos que van a seguir cambiando como horarios y precios, que las prompt lo manejen
+de manera dinamica") tras el fix de horarios de hoy — porque él se iba a ausentar y
+no quería que cada cambio futuro de horario/precio dependiera de que Claude edite el
+workflow a mano.
+
+**Hallazgo real antes de tocar nada**: el panel YA tenía un lugar pensado para esto
+— `/servicios`, que lee/edita `knowledge_base` y dice literalmente "Lo que edités acá,
+Asiri lo empieza a usar al instante". Eso era **falso** para horarios y precio de
+consulta: esos 2 valores estaban como texto fijo en el prompt de Sub-Agent
+Agendar/General, y el propio orden de decisión de General (PASO 1: info canned
+LITERAL, nunca llega a `buscar_conocimiento`) hacía que la KB fuera invisible para
+esas 2 preguntas. Además la fila de horarios (KB id=20) tenía el valor VIEJO — nadie
+lo había notado porque nunca se consultaba.
+
+**Fix** (reusa la KB existente, no tabla/UI nueva):
+- KB id=20 ("Días y horarios de atención") recortada a solo la frase citable
+  ("La Dra. Raquel atiende martes y jueves de 8 a 12 hs, viernes de 8:30 a 12 hs, y
+  lunes y miércoles de 15 a 19 hs.") — antes tenía además una instrucción interna
+  ("Al pedir un turno, el primer mensaje debe declarar...") que no era segura de citar
+  textual al paciente.
+- 2 nodos nuevos en v6: `Get KB Horarios y Precio` (Postgres, `SELECT id, contenido
+  FROM knowledge_base WHERE id IN (20, 21)`) → `Extraer Horarios y Precio` (Code:
+  arma `horarios` + `precio_consulta` extraído por regex `$XX.XXX` del contenido de
+  id=21, con fallback defensivo a los valores reales de hoy).
+- Sub-Agent Agendar (PASO 3) y Sub-Agent General (canned "Horarios Dra. Raquel",
+  "Precio consulta" x2, "PRECIO DE TRATAMIENTO especifico") ahora interpolan
+  `{{ $('Extraer Horarios y Precio').item.json.horarios/precio_consulta }}` en vez de
+  texto fijo.
+- `lib/servicios.ts` (panel): nueva sección "Horarios de atención" en `/servicios`
+  (antes solo existía "Precios y valores") — deployado.
+
+**2 bugs reales encontrados y arreglados DURANTE el armado (no en el diseño inicial)**:
+1. **"No path back to referenced node"** — el primer intento conectó los 2 nodos
+   nuevos como rama paralela muerta desde "Edit Fields - Extraer Datos" (mismo patrón
+   sin salida que "Get Paciente Context"), asumiendo que "ejecutó antes en la misma
+   corrida" alcanza para que `$('NodeName')` funcione desde otro nodo. NO alcanza:
+   n8n necesita un camino CONECTADO real (pairedItem lineage). Confirmado con 2
+   ejecuciones reales que fallaron justo así. Fix: insertar los 2 nodos EN LINEA entre
+   `Parse Intent` y `Switch sobre Intent` (punto compartido por todos los sub-agents
+   antes de la bifurcación), con merge explícito `{...$('Parse Intent').item.json,
+   horarios, precio_consulta}` para no perder los campos que el Switch necesita para
+   rutear.
+2. **Comparación de tipos silenciosa** — el código comparaba `r.id === 20` (número),
+   pero el nodo Postgres devuelve `id` como STRING ("20") → la comparación siempre
+   daba falso y el código caía al fallback en silencio (sin error visible). Se probó
+   con la **prueba de fuego real**: cambiar el precio en la KB a un valor de prueba
+   ($99.999) y ver que el bot lo seguía diciendo con el valor viejo — eso expuso el
+   bug. Fix: `String(r.id) === '20'`.
+
+**Verificado con la prueba que realmente importa** (no solo "el diff se ve bien"):
+se cambió el precio y despues el horario en la KB a valores de prueba claramente
+distinguibles, se mandó un mensaje real, y el bot repitió el valor de prueba
+exacto — confirmando que editar `/servicios` (o la KB directo) cambia lo que el bot
+dice SIN tocar n8n. Se probó también el path de Sub-Agent Agendar (oferta de turno)
+con el valor real ya revertido. Todos los datos de prueba (6 teléfonos sintéticos)
+limpiados de `n8n_chat_histories`/`conversaciones`/`pacientes` al terminar.
+
+**Pendiente (no se tocó hoy, por alcance)**: precio de cuota mensual ($70.000, KB
+id=36) sigue hardcodeado en Sub-Agent General — mismo patrón, se puede extender
+cuando haga falta agregándolo a la misma query/Code node.
+
+## Sesión 2026-08-21 — Bug real: turno de Salvador Mayans nunca se creó en Dentalink (2 capas rotas) + 3 pedidos de contenido de la Dra.
+
+**Reporte real de la Dra. Raquel (19/8, WhatsApp a Lucas)**: un paciente (Salvador
+Mayans) tuvo conversación con el bot pero el turno JAMÁS se creó en Dentalink — ella
+tuvo que agendarlo a mano. Reconstruyendo la conversación real (`n8n_chat_histories`,
+session `5493885861016`): el paciente escribió en UN SOLO mensaje "Si, el paciente es
+Salvador Mayans, DNI 56009370 / Cual es el valor de la consulta? / Recibe instituto de
+seguros?" — el bot solo contestó precio/obra social y nunca llamó
+`crear_paciente_dentalink` ni `reservar_turno`.
+
+**Causa raíz (confirmada reproduciendo el caso en vivo, no solo leyendo el prompt) —
+son 2 capas rotas, no una:**
+
+1. **Router - Clasificar Intent**: tiene una regla "EXCEPCION A LA CONTINUACION" (si
+   en medio de un flujo el paciente pregunta info canned → abandonar y devolver
+   `consulta_general`) que no contemplaba el caso de que el mensaje trajera AMBAS
+   cosas a la vez (la info pedida + la pregunta nueva). Clasificó mal a
+   `consulta_general` en vez de `agendar_nuevo`.
+2. **Sub-Agent General** ya tenía desde el 03/06 (caso Valentino) una "VALIDACION DE
+   DESTINO" pensada exactamente para este escenario (si el paciente claramente está
+   accionando → `[NO_REPLY]`, deja que el Router reclasifique) — pero la regla de
+   obra social ("REGLA DE PRIORIDAD ABSOLUTA... IGNORAR EL RESTO y responder SOLO el
+   canned de OS") la pisaba en la práctica: el bot respondió el canned de obra social
+   e ignoró que el mensaje traía nombre+DNI para completar un registro pendiente.
+
+**Primer intento de fix (solo en Sub-Agent Agendar) NO alcanzó**: reproduciendo el
+caso con teléfono de test, la ejecución real (262253) mostró que el Router mandó el
+mensaje a Sub-Agent General (intent `consulta_general`), no a Agendar — el fix nunca
+tuvo chance de aplicarse porque el sub-agent correcto ni corrió.
+
+**Fix real (2 capas, defensa en profundidad — regla dura del proyecto)**:
+- `apply_fix_router_continuacion_multi_pedido.py`: nueva excepción-a-la-excepción en
+  el Router — si el mensaje trae la info pedida (nombre+DNI, slot, etc.) JUNTO con
+  una pregunta canned, mantener el intent operativo, no abandonar a
+  `consulta_general`.
+- `apply_fix_subagent_general_os_carveout.py`: excepción a la regla de prioridad
+  absoluta de obra social — si el mensaje también completa una acción pendiente que
+  Sub-Agent General no puede ejecutar, gana la validación de destino ya existente
+  (`[NO_REPLY]`, deja reclasificar).
+
+**Verificado E2E de punta a punta** (3 turnos reales vía webhook público, esperando
+la respuesta real del bot entre cada turno — no solo el diff): turno 1 oferta de
+slot, turno 2 confirmación + pedido nombre/DNI, turno 3 (multi-intent real: nombre+
+DNI+precio+obra social en un solo mensaje) → Router clasificó `agendar_nuevo`,
+`crear_paciente_dentalink` se ejecutó (paciente id 664 creado), `reservar_turno`
+se ejecutó (**cita real 8850 creada en Dentalink**, 03/09 10:30hs) — el bug
+completo está resuelto. Cita de test cancelada después (`id_estado=1`) y
+conversación de test borrada de `n8n_chat_histories`/`conversaciones`/`pacientes`.
+
+**3 pedidos de contenido de la Dra. (mismo hilo de WhatsApp, 19/8 y 21/8), también
+implementados y probados hoy:**
+- **Horarios actualizados** (`apply_fix_horarios_dra_raquel.py`, toca Sub-Agent
+  Agendar PASO 3 + Sub-Agent General "Horarios Dra. Raquel"): Martes y jueves 8 a 12
+  hs, Viernes 8:30 a 12 hs, Lunes y miércoles 15 a 19 hs (antes: Lun/Mié 15-20,
+  Mar/Jue/Vie 8-12 parejo — estaba mal en los dos ejes). **NO se tocó** el horario de
+  atención de la SECRETARIA ("Lun y Mié 15 a 20 hs / Mar, Jue y Vie 8 a 13 hs", KB
+  id=11) que aparece en los canned de escalación — es un concepto distinto,
+  confirmado por grep en los 4 sub-agents.
+- **Pago el día de la consulta** (`apply_fix_pago_dia_consulta.py`, nuevo canned en
+  Sub-Agent General): si preguntan puntualmente si pueden pagar el mismo día/al
+  llegar, ahora responde el texto exacto que pidió la Dra. ("Nosotros le enviamos un
+  recordatorio... dos días hábiles antes... para confirmar su asistencia le
+  solicitaremos abonar...") en vez del canned genérico de alias que sonaba a "podés
+  pagar cuando quieras".
+- **Precio en primer contacto** (`apply_fix_precio_primer_contacto.py`, split del
+  canned de precio en Sub-Agent General): paciente nuevo que pregunta precio SIN
+  haber pedido turno todavía → respuesta simple sin alias/CBU ("Hola! Soy Asiri...
+  El valor de la consulta es de $50.000... ¿Desea agendar un turno?"); paciente ya en
+  flow de agendar o que pide explícitamente el alias → sigue la respuesta completa de
+  3 partes con CBU.
+
+Los 5 fixes de hoy probados con mensajes reales vía webhook público antes de darlos
+por buenos (teléfonos sintéticos, limpiados después). Backups PRE/POST de cada uno en
+`workflows/history/`. Mensaje-resumen para pasarle a la Dra. armado y entregado a
+Lucas.
+
+## Sesión 2026-08-18 — Bug real: "el agente solo ofrece turnos de tarde"
+
+Reporte real de la Dra. Raquel (captura de WhatsApp): a una paciente que pidió un
+turno de ortodoncia sin especificar horario, el bot solo ofreció tardes, llegando
+hasta **16 de Septiembre** — cuando había turnos de mañana desde el **28 de Agosto**
+(3 semanas antes). Causa raíz encontrada con la ejecución real (v6 exec 260221 →
+Sub-WF Buscar Horarios Validado exec 260225, `GuDQ9VmKWZvQnerV`):
+
+**Bug 1 (raíz)**: el nodo `Validar fecha` tenía un "BLINDAJE" que buscaba las
+substrings `'17'/'18'/'19'/'tarde'/'despues'` en el JSON stringificado de TODO el
+input de la tool — pero a este sub-workflow solo le llega `{fecha}`, nunca el
+mensaje real de la paciente. Como la paciente escribió hoy 18/8 sin fecha concreta,
+el Sub-Agent buscó desde `fecha: "2026-08-18"` — el string de esa fecha CONTIENE
+"18" → el blindaje interpretó "pidió después de las 18hs" → `franja='tarde'`,
+`hora_minima=18` → el texto que arma `Format Slots` le decía literalmente al LLM
+**"NO ofrezcas mañanas"**, con `total_manana: 10` turnos reales disponibles. Bug
+sistémico: se repite CUALQUIER día que la fecha buscada tenga 17, 18 o 19 en el
+día del mes (o el sub-workflow reciba una fecha con esos dígitos en cualquier
+posición) — no un caso aislado del 18/8. Fix: sacar el blindaje entero (no puede
+funcionar bien, nunca tiene el texto real de la paciente para inspeccionar).
+
+**Bug 2 (secundario, encontrado al re-testear)**: con el blindaje sacado, `franja`
+correctamente queda `null` — pero cuando no hay preferencia, `Format Slots` le
+daba al LLM las listas de mañana/tarde por separado sin decir cuál es el más
+próximo en general, y el modelo seguía sesgando hacia tarde por las suyas. Fix:
+calcular explícitamente el slot cronológicamente más próximo (Dentalink ya
+devuelve los slots ordenados por fecha) y decírselo directo al modelo en el texto.
+
+**Verificado con 2 tests E2E reales** (webhook público, números de prueba, no
+pacientes reales) antes y después de cada fix — el segundo test post-fix confirmó
+la respuesta correcta: *"El primer turno disponible que tengo es Viernes 28 de
+Agosto 8:30 hs"*. Scripts: `apply_fix_bulletproof_tarde_fix.py`,
+`apply_fix_format_slots_iterate.py`. Backups en `workflows/history/buscar_horarios_*`.
+
+**Bug 3 (más grave, encontrado al re-verificar mañana/tarde)**: probando el pedido
+explícito de "mañana", la ejecución real (260293) FALLÓ de verdad: `Evolution API -
+Enviar Mensaje` del v6 — el nodo que manda CADA respuesta del bot a CADA
+paciente — todavía tenía el patrón viejo sin `JSON.stringify` (`"text": "{{
+$('Loop Mensajes').first().json.message }}"`), el mismo bug que se arregló esta
+semana en Recordatorios/Daily Summary/Notify Grupo/Health Check/Human Takeover
+pero que NUNCA se le aplicó a este nodo específico. Cualquier respuesta del bot
+con un salto de línea real (muy común, cualquier mensaje de más de un párrafo)
+rompía el JSON y Evolution GO devolvía "Bad control character" → el paciente NO
+recibía la respuesta, en silencio. Fix aplicado (`apply_fix_v6_evo_go.py`) y
+verificado: el mismo pedido de "mañana" que había fallado, reintentado, salió
+sin error. Este es el nodo de mayor tráfico de todo el sistema — probablemente
+explica fallos de envío esporádicos no reportados hasta ahora.
+
+## Barrido sistemático de bugs silenciosos (18/8, pedido de Lucas tras el bug de JSON)
+
+Después de encontrar el bug de `Evolution API - Enviar Mensaje` (arriba), Lucas pidió
+un barrido completo para encontrar TODO lo que pueda estar fallando en silencio.
+3 pasos, todos con evidencia real:
+
+1. **Grep de "text/message sin JSON.stringify" en los 32 workflows activos** →
+   encontró UN nodo más: `HTTP Send Admin Confirm` (v6) — la confirmación de
+   `/bot off`/`/bot on`. Arreglado y **verificado en vivo con un ciclo real
+   off→on** (mismo bot de producción, restaurado en <1 min). Grave porque es
+   justo el tipo de escenario del incidente de Mariela: un admin apaga el bot y
+   no recibe confirmación de que funcionó.
+
+2. **Historial real de ejecuciones con error, en TODOS los workflows activos**:
+   70 errores encontrados. 50 eran de Health Check (todos de ANTES del fix del
+   6/8, nada nuevo). 2 de Daily Summary (también ya explicados). **18 del v6 —
+   17 de los 18 eran el MISMO bug de `Evolution API - Enviar Mensaje`**, desde
+   el **05/08 hasta HOY**: 13 días, ~15 pacientes reales afectados (lista
+   completa con teléfono/fecha en el chat con Lucas — varios eran confirmaciones
+   de turno o datos de pago que nunca llegaron). Ya no puede volver a pasar,
+   el nodo está arreglado.
+
+3. **Mapeo de nodos `continueOnFail`** (pueden fallar sin que el workflow se
+   marque como error): 37 nodos en 8 workflows. Los de más riesgo — `Step 6a:
+   Cancelar en Dentalink` / `Step 6d-1: POST Reservar` (Sub-WF
+   CancelarReprogramar, `5cAWJxiWJ50hxEq3`) — se revisaron contra las 9
+   ejecuciones reales que existen: solo una corrió, y salió bien. **Sin
+   evidencia de daño real**, pero sigue siendo un riesgo latente (si algún día
+   falla, el bot podría confirmarle un turno a un paciente que nunca se creó de
+   verdad en Dentalink). Pendiente diseñar qué hacer en ese caso (¿reintentar?
+   ¿escalar a secretaria?) — no aplicado, solo documentado.
+
+**Lección**: mismo patrón que toda la semana — un "blindaje"/salvaguarda agregado
+sin test real, que termina generando MÁS falsos positivos que los casos que
+pretendía cubrir, porque revisaba datos que no reflejan lo que dice el paciente
+(la fecha buscada, no su mensaje). Antes de agregar detección heurística por
+texto, verificar qué datos realmente le llegan al nodo.
+
+---
+
+## Sesión 2026-08-15 — Reunión de seguimiento con Dra. Raquel (Lucas desde Toscana)
+
+Detalle completo en `docs/reunion-2026-08-15-dra-raquel.md`. Es en gran parte un seguimiento
+de `docs/reunion-2026-07-14-dra-raquel.md` (mismos temas) — lo nuevo:
+
+- **Incidente recurrente de recordatorios**: Irina volvió a pedir apagar recordatorios porque
+  ya había confirmado a mano, se reactivaron tarde, faltaron confirmaciones de lunes/martes.
+  Diagnóstico: NO es bug — el fix técnico del 14/7 (agenda como fuente de verdad) sigue sano,
+  el gap es que Irina sigue pidiendo on/off en vez de gestionar todo por Dentalink. Ver
+  `decisions.md` 15/8.
+- **Reportero semanal** (construido 11/8): pedido de extenderlo con scoring de urgencias +
+  mapeo semanal específico de urgencias (no solo escalaciones generales).
+- **Panel**: demo formal a Raquel — reacción positiva al chat simplificado tipo WhatsApp y las
+  métricas. Gap señalado: toggle bot/humano no es inmediato (espera ventana ~30 min).
+- **Triaje de urgencias**: Raquel confirma que ya filmó los 4 videos (alambre pincha, bracket
+  suelto, alambre girado, ligadura pincha) — falta que los mande + el fraseo de preguntas.
+- **Landing page**: sin material nuevo de Belén, mismo pedido que el 14/7. Detalle movido a
+  `raquel-rodriguez/memory/` (repo propio, memoria creada esta sesión).
+- **Grupo de supervisión** (Raquel+Lucas+Irina): pedido el 14/7, sigue sin crearse un mes
+  después — pendiente de Raquel, no bloqueo técnico.
+
+Backlog actualizado (`memory/backlog.md`, secciones "Reunión 14/7" cerrada/actualizada +
+"Reunión 15/8" nueva).
+
+---
+
+## Sesión 2026-08-11 — Reportero Semanal construido y probado con datos reales
+
+Backlog P1 desde el 18/7 ("diseño pactado, nunca construido"), pedido explícito de Lucas
+("dale el reportero semanal"). Workflow nuevo `Áurea — Reportero Semanal`
+(`MJ38kSTRZDPgPCCy`), activo, 11 nodos:
+
+- Trigger doble: cron lunes 10 AM ART (`0 15 * * 1`, recordar que el cron del server usa
+  hora Berlin — ver nota de zona horaria en sesiones previas) + webhook manual
+  `trigger-reportero-manual` para pruebas.
+- `Query Escalaciones Semana` (Postgres, credencial `TpYhZX4UT61xAKSV`) trae
+  `escalaciones_log` de los últimos 7 días.
+- `Clasificar y Agrupar`: **copia 1:1 de `lib/escalaciones.ts` del panel** (mismas regex
+  señal/ruido/operativo + temas) — si se edita un lado, editar el otro. Mantiene
+  consistencia con lo que ya ve la Dra. en `/aprendizaje`.
+- Si hay señal: `Prep LLM Body` → `LLM Síntesis` (gpt-5-nano, credencial OpenAI
+  `nYujqfon7GGDnJUO`, la misma que ya usa "Banlist Shadow" en el v6) le pide una sugerencia
+  concreta por tema de qué cargar en Conocimiento. **OJO real encontrado en el primer test**:
+  gpt-5-nano rechaza `temperature` custom ("Only the default (1) value is supported") — se
+  sacó el parámetro del body.
+- `Prep Envío (test mode)`: **nace con `TEST_MODE=true`** (manda a Lucas, no al grupo) —
+  mismo patrón ya usado en Recordatorios. Pasar a `false` recién cuando Lucas confirme que
+  el formato/contenido del reporte le sirve (así lo pidió el diseño original: "mostrar el
+  primer reporte a Lucas antes").
+- `Enviar WA`: mismo patrón `JSON.stringify` sin comillas propias ya validado 3 veces esta
+  semana para mensajes multilínea con emojis.
+
+**Verificado con datos reales de la semana** (no solo el diff): 2 pruebas E2E reales vía el
+webhook manual, la primera reveló el bug de `temperature`, la segunda salió limpia — 12
+casos de señal reales, agrupados en 4 temas, con sugerencias concretas y en español
+generadas por el LLM, mensaje entregado a Lucas por WhatsApp real. De paso se encontró y
+limpió un resto de escalación de prueba (`id=113`, del test de Notify Grupo del 06/08 que
+había quedado sin phone y sin borrar) que se había colado en el reporte.
+
+**Decisión de Lucas (11/8)**: queda mandando SOLO a Lucas (`TEST_MODE=true` permanente, no
+es un modo de prueba transitorio) — "que me mande a mí nomás, así que tranca". No pasar a
+mandar al grupo salvo que lo pida explícitamente.
+
+---
+
+_Última actualización: 2026-08-06 mañana ART — barrido completo: la misma expresión rota de
+Evolution GO apareció en 4 workflows más además de v6/Recordatorios, los 5 ya arreglados y
+verificados con ejecución real_
+
+## Sesión 2026-08-06 mañana — barrido sistemático del bug de expresión rota (Evolution GO)
+
+**Motivo**: Lucas notó que no le llegó el resumen diario de recordatorios y me marcó,
+correctamente, que decir "revisé todo" y seguir dejando el mismo bug en otros lados no es
+suficiente rigor. Tenía razón: encontré la misma expresión rota (`"{{ String(={{ $json.X }}
+||"").replace(...) }}"`, nested mustache + "=" suelto — el patrón de la migración apurada de
+la noche del 04→05/08) en **4 workflows más**, además de los 2 ya arreglados anoche
+(v6, Recordatorios):
+
+1. **`Áurea — Daily Summary Recordatorios`** (`QsGBGkZdGu5gTdBf`) / nodo `Send WA Lucas`:
+   por esto Lucas no recibió el resumen de hoy ni de ayer (falla desde el 05/08). Los
+   recordatorios en sí SE MANDARON BIEN los dos días (7/7 hoy, 0 errores) — solo el aviso A
+   LUCAS sobre eso estaba roto.
+2. **`Helper - Notify Grupo`** (`S5U6tSipzlgFHCkf`) / nodo `Notify Grupo Send` — **el más
+   grave**: el aviso de escalaciones (urgencias, pagos, dudas reales) al grupo de WhatsApp de
+   la clínica estuvo roto desde el 05/08 20:44 hasta el fix (06/08 ~13:55 confirmado con 4
+   ejecuciones reales fallidas). Las escalaciones SÍ se loguearon en `escalaciones_log`
+   (visibles en `/aprendizaje`) pero el aviso por WhatsApp nunca llegó — agravado porque este
+   nodo tenía además su PROPIO bug: el "number" pretendía hardcodear el JID del grupo
+   (`120363407321448469@g.us`) pero mal escrito como token JS inválido. Verificado con un
+   envío real de prueba: Evolution GO acepta el JID completo del grupo (CON el sufijo
+   `@g.us` — a diferencia de los números de paciente, un grupo NO se debe pasar por
+   `.replace(/[^0-9]/g,...)`, eso lo rompe).
+3. **`Áurea — Health Check (Dentalink + Evolution)`** (`Yjl6kyLnALhIfbFX`) / nodo
+   `Send WA Alert Lucas` — mismo patrón. Pero además tenía un bug SEPARADO y más profundo: el
+   nodo `Check Evolution` seguía apuntando al hostname Docker interno de la Evolution API
+   CLÁSICA (`http://evolution-api-y6xc-api-1:8080/...`), que ya no existe → el workflow
+   entero crasheaba con error de DNS cada 30 min desde las 12:00 UTC de hoy, ANTES de llegar
+   siquiera al nodo con la expresión rota. Fix: apuntar a
+   `GET https://evo.raquelrodriguez.com.ar/instance/all` (Evolution GO no tiene un endpoint
+   de estado por-instancia más simple) + reescribir `Evaluar Health` para parsear el nuevo
+   shape (`{data: [{name, connected: bool}]}`, antes esperaba `{state:...}`/
+   `{connectionStatus:...}`). Verificado con la corrida real de las 17:00 UTC:
+   `{healthy:true, skip_alert:true}` — sano de punta a punta.
+4. **`Human Takeover - Chatwoot`** (`w7BBpZeEwZnpCX1q`) / nodo
+   `Evolution API - Enviar a WA` — no había disparado desde la migración (ninguna ejecución
+   real entre el 04/08 18:42 y el fix), así que no afectó a nadie todavía, pero tenía el
+   mismo patrón roto. Arreglado preventivamente y verificado con un webhook Chatwoot
+   sintético (`event: message_created`, número de prueba) — el nodo construye y manda la
+   petición sin error.
+
+**Todos verificados con ejecución real** (no solo el diff), datos de prueba limpiados de la
+base después. Scripts: `apply_fix_daily_summary_send_wa_expr.py`,
+`apply_fix_ruido_notify_grupo_evo_go.py` (los 3 de expresión), `apply_fix_health_check_evo_go_endpoint.py`
+(el del endpoint muerto). Backups PRE/POST de cada uno en `workflows/history/`.
+
+**Lección reforzada, esta vez con evidencia de que no se aplicó a tiempo**: en cuanto se
+encuentra un patrón de bug (una expresión rota, un endpoint muerto) en UN workflow durante
+una migración, hay que **grepear TODOS los workflows activos por esa misma firma antes de
+cerrar el tema** — no esperar a que cada uno se manifieste por separado (a veces días después,
+cuando alguien nota que falta un mensaje). El grep sistemático (`String(={{` / `{{ ={{`) en
+los 30 workflows activos encontró los 3 restantes en un solo paso.
+
+---
+
+## Sesión 2026-08-06 madrugada — Recordatorios: expresión rota tras la migración a Evolution GO
+
+**Contexto**: Lucas preguntó "¿los recordatorios y eso anda?" — auditoría directa del workflow
+`Recordatorio de Turno 48HS - Dra. Raquel` (`7RqTApkvVavRmq3R`) mostró que corrió OK todos los
+días hasta ayer 08:00 ART, pero esa corrida fue **antes** de la migración a Evolution GO de
+anoche. La corrida de hoy 08:00 ART iba a ser la primera con el código nuevo — nunca probada.
+
+**Bug 1 (sintaxis)**: el nodo `Enviar WhatsApp` (httpRequest) tenía un `jsonBody` con `{{ }}`
+anidados y un `=` suelto (`"{{ String(={{ $json.remoteJid }}||"").replace(...) }}"`) — mismo
+patrón de migración apurada que los 3 bugs del v6 de anoche. Con `continueOnFail: true`, esto
+fallaría en silencio: el workflow reportaría "success" pero CERO recordatorios saldrían.
+
+**Bug 2 (encontrado recién al testear, no estaba en el diagnóstico inicial)**: al corregir SOLO
+la sintaxis (interpolar `$json.message` directo entre comillas dobles), el envío real devolvió
+`"The value in the JSON Body field is not valid JSON"` — el mensaje de recordatorio es
+multi-línea de verdad (`\n` reales del template), y un salto de línea crudo dentro de un string
+JSON entre comillas rompe el JSON. Fix real: `{{ JSON.stringify($json.message) }}` **sin**
+comillas propias alrededor (`JSON.stringify` ya devuelve el string completo escapado y
+citado) — mismo patrón para `number`.
+
+**Verificado con test E2E real, no solo el diff**: se activó momentáneamente `TEST_MODE=true`
+en el nodo `Preparar mensaje` (ya existía, hecho para esto — redirige TODO el envío al
+`TEST_PHONE` de Lucas con prefijo `[TEST 24h/72h] Para: <nombre real>`), se disparó
+`POST /webhook/trigger-recordatorios-manual`, y se confirmó por captura de Lucas que el mensaje
+completo (multi-línea, con el turno real de una paciente — Pamela, viernes 7/8 10:00hs) llegó
+íntegro a WhatsApp. Después se revirtió `TEST_MODE` a `false` — **crítico no olvidarlo**, si
+queda en `true` la corrida real de las 8 AM le manda todo a Lucas en vez de a los pacientes.
+
+Scripts: `scripts/apply_fix_recordatorios_enviar_whatsapp_expr.py` (fix definitivo) +
+`scripts/apply_toggle_recordatorios_test_mode.py --on/--off` (toggle de test, reusable para la
+próxima vez que haga falta probar este workflow sin tocar pacientes reales). Backups PRE/POST
+de las 3 aplicaciones en `workflows/history/recordatorios_*`.
+
+**Lección reforzada**: la migración de anoche tocó "TODOS los workflows activos" según el
+reporte de la sesión de la tarde, pero solo el v6 recibió test E2E real esa noche. Este bug en
+Recordatorios confirma que "actualizado" ≠ "probado" aplica a CUALQUIER workflow tocado en una
+migración de infraestructura, no solo al que tiene más tráfico. Antes de confiar en un cron que
+todavía no corrió con el código nuevo, conviene disparar su trigger manual (si tiene) con un
+modo de test real, no asumir por el diff que va a andar.
+
+## Sesión 2026-08-09/10 — orden de recordatorios multi-turno + bug real de Dentalink
+
+**Bug de Dentalink en CancelarReprogramar (arreglado, verificado):** Lucas pegó 2
+escalaciones reales del grupo. La de "No veo turnos disponibles registrados en Dentalink"
+resultó ser un bug real, no falta de disponibilidad: en `Sub-WF - CancelarReprogramar`
+(`5cAWJxiWJ50hxEq3`), "Step 6b-prep: Prep Query Horarios" armaba el filtro en un campo
+`dentalink_query_url` (URL completa) pero "Step 6b: GET Agendas" leía un campo DISTINTO,
+`q_horarios` (nunca existía) → la query a Dentalink era literalmente `undefined` → siempre
+`{"data": []}`. Pasó 4 veces desde el 30/7 (mismo motivo exacto en `escalaciones_log`).
+Fix: renombrar al campo correcto + agregar filtro `fecha` (mismo patrón ya probado de
+"Sub-WF - Buscar Horarios Validado"). Verificado pegándole directo a la API real de
+Dentalink: la query vieja no filtraba nada útil, la nueva trae turnos reales.
+Script: `apply_fix_buscar_horarios_deep.py`.
+
+**Escalación "se los envié a la secretaria" — no es bug**: numero con identidad @lid
+nueva sin historial previo, el bot no tiene contexto de qué "les" mandó. Coincide con la
+decisión ya tomada el 6/7 sobre @lid (backlog aparte, no se toca sin resolver el problema
+de fondo de identidad).
+
+**Escalaciones "ya atendiendo" (48% del volumen)**: verificado que el panel `/aprendizaje`
+YA las separa correctamente de la señal (no ensucian la vista), el aviso por WhatsApp para
+ese caso ya se cortó el 4/8, y las 55 ocurrencias corresponden a 40 pacientes reales con
+ficha — no es ruido espurio, es la secretaria atendiendo de verdad. Sin acción necesaria.
+
+**Orden de recordatorios cuando un paciente tiene 2+ turnos el mismo día** (pedido real de
+la Dra. Raquel, caso Ignacio Agus 11:10/11:40 mandados invertidos): se agregó el nodo
+"Ordenar Citas por Hora" en `Recordatorio de Turno 48HS` (`7RqTApkvVavRmq3R`), entre "GET
+Citas por fecha" y "Split Citas" — ordena TODO el array del día por `hora_inicio` antes de
+partirlo en items. Es un sort global (no agrupado por paciente), así que escala solo a
+cualquier cantidad de turnos el mismo día por paciente, no solo 2. Verificado con test real
+(TEST_MODE on, ejecución 255176): el nodo corrió limpio, devolvió las citas del día
+ordenadas cronológicamente, y la cadena completa (Split→GET Paciente→Preparar mensaje→
+Enviar WhatsApp) siguió funcionando sin error. TEST_MODE revertido a false, filas de prueba
+en `recordatorios_enviados` limpiadas. Script: `apply_fix_recordatorios_orden_multiturno.py`.
+
+---
+
+## Panel — polling más agresivo (pedido de Lucas en vivo)
+
+`chat-view.tsx` 4s→1.5s, `conversation-list.tsx` 6s→2.5s (ambos siguen gateados a pestaña
+visible). Deployado a `panel.raquelrodriguez.com.ar` vía `deploy/redeploy.sh` (GitHub Actions
+sigue trabado por billing, pendiente de Lucas). Commit `27a039a`.
+
+## Panel — bug de atribución: mensajes de staff (wa_outbound) sin limpiar, atribuidos a "Asiri"
+
+Lucas mostró una captura real: el chat de `+54 9 388 470-8109` mostraba el marcador crudo
+`[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria...]:` sin limpiar, con label
+"Asiri" (verde, bot) en vez de "Dra. Raquel" (azul, humano). Causa: `chat-view.tsx` tenía un
+guard `!esBotFuente &&` antes de chequear `metadata.source === "wa_outbound"` — pero el Logger
+marca `fuente: "bot"` para CUALQUIER fila `type: "ai"` de `n8n_chat_histories`, incluidas las
+notas de relay humano (confirmado con la fila real en Supabase: `fuente: "bot"` +
+`metadata.source: "wa_outbound"` al mismo tiempo). El guard bloqueaba la detección SIEMPRE.
+`source: wa_outbound` lo escribe un único nodo del v6 (`Build fromMe AI memory`, rama
+`fromMe=true`) — nunca la generación normal del bot — así que es señal exclusiva, no hacía
+falta cruzarla con `fuente`. Fix: sacar el guard. Deployado (commit `2a96394`).
+
+## Intento de fix del Logger (fichas falsas) — REVERTIDO, no dejar aplicado sin más cuidado
+
+Se intentó (madrugada 06/08) agregar un nodo IF entre "Parse mensajes" y "HTTP - Upsert
+Paciente" en el Logger (`xsXeHp7WLXnFQc3o`) para que solo mensajes `rol=user` creen ficha de
+paciente (evitar el caso "Ange"/fichas falsas de arriba). **Se revirtió de inmediato**: el
+test con datos sintéticos mostró que rompía `HTTP - Insert Conversacion` para TODOS los items
+(no solo el bypass) — error real de Postgres `invalid input syntax for type bigint: ""`,
+porque "Insert Conversacion" lee `{{ $json[0].id }}` (el id de la ficha creada) del nodo
+INMEDIATO ANTERIOR, y con dos caminos convergiendo en un solo puerto de entrada n8n dejó de
+resolver bien esa referencia incluso para el item que SÍ pasó por el upsert. Revertido al
+backup PRE (`workflows/history/logger_PRE_fix_no_ficha_falsa.json`), confirmado con ejecución
+real que "Insert Conversacion" volvió a funcionar sin error y que el cursor
+(`MAX(chat_history_id) FROM conversaciones`, que es como el Logger determina qué es "nuevo" —
+OJO que NO usa el `last_synced_chat_id` de static data pese a lo que sugiere el nombre del
+nodo "Get last_synced", ese campo parece vestigial) quedó sincronizado sin backlog (verificado
+con una ejecución real limpia, 0 filas nuevas, cursor = 2416 = mismo que el máximo real de
+`n8n_chat_histories` en ese momento). Cero pacientes reales afectados — se probó con teléfonos
+sintéticos (5490000000001/002), limpiados de la base al terminar.
+
+**Si se retoma este fix**: hay que resolver la referencia `$json[0].id` de forma que no
+dependa de "cuál fue el nodo inmediato anterior" — por ejemplo pasando el `paciente_id` como
+parte del mismo item que sale de la rama IF (agregando un campo `paciente_id` en cada rama
+antes de que converjan), en vez de leerlo con un `$json` posicional que se rompe si el grafo
+tiene más de un camino de entrada al nodo. Corregir con un test E2E real (no solo el diff)
+ANTES de dar por bueno, tal como esta misma sesión tuvo que aprender dos veces esta noche.
+
+**Hallazgo aparte, no resuelto (para hablar con Lucas)**: ese número específico no tiene
+ninguna conversación real de paciente en 7 mensajes desde el 21/7 — solo notas
+`[ATENCION HUMANA]`. El contenido relayado ("Ange fijate si ese es el botón...", "planilla de
+compra") es claramente Irina hablando de insumos/compras con alguien, no un paciente. La
+instancia Evolution GO "raquel" está conectada al **número personal de Irina**
+(`5493885786946`, confirmado por el JID) — cualquier mensaje que ella mande desde ese WhatsApp,
+sea a un paciente o no, dispara el webhook y puede crear una ficha de "paciente" falsa. No es
+nuevo de esta migración (viene desde el 21/7 al menos). Sin resolver — depende de si Irina usa
+ese numero tambien para uso personal/proveedores; si es asi, en algun momento conviene separar
+el numero del bot del numero personal de ella.
+
+---
+
+## Sesión 2026-08-05 — Integración Definitiva de Evolution GO (APLICADO Y CONFIRMADO)
+
+**Contexto e Infraestructura:**
+- La Dra. Raquel escaneó el QR en la nueva interfaz de **Evolution GO** (escrito en Go, instanciado en VPS `187.127.0.110`).
+- Instancia `raquel` **Conectada** (`connected: True`, JID `5493885786946`).
+
+**Acciones y Fixes Aplicados:**
+1. **Configuración y Persistencia de Webhook**:
+   - `webhook` en `evogo_users` configurado a `https://n8n.raquelrodriguez.com.ar/webhook/evolution-v2`.
+   - `CONNECT_ON_STARTUP: "true"` activado en `/docker/evolution-go/docker-compose.yml`.
+2. **Actualización de Workflows en n8n para Evolution GO**:
+   - Evolution GO utiliza peticiones HTTP REST estándar (`POST /send/text`, `POST /message/downloadmedia`, `POST /message/presence`) con el token de instancia `apikey: fe27778f-6608-4a71-9385-e5c5c1eebf14`.
+   - Nodos actualizados a `n8n-nodes-base.httpRequest` nativos en **TODOS los workflows activos**:
+     - `Agente IA v6` (`O155MqHgOSaNZ9ye`): Enviar Mensaje, Obtener Media/Imagen (`/message/downloadmedia`), Typing status (`/message/presence`), Admin Confirm.
+     - `Recordatorio de Turno 48HS` (`7RqTApkvVavRmq3R`).
+     - `Helper - Notify Grupo` (`S5U6tSipzlgFHCkf`).
+     - `Daily Summary Recordatorios` (`QsGBGkZdGu5gTdBf`).
+     - `Health Check` (`Yjl6kyLnALhIfbFX`).
+     - `Reactivación de Pacientes Inactivos` (`v8G9Cp98gioXObtu`).
+     - `Human Takeover - Chatwoot` (`w7BBpZeEwZnpCX1q`).
+3. **Panel de Métricas y `.env.production`**:
+   - `EVOLUTION_API_KEY`/`EVOLUTION_GLOBAL_API_KEY` actualizada en `panel/.env.local` y en
+     `/opt/nexora-panel/.env.production` en el VPS (valor real NUNCA en este repo — regla del
+     proyecto; vive en los `.env*` locales/server, gitignored).
+4. **Verificación de Envío**:
+   - Mensaje de prueba real enviado por Evolution GO a Lucas (`"Hola Lucas! Prueba de envio con Instance token desde Evolution GO 🚀"`).
+   - **Confirmado por Lucas en WhatsApp Web con captura de pantalla a las 9:00 p.m.**
+
+⚠️ **CORRECCIÓN de esta misma noche** (ver sesión siguiente): ese test probaba SOLO el envío
+directo a la API REST — el pipeline de RECEPCIÓN (webhook entrante) quedó completamente roto
+hasta ~2hs después. "0 nodos antiguos en workflows activos" era cierto para el mecanismo de
+envío, pero no cubría el shape del payload de *entrada*, que es una estructura totalmente
+distinta. Ver el detalle abajo.
+
+---
+
+## Sesión 2026-08-05 (noche) — Evolution GO: el bot estaba MUDO Y SORDO, 3 fixes reales
+
+**Contexto:** tras la migración de la tarde, Lucas reportó que el WhatsApp "se cayó" (en
+realidad: Postgres de Evolution GO se quedó sin conexiones — ver más abajo). Al reconectar el
+QR, pedí "corroborar sin mandar cagada" el trabajo de la sesión de la tarde. La auditoría real
+(ejecuciones de n8n, no la afirmación del reporte) encontró que **el bot recibía WhatsApp pero
+nunca respondía a ningún paciente** — 40 ejecuciones seguidas, ninguna llegaba a "Enviar
+Mensaje". Root cause en 3 capas distintas, cada una diagnosticada con datos reales antes de
+tocar nada:
+
+### Fix 1 — pipeline de ENTRADA roto (CRÍTICO, afectaba al 100% de los mensajes)
+`Webhook Validator` (y 3 nodos más: `Kill-switch Check`, `Rate Limit Prep`,
+`Edit Fields - Extraer Datos`) seguían leyendo el shape de la Evolution API clásica
+(`body.data.key.{remoteJid,id,fromMe}`, `body.data.message.conversation`,
+`body.data.pushName`) — campos que **no existen** en Evolution GO (usa `whatsmeow`, shape
+totalmente distinto). El validador rechazaba el 100% de los mensajes entrantes en el segundo
+nodo del flujo, antes de que nada se guarde en memoria. Confirmado con un paciente real
+(**Samira Benitez**, cita/DNI enviados a las 19:46, nunca procesados — ni guardados en
+`conversaciones` ni en `n8n_chat_histories`, porque el rechazo pasa ANTES de cualquier
+persistencia).
+
+**Mapeo real del shape nuevo** (confirmado con payloads reales, no documentación):
+```
+body.data.key.remoteJid       -> body.data.Info.Chat
+body.data.key.id              -> body.data.Info.ID
+body.data.key.fromMe          -> body.data.Info.IsFromMe
+body.data.pushName            -> body.data.Info.PushName
+body.data.messageType         -> body.data.Info.Type  ("text"/"reaction"/"media")
+body.data.message.conversation -> body.data.Message.conversation
+body.instance                 -> body.instanceName
+```
+LID-safe (número real puede venir en `Chat`, `Sender`, `RecipientAlt` o `SenderAlt` según el
+caso — el mismo mensaje `fromMe` a veces trae el numero real en un campo distinto que un
+mensaje entrante): se prueban los 4 en orden, primero que matchee `@s.whatsapp.net`.
+
+Aplicado con `scripts/apply_fix_evolution_go_payload.py --apply`. Backups en
+`workflows/history/v6_{PRE,POST}_fix_evolution_go_payload.json`.
+
+### Fix 2 — pipeline de SALIDA roto (el bot generaba la respuesta pero no la mandaba)
+Tras el Fix 1, el bot ya clasificaba y generaba respuestas correctas — pero
+`Evolution API - Enviar Mensaje` fallaba con "Bad request". Causa: `Evolution - Typing` (un
+`httpRequest` genérico que reemplazó al nodo custom viejo) **pisa completamente** el `json`
+del item con la respuesta HTTP de `/message/presence` — se pierden `remoteJid`/`phone`/
+`message` que había armado `Split en Mensajes`. El nodo custom viejo probablemente preservaba
+esos campos; el `httpRequest` genérico no, y nadie lo notó porque nunca se hizo un test E2E
+real disparando el webhook completo.
+
+**Fix**: `Evolution - Typing` y `Evolution API - Enviar Mensaje` ahora leen con referencia
+explícita a `$('Loop Mensajes').first().json.X` (mismo patrón que ya usaba `Gate Humano Final`
+con `Preparar Mensaje Final`) en vez de `$json.X` — no importa qué haga el nodo intermedio con
+su propio output.
+
+Aplicado con `scripts/apply_fix_evolution_typing_pisa_datos.py --apply`.
+**Verificado con 2 tests E2E reales** disparando el webhook público con el shape real de
+whatsmeow: ambos llegaron hasta el envío y quedaron guardados en `n8n_chat_histories`
+(`human`+`ai` por par), confirmando memoria + clasificación + generación + envío funcionando
+de punta a punta.
+
+### Fix 3 — pipeline de MEDIA roto (fotos/audios/documentos, no bloqueante pero real)
+`Switch - Tipo Mensaje` rutea según `image_url`/`audio_url`/`document_url` — campos que
+`Edit Fields` armaba leyendo `imageMessage.url` (shape viejo, no existe más) → SIEMPRE vacíos
+→ el switch nunca matchea ninguna rama de media → un paciente que manda una foto o un
+comprobante de pago es tratado como si no hubiera mandado nada. Confirmado con el caso real:
+**Samira mandó un comprobante de MercadoPago (PDF) a las 19:45, se perdió sin rastro.**
+
+Hallazgo clave sobre cómo funciona Evolution GO: **NO expone URLs descargables** como la
+Evolution API clásica — manda el archivo **ya descargado y en base64 directo en el webhook**:
+```
+body.data.Info.Type       = "media"
+body.data.Info.MediaType  = "document" | "image" | "audio" | "ptt" | "video" | ...
+body.data.Message.base64  = contenido ya decodificado
+body.data.Message.documentMessage.{fileName, mimetype, ...}   (imageMessage/audioMessage/
+  videoMessage/stickerMessage/locationMessage/contactMessage siguen el protocolo estándar de
+  WhatsApp — no cambia entre libs, solo el contenedor padre sí: `Message`, no `message`)
+```
+
+**Fix**: `Switch - Tipo Mensaje` rutea por `Info.MediaType` directo (dato explícito, no
+"¿hay URL?"). `Evolution API - Obtener Media`/`Obtener Imagen` — que eran `httpRequest` a
+`/message/downloadmedia`, un endpoint **nunca verificado** contra Evolution GO real — se
+reconstruyeron como nodos `Set` que copian el base64 directo del webhook (sin conexiones
+nuevas, mismo nombre/posición, solo cambia CÓMO consiguen el dato: sin llamada HTTP externa,
+más rápido, sin dependencia no probada). `document`/`otros` (video/sticker/ubicación/
+contacto) solo generan un marcador de texto — así estaba diseñado desde antes de la
+migración, no es parte de este bug.
+
+Aplicado con `scripts/apply_fix_evolution_go_media.py --apply`. Verificado con el payload
+real del comprobante de Samira (re-disparado al webhook con destinatario de test): rutea
+correctamente a "documento", genera el marcador `[DOCUMENTO: mercadopago_comprobante_....pdf
+(application/pdf)]`.
+
+### Incidente aparte — Postgres de Evolution GO se quedó sin conexiones (causa de la "caída")
+`idle_session_timeout`/`idle_in_transaction_session_timeout` estaban en `0` (sin límite) en
+`evolution-go-postgres` — `whatsmeow` tiene un leak de conexiones conocido (no cierra bien la
+conexión en cada `/instance/connect`), y sin timeout las conexiones fugadas nunca se
+liberaban → agotó `max_connections=100` → NINGUNA instancia (`raquel` ni `Waves`, comparten el
+mismo Postgres) podía generar QR. Fix de infraestructura, **declarado en el propio
+`docker-compose.yml`** (no solo un `ALTER SYSTEM` ad-hoc que se pierde si se recrea el
+container): `idle_session_timeout=3min`, `idle_in_transaction_session_timeout=2min`. Con esto
+puesto, el pool nunca más puede agotarse por acumulación, pase lo que pase con el bug de la
+app. Además, el banner de reconexión del panel (`whatsapp-status-banner.tsx`) bajó su
+auto-refresh de 20s a 50s (menos presión sobre el mismo leak).
+
+### Pendientes de esta sesión
+- **Ventana rota real** (~19:05 a 20:07 ART del 05/08): ~11 mensajes de pacientes reales no
+  llegaron a procesarse ni guardarse. Los más relevantes para seguimiento humano: **Samira
+  Benitez** (datos + comprobante de pago) y **"manuu saltos"** ("me sigue chocando", suena a
+  aparatología). Reportados a Lucas por WhatsApp, no recuperables desde el panel (nunca se
+  guardaron en `conversaciones`).
+- **Auditados y sanos**: los otros 6 workflows que la sesión de la tarde tocó no dependen del
+  shape de Evolution (o no tienen webhook de entrada, o su entrada no es de Evolution) — el
+  bug era exclusivo del v6.
+- Token `ghp_p1z37…` filtrado (sesión 22/7) y contraseña del panel: siguen pendientes de Lucas.
+- **Lección para la próxima migración de infraestructura de mensajería**: "el envío funciona"
+  y "el bot funciona" son afirmaciones distintas. Verificar SIEMPRE con un test E2E que dispare
+  el webhook público completo (no solo un POST directo a la API de envío) y confirme que la
+  respuesta se genera Y persiste en memoria — el pipeline de recepción es donde vive la lógica
+  de negocio real y es lo primero que rompe un cambio de shape de payload.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---
 
 ## Sesión 22/7 — Panel LIVE en producción
+
 
 **El panel `nexora-whatsapp-agent` está deployado y andando:** https://panel.raquelrodriguez.com.ar
 (login `lucas`/`irina`/`raquel`). Verificado E2E: la API real devolvió 67 conversaciones (auth

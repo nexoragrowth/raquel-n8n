@@ -204,6 +204,37 @@ CREATE TABLE IF NOT EXISTS urgencias_log (
 CREATE INDEX IF NOT EXISTS idx_urgencias_created ON urgencias_log (created_at);
 
 -- ----------------------------------------------------------------------------
+-- 8b. triaje_urgencias_log — creada el 2026-09-02 (scripts/create_triaje_urgencias_log_table.py)
+--     Reemplaza en la práctica a urgencias_log (borrada el 18/7 por vacía). Una fila por
+--     urgencia evaluada por el triaje: salida del gate determinístico de red flags
+--     (triaje/gate_red_flags.js), clasificación del LLM y acción tomada. Fase 1 (sombra):
+--     la escribe el satélite "Áurea — Triaje Urgencias (sombra)" leyendo escalaciones_log;
+--     después la escribe el v6 en línea. Tabla propia para NO ensuciar /aprendizaje ni el
+--     reportero; el futuro "scoring de urgencias" del reportero lee de acá.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS triaje_urgencias_log (
+    id                     BIGSERIAL PRIMARY KEY,
+    escalacion_id          BIGINT UNIQUE REFERENCES escalaciones_log(id) ON DELETE SET NULL,
+    telefono               TEXT,
+    exec_id                TEXT,
+    escalacion_created_at  TIMESTAMPTZ,
+    motivo_bot             TEXT,
+    mensaje_paciente       TEXT,
+    gate_red_flags         JSONB NOT NULL DEFAULT '[]'::jsonb,   -- ["gate:fiebre","llm:dolor intenso",...]
+    gate_escala            BOOLEAN NOT NULL DEFAULT FALSE,
+    tipo                   TEXT,        -- red_flag | alambre_pincha | bracket_suelto | alambre_girado | ligadura_pincha | otra_urgencia | no_urgencia | error_llm
+    confianza              TEXT,        -- alta | media | baja
+    razon                  TEXT,
+    modelo                 TEXT,
+    modo                   TEXT NOT NULL DEFAULT 'sombra',    -- sombra | piloto | live
+    accion                 TEXT NOT NULL DEFAULT 'escalado',  -- escalado | video
+    video_enviado          TEXT,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_triaje_created ON triaje_urgencias_log (created_at);
+CREATE INDEX IF NOT EXISTS idx_triaje_tipo    ON triaje_urgencias_log (tipo);
+
+-- ----------------------------------------------------------------------------
 -- 9. peticiones — tabla fundacional 15/7: pedidos del staff/dashboard con
 --    SLA 24hs (docs/handoff: "deje peticiones con SLA 24hs").
 --    ⚠️ SCHEMA 100% DEDUCIDO (mismo caso que urgencias_log: sin DDL registrado,
