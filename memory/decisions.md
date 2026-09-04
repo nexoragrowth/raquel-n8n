@@ -416,3 +416,21 @@ mataría la Opción 2).
 **Revisable**: sí — si el auto-silencio post-escalación se arregla a nivel Helper/Re-check, se
 puede reevaluar volver a un sub-agent para el resumen; hoy no aporta nada que el resumen
 determinístico no tenga.
+
+## 2026-09-04 — Escalaciones: el label `humano` se aplica 20 s DESPUÉS del aviso, no al instante
+
+**Decisión**: en `Helper - Notify Grupo` (S5U6tSipzlgFHCkf) el webhook responde al instante
+(`onReceived`) y `Chatwoot Apply` corre después de un Wait de 20 s. El aviso al grupo sigue
+siendo inmediato.
+**Razón**: con el label sincrónico, `Re-check Humano`/`Gate Humano Final` del v6 veían el label
+1.4 s después de que el propio bot escalara y suprimían su respuesta: 6/6 escalaciones desde el
+30/8 sin "Recibimos tu mensaje…" para el paciente (confirmado con ejecuciones reales). Todos los
+prompts asumen que ese canned se entrega y que DESPUÉS el bot se calla — el delay restituye esa
+semántica sin tocar el v6.
+**Alternativas descartadas**: que el re-check ignore labels "propios" (no hay timestamp por
+label en Chatwoot); no aplicar label cuando escala el bot (rompería el silencio post-escalación
+que sí se quiere); arreglarlo dentro del v6 (blast radius mayor).
+**Costo aceptado**: ventana de 20 s en la que un paciente que re-escribe muy rápido puede recibir
+una segunda respuesta/escalación. Antes no recibía ninguna.
+**Revisable**: sí — ajustar `--segundos` si la ventana molesta o si la respuesta del bot tarda
+más (tail con Formatting Agent ≈ 5–10 s).

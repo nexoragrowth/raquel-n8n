@@ -186,14 +186,13 @@
       --piloto ""`; (d) E2E del cierre; (e) cuando lleguen los videos de bracket_suelto /
       alambre_girado / ligadura_pincha: `upload_urgencia_video_supabase.py` + UPDATE
       `triaje_videos` activo=true (sin n8n).
-- [ ] **P1 — BUG preexistente: toda escalación del bot silencia su propia respuesta al
-      paciente** (6/6 casos desde el 30/8, confirmado con ejecuciones reales durante el mapeo
-      del 4/9): `escalar_a_secretaria` → Helper `Chatwoot Apply` aplica label `humano` en
-      forma sincrónica → `Re-check Humano` 1.4 s después suprime el canned ("Recibimos tu
-      mensaje…"). El grupo SÍ recibe el aviso; el paciente escalado no recibe nada. Fix
-      candidato: que `Chatwoot Apply` no se aplique en la misma ejecución que escala, o que
-      el re-check ignore labels aplicados por la propia ejecución. La rama del triaje ya lo
-      esquiva (manda el texto antes del aviso). SENSIBLE (toca v6 o el Helper).
+- [x] 2026-09-04 **BUG preexistente arreglado: toda escalación del bot silenciaba su propia
+      respuesta al paciente** (6/6 casos desde el 30/8). Fix en el Helper `S5U6tSipzlgFHCkf`
+      (`scripts/apply_fix_helper_label_diferido.py`, 0 cambios en el v6): webhook responde al
+      instante (`onReceived`) + Wait 20 s antes de `Chatwoot Apply` → el aviso al grupo sigue
+      inmediato, el label `humano` llega cuando la respuesta del bot ya salió. Verificado en
+      vivo (label ausente a +3 s, presente a +25 s). Vigilar la primera escalación real de un
+      paciente: debe recibir "Recibimos tu mensaje…" y después quedar en silencio.
 - [ ] **P1: Scoring de urgencias en el reportero semanal** — extender el reportero ya
       construido (11/8) para que además mapee las urgencias de la semana (no solo
       escalaciones generales) y sugiera contenido/video nuevo para casos recurrentes.

@@ -70,9 +70,18 @@ sesión `5491161461034`, `escalaciones_log` 189/190, `triaje_urgencias_log` 3, 5
 vuelve a aplicar — para demos, `scripts/limpiar_numero_demo.py --phone … --apply --solo-label`
 después de cada escalación). `scripts/limpiar_numero_demo.py` es nuevo.
 
-**Hallazgo grave aparte (no arreglado, fuera del alcance del PUT)**: el auto-silencio
-post-escalación de TODOS los sub-agents (6/6 desde el 30/8: el paciente escalado nunca recibe
-"Recibimos tu mensaje…"). Ver `docs/triaje-fase2-diseno-2026-09-04.md` §9 y backlog P1.
+**Hallazgo grave aparte → ARREGLADO el mismo día (con OK de Lucas)**: el auto-silencio
+post-escalación de TODOS los sub-agents (6/6 desde el 30/8: el paciente escalado nunca recibía
+"Recibimos tu mensaje…"). Fix solo en el Helper `S5U6tSipzlgFHCkf`
+(`scripts/apply_fix_helper_label_diferido.py`): webhook `responseMode` lastNode → onReceived
+(la tool ya no bloquea ~2 s) + nodo `Esperar respuesta del bot (20s)` antes de `Chatwoot
+Apply` en ambas ramas. Verificado en vivo con una llamada silenciosa al número de Lucas: label
+ausente a +3 s, presente a +25 s (después quitado; fila de prueba `escalaciones_log` 203
+borrada). Backups `workflows/history/helper_notify_grupo_PRE/POST_label_diferido_20260904_172623.json`.
+Ventana de 20 s en la que un paciente que re-escribe muy rápido puede recibir otra respuesta —
+aceptado (hoy no recibía ninguna). Ver `docs/triaje-fase2-diseno-2026-09-04.md` §9.
+
+**Commit**: `0eea5d3` (todo lo del triaje) + commit siguiente con el fix del Helper.
 
 **Pendiente**: Raquel — textos definitivos (hoy borradores en `triaje_videos`/`triaje_config`),
 videos de los otros 3 tipos (subir + `activo=true`, sin n8n), lista de red flags; E2E del
