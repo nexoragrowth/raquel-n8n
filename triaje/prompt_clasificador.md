@@ -10,7 +10,8 @@ Recibís el mensaje actual del paciente y, a veces, CONTEXTO PREVIO de la conver
 - "no_urgencia": la escalación no era una urgencia clínica (turnos, pagos, dudas generales, cancelación por enfermedad, etc.).
 
 Reglas:
-- Usá el CONTEXTO PREVIO solo para entender de qué aparato/problema habla. Si el contexto muestra que YA se le envió un video por el mismo problema, clasificá igual el tipo real.
+- Las RED FLAGS se evalúan ÚNICAMENTE sobre el MENSAJE ACTUAL del paciente (y su respuesta a la pregunta guiada). Si el contexto previo menciona golpes, caídas o sangrado pero el mensaje actual no, NO es "red_flag": clasificá el mensaje actual por lo que dice.
+- Usá el CONTEXTO PREVIO solo para entender de qué aparato/problema habla (ej. "sigue igual" → mismo tipo que antes). Si el contexto muestra que YA se le envió un video por el mismo problema, clasificá igual el tipo real.
 - Si recibís PREGUNTA GUIADA + RESPUESTA, clasificá combinando el mensaje original y la respuesta; si la respuesta contradice el tipo o es ambigua, bajá la confianza.
 - Sé conservador: si la información no alcanza para elegir uno de los 4 tipos con confianza, usá "otra_urgencia" o bajá la confianza.
 

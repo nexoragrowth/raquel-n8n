@@ -11,6 +11,20 @@
 - [ ] Lunes 20/7 08:00 ART: vigilar la primera corrida real del Recordatorio contra v3
       (y que las confirmaciones de los 13 backfilleados matcheen).
 
+## P1 — Panel: enviar mensaje / toggle bot NUNCA funcionó (confirmado 5/9)
+- [ ] `nexora-whatsapp-agent` tiene la UI y las server actions (`enviarMensajeAction`,
+      `toggleBotAction`) que POSTean a `{N8N_PANEL_WEBHOOK_BASE}/panel-send-human` y
+      `/panel-toggle-bot` con header `X-Panel-Secret` — pero en n8n NO existen esos webhooks
+      (63 workflows revisados) y el `.env.production` del VPS no tiene las 2 variables → el
+      panel siempre respondió "El panel todavía no está conectado al servidor del bot".
+      Build propuesto (~40 min): satélite n8n "Panel — acciones staff" con 2 webhooks que
+      validan el secreto; `panel-send-human`: `/send/text` por Evolution GO al paciente +
+      fila `ai` en `n8n_chat_histories` con source `human_takeover` (el panel la muestra como
+      "Dra. Raquel", el Logger como `rol=human`) + label `humano` en Chatwoot (mismo efecto
+      que escribir desde el WhatsApp del consultorio); `panel-toggle-bot`: label
+      `humano`/`bot` en Chatwoot. Después: agregar las 2 env al VPS + `docker compose up -d
+      --force-recreate` (el redeploy.sh preserva el .env pero hay que recrear el container).
+
 ## P1 — BUG agendar prematuro (detectado 19/7 por Lucas)
 - [ ] **El bot RESERVA el turno sin confirmación explícita del paciente ni pago.** Caso real:
       el paciente eligió una fecha y preguntó el PRECIO (frenillo → "valor $50.000") pero NUNCA

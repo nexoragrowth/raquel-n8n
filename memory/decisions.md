@@ -434,3 +434,18 @@ que sí se quiere); arreglarlo dentro del v6 (blast radius mayor).
 una segunda respuesta/escalación. Antes no recibía ninguna.
 **Revisable**: sí — ajustar `--segundos` si la ventana molesta o si la respuesta del bot tarda
 más (tail con Formatting Agent ≈ 5–10 s).
+
+## 2026-09-05 — Triaje: el clasificador solo ve el contexto del episodio actual
+
+**Decisión**: `Triaje: Evaluar` recorta el contexto del Router al tramo posterior al último
+`[TRIAJE ESCALADO]` / `[TRIAJE CIERRE]` antes de pasárselo al clasificador, y el prompt del
+clasificador exige evaluar red flags ÚNICAMENTE sobre el mensaje actual. La reconstrucción de
+estado (Opción ya enviada) sigue mirando el contexto completo.
+**Razón**: caso real (Lucas, 4/9 18:43 ART, exec 270770): "Me pincha un alambre de brackets"
+salió `red_flag` porque el contexto aún contenía "se cayó, le sangra mucho" de un episodio ya
+escalado. Un episodio cerrado/escalado no debe contaminar el siguiente; las red flags del
+mensaje actual las cubre además el gate determinístico.
+**Alternativa descartada**: no pasar contexto al clasificador (pierde "sigue igual" → mismo
+tipo); confiar solo en el prompt (una sola capa).
+**Revisable**: sí — si aparecen casos donde el contexto del episodio anterior sí importa
+clínicamente (hoy la doctora ya lo tiene porque ese episodio se escaló).

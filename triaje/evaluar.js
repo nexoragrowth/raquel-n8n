@@ -50,7 +50,17 @@ const cfg = {
 
 const pm = $('Preparar Mensaje Final').first().json;
 const text = String(pm.text || "").trim();
-let ctx = ""; try { ctx = String($('Build Router Context').first().json.ctx || ""); } catch (e) { ctx = ""; }
+let ctxCompleto = ""; try { ctxCompleto = String($('Build Router Context').first().json.ctx || ""); } catch (e) { ctxCompleto = ""; }
+// El contexto que ve el clasificador es SOLO el episodio actual: todo lo anterior al último
+// [TRIAJE ESCALADO] / [TRIAJE CIERRE] es un caso ya cerrado y no debe contaminar (caso real 4/9:
+// un "se cayó y sangra mucho" de un turno ya escalado hizo que "me pincha un alambre" saliera red_flag).
+const recortarCtx = (c) => {
+  const partes = c ? c.split("\n---\n") : [];
+  let desde = 0;
+  partes.forEach((p, i) => { if (/^BOT: \[TRIAJE (?:CIERRE|ESCALADO)\]/.test(p)) desde = i + 1; });
+  return partes.slice(desde).join("\n---\n");
+};
+const ctx = recortarCtx(ctxCompleto);
 let estado = null; try { estado = parseJ($('Triaje: Redis GET estado').first().json.triaje_estado, null); } catch (e) { estado = null; }
 if (estado && typeof estado !== "object") estado = null;
 
@@ -84,8 +94,8 @@ if (gate.flags.length) {
 }
 
 // ---- Estado reconstruido desde la memoria si Redis no lo tiene (2ª capa, solo modo nuevo) ----
-if (!estado && modo_entrada === "nuevo" && ctx) {
-  const partes = ctx.split("\n---\n");
+if (!estado && modo_entrada === "nuevo" && ctxCompleto) {
+  const partes = ctxCompleto.split("\n---\n");
   let ultimoVideo = null;
   for (const p of partes) {
     if (/^BOT: \[TRIAJE (?:CIERRE|ESCALADO)\]/.test(p)) ultimoVideo = null;

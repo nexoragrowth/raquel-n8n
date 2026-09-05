@@ -1,5 +1,37 @@
 # Estado actual — raquel-n8n
 
+## Sesión 2026-09-05 — Triaje: bug real de contaminación de contexto (arreglado) + el panel nunca pudo enviar mensajes
+
+**1) Prueba real de Lucas anoche (4/9 18:43 ART, exec 270770) "Me pincha un alambre de vrackets"
+→ recibió el texto de escalación, no el video.** Causa: el clasificador devolvió `red_flag` con
+razón "el contexto indica una caída con sangrado abundante" — el contexto (últimos 6 mensajes
+de `Build Router Context`) todavía tenía mi E2E #5 ("mi hijo se cayó, le sangra mucho") de un
+episodio YA escalado, y el LLM lo trató como continuación. Defecto de diseño, no de la prueba.
+**Fix aplicado (2º PUT idempotente del v6, solo cambia el jsCode de `Triaje: Evaluar` + el
+prompt del clasificador embebido)**: (a) `recortarCtx()` — el clasificador solo ve el contexto
+posterior al último `[TRIAJE ESCALADO]`/`[TRIAJE CIERRE]` (episodio actual; la reconstrucción
+de estado sigue usando el ctx completo); (b) prompt: "las red flags se evalúan ÚNICAMENTE
+sobre el mensaje actual". Test unitario nuevo (46/46). E2E con el mensaje exacto de Lucas →
+`alambre_pincha` alta → video Opción 1 (log 10). Memoria de Lucas limpiada de nuevo (12 filas).
+
+**2) El mensaje de Lucas de hoy ("che me pincha", ~17:20 ART) NUNCA llegó a Evolution GO**: en
+el log del container `evolution-go-api` de la última hora solo entró su "Hola" (17:17:49, vía
+LID `223871026389070@lid` con JID swap y un WARN de "untrusted identity… clearing stored
+identity and retrying"); ninguna ejecución del v6 después de las 20:18 UTC de ningún teléfono.
+Instancia `Connected/LoggedIn`, Health Check verde. Pendiente: que Lucas reenvíe y ver si es
+un problema de entrega de WhatsApp desde su dispositivo (identidad LID) o de horario sin
+tráfico.
+
+**3) El panel NO puede enviar mensajes ni togglear el bot — y nunca pudo.** Error real:
+"El panel todavía no está conectado al servidor del bot." = `app/(app)/conversaciones/actions.ts`
+cuando faltan `N8N_PANEL_WEBHOOK_BASE`/`N8N_PANEL_WEBHOOK_SECRET`. Verificado: (a) en n8n NO
+existe ningún workflow con webhook `panel-send-human` ni `panel-toggle-bot` (63 workflows
+revisados); (b) `/opt/nexora-panel/.env.production` no tiene esas 2 variables. El panel LEE
+directo de Supabase (por eso renderiza todo), pero ESCRIBIR requiere esos webhooks. **Corrección
+a lo que le dije a Lucas el 2/9** (y él a Raquel): el panel NO reemplaza el toggle/envío humano
+todavía; solo lectura. La UI existe (`chat-view.tsx`), el backend no. Ver backlog P1 (build
+propuesto: satélite n8n con los 2 webhooks + secreto + env en el VPS + redeploy).
+
 ## Sesión 2026-09-04 — Triaje con video: Fase 2 (piloto en el v6) en construcción — Lucas lo necesita completo para vender
 
 **Contexto**: Lucas probó "por su cuenta" escribiéndole al **número real de la clínica** (no al

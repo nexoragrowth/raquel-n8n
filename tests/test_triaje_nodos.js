@@ -177,6 +177,13 @@ const check = (nombre, cond, detalle) => { console.log(`${cond ? "OK  " : "FAIL"
   ev = await runEvaluar(c);
   check("ctx con ESCALADO posterior -> sin estado", !ev.estado, JSON.stringify(ev.estado));
 
+  // --- Contexto de un episodio ya escalado NO llega al clasificador (caso real 4/9) ---
+  const ctxViejo = "PACIENTE: mi hijo se cayó y le sangra mucho la boca\n---\nBOT: [TRIAJE ESCALADO] Recibimos su mensaje\n---\nPACIENTE: Hola\n---\nBOT: Hola! Soy Asiri";
+  c = { text: "Me pincha un alambre de brackets", estado: null, parseExecuted: true, ctx: ctxViejo };
+  ev = await runEvaluar(c);
+  check("ctx recortado al episodio actual", ev.ruta_pre === "clasificar" && !ev.llm_body.includes("se cayó") && ev.llm_body.includes("Hola! Soy Asiri"), ev.llm_body.slice(0, 200));
+  check("  ...y el texto llega igual al LLM", ev.llm_body.includes("Me pincha un alambre"), "");
+
   // --- Decidir defensivo: input sin evaluación ---
   d = await runDecidir({ choices: [] }, c, null);
   check("decidir sin evaluar -> escalar", d.ruta === "escalar" && d.razon === "sin_evaluacion", d.ruta);
