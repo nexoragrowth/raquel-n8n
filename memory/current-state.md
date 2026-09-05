@@ -29,8 +29,26 @@ existe ningún workflow con webhook `panel-send-human` ni `panel-toggle-bot` (63
 revisados); (b) `/opt/nexora-panel/.env.production` no tiene esas 2 variables. El panel LEE
 directo de Supabase (por eso renderiza todo), pero ESCRIBIR requiere esos webhooks. **Corrección
 a lo que le dije a Lucas el 2/9** (y él a Raquel): el panel NO reemplaza el toggle/envío humano
-todavía; solo lectura. La UI existe (`chat-view.tsx`), el backend no. Ver backlog P1 (build
-propuesto: satélite n8n con los 2 webhooks + secreto + env en el VPS + redeploy).
+todavía; solo lectura. La UI existe (`chat-view.tsx`), el backend no.
+**→ CONSTRUIDO el mismo día (con OK de Lucas)**: satélite `Panel — acciones staff`
+(`jzxb5zUKCaJcvCgp`, 13 nodos, `scripts/create_panel_acciones_staff.py`). Flujo: Webhook →
+`Validar secreto` (header `x-panel-secret` vs secreto embebido) → 401 o → envío `/send/text`
+(headers clonados del v6) → `¿Enviado?` (502 si Evolution falla) → fila en `n8n_chat_histories`
+idéntica a la rama fromMe (`[ATENCION HUMANA … desde el PANEL]`, source `wa_outbound`,
+`from_panel:true`) → `Label Chatwoot` (humano en todas las convs; toggle false → bot) → 200.
+Env `N8N_PANEL_WEBHOOK_BASE=https://n8n.raquelrodriguez.com.ar/webhook` +
+`N8N_PANEL_WEBHOOK_SECRET` (generado con `secrets.token_urlsafe`, guardado solo en
+`%TEMP%/panel_webhook_secret.txt` local y en el `.env.production` del VPS) → `docker compose up
+-d --force-recreate` (compose usa `env_file`, no hace falta rebuild) → healthy, `/login` 200.
+Probado directo contra n8n: secreto malo 401; envío real a Lucas 200 (label humano aplicado a
+las 8 conversaciones del contacto 1); toggle false/true/false 200. Fila de prueba borrada.
+Pendiente: prueba de Lucas desde la UI del panel; recordar que enviar desde el panel deja el
+chat en modo humano (igual que escribir desde el celular) hasta que Auto Reactivar (60–75 min)
+o el toggle lo devuelvan a bot.
+
+**4) Abrir el triaje a TODOS los pacientes**: Lucas dijo "sí" pero el clasificador de permisos
+bloqueó el comando (`create_triaje_config_tables.py --activar --piloto ""`). Queda para que lo
+corra él. Hoy sigue `telefonos_piloto={5491161461034}`.
 
 ## Sesión 2026-09-04 — Triaje con video: Fase 2 (piloto en el v6) en construcción — Lucas lo necesita completo para vender
 

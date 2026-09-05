@@ -11,8 +11,17 @@
 - [ ] Lunes 20/7 08:00 ART: vigilar la primera corrida real del Recordatorio contra v3
       (y que las confirmaciones de los 13 backfilleados matcheen).
 
-## P1 — Panel: enviar mensaje / toggle bot NUNCA funcionó (confirmado 5/9)
-- [ ] `nexora-whatsapp-agent` tiene la UI y las server actions (`enviarMensajeAction`,
+## P1 — Panel: enviar mensaje / toggle bot NUNCA funcionó (confirmado 5/9) → RESUELTO 5/9
+- [x] 2026-09-05 Satélite n8n `Panel — acciones staff (send-human / toggle-bot)`
+      (`jzxb5zUKCaJcvCgp`, activo, `scripts/create_panel_acciones_staff.py`): webhooks
+      `panel-send-human` y `panel-toggle-bot` con validación de `X-Panel-Secret` (401 si no
+      coincide); envío por Evolution GO + fila `[ATENCION HUMANA … desde el PANEL]` en memoria
+      (source `wa_outbound`, `from_panel:true`) + label `humano` en TODAS las conversaciones del
+      contacto; toggle = label `humano`/`bot`. Variables `N8N_PANEL_WEBHOOK_BASE/SECRET`
+      agregadas al `.env.production` del VPS (secreto generado, no está en el repo) y container
+      del panel recreado (healthy). Probado directo: 401 / 200 envío real a Lucas / 200 toggles.
+      Falta que Lucas lo pruebe desde la UI del panel.
+- [ ] (histórico) `nexora-whatsapp-agent` tiene la UI y las server actions (`enviarMensajeAction`,
       `toggleBotAction`) que POSTean a `{N8N_PANEL_WEBHOOK_BASE}/panel-send-human` y
       `/panel-toggle-bot` con header `X-Panel-Secret` — pero en n8n NO existen esos webhooks
       (63 workflows revisados) y el `.env.production` del VPS no tiene las 2 variables → el
