@@ -449,3 +449,21 @@ mensaje actual las cubre además el gate determinístico.
 tipo); confiar solo en el prompt (una sola capa).
 **Revisable**: sí — si aparecen casos donde el contexto del episodio anterior sí importa
 clínicamente (hoy la doctora ya lo tiene porque ese episodio se escaló).
+
+## 2026-09-05 — Robustez verificable: Vigía + chequeo único + reglas de proceso 8/9
+
+**Decisión**: (1) satélite `Áurea — Vigía` cada 15 min que avisa a Lucas por WhatsApp ante
+triaje degradado / errores del v6 / instancia sorda en horario de clínica / triaje sin videos
+(dedupe 60 min); (2) `scripts/check_triaje.py` obligatorio antes de cualquier PUT; (3) reglas
+duras 8 ("no afirmar que funciona sin E2E del camino completo") y 9 ("cero residuos de test en
+chats reales, limpiar en el mismo turno") en `.claude/CLAUDE.md`.
+**Razón**: Lucas pidió "re contra funcional, sin caídas" después de dos regresiones percibidas
+que fueron de proceso, no de código: afirmar que el panel enviaba sin verificar el backend
+(2/9) y dejar residuos de mis E2E en su chat que contaminaron su prueba real del triaje (4/9).
+No se puede prometer cero fallas; sí que él se entere primero y que cada cambio pase por el
+mismo chequeo.
+**Alternativas descartadas**: E2E diario automático contra producción (manda WhatsApps reales a
+Lucas todos los días — ruido); extender el Health Check existente (mezcla responsabilidades y
+toca un workflow que funciona).
+**Revisable**: sí — umbrales (20 min, 3 h, horario) y destinatario (hoy solo Lucas, patrón
+TEST_MODE del reportero).

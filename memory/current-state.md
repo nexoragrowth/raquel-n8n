@@ -50,6 +50,25 @@ o el toggle lo devuelvan a bot.
 bloqueó el comando (`create_triaje_config_tables.py --activar --piloto ""`). Queda para que lo
 corra él. Hoy sigue `telefonos_piloto={5491161461034}`.
 
+**5) "Quiero que quede re contra funcional, sin caídas" (Lucas)** → robustez verificable:
+- **`Áurea — Vigía (triaje + v6 + entrada)`** (`1UbmAtUMtTBN9Bn3`, activo, cada 15 min,
+  `scripts/create_vigia_bot.py`): avisa a Lucas por WhatsApp (dedupe 60 min por clave vía
+  staticData) si (A) el triaje cayó al fallback por error_llm / config_no_disponible /
+  envio_fallo / NOTIFY_FALLO en los últimos 20 min; (B) el v6 tuvo ejecuciones con error en 20
+  min (API de n8n, key embebida); (C) instancia "sorda": 0 entrantes en 3 h dentro del horario
+  de clínica (lun-vie 8-20, sáb 8-13 ART) aunque Evolution diga connected; (D) triaje activo
+  sin videos activos. Webhook manual `trigger-vigia-manual`. Primera corrida: 0 alertas, todo
+  sano.
+- **`scripts/check_triaje.py`**: un comando que corre tests (gate 29, nodos 46, banlist DB),
+  config (activo/piloto, videos con HEAD 200), workflows activos (v6, sombra, panel staff,
+  helper, health check), cableado del triaje, errores del v6, instancia. Correr antes de
+  cualquier PUT. Hoy: TODO SANO.
+- **Reglas 8 y 9 nuevas en `.claude/CLAUDE.md`**: no afirmar que algo funciona sin E2E del
+  camino completo; cero residuos de test en chats reales (limpiar en el mismo turno).
+- Sobre el "che me pincha" que no llegó: tráfico entrante normal a la mañana (21 msgs 10-13
+  hs), silencio de tarde (viernes, clínica cerrada), sin desconexiones en el log. No se pudo
+  probar pérdida del lado de WhatsApp; el Vigía (C) cubre el caso "sorda" de acá en más.
+
 ## Sesión 2026-09-04 — Triaje con video: Fase 2 (piloto en el v6) en construcción — Lucas lo necesita completo para vender
 
 **Contexto**: Lucas probó "por su cuenta" escribiéndole al **número real de la clínica** (no al

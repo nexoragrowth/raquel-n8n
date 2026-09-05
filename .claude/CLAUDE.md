@@ -58,6 +58,8 @@ Auditorias completas en `<vault>/projects/audit-memoria-v6.md` y `audit-base-con
 5. **Defensa en profundidad sobre prompt**: cada regla critica debe estar en al menos 2 capas (prompt + gate deterministico). El banlist regex es la ultima linea.
 6. **MVP es agendar + recordar + escalar todo lo demas**. Cualquier intento de meter features extra (vision, RAG abierto, sub-agents creativos), parar.
 7. **fromMe filter universal**: cualquier mensaje saliente del numero de la clinica que NO sea del bot → aplica label humano + silence flag Redis. No depender de Chatwoot solo.
+8. **Nunca afirmar que una feature "funciona" sin haber ejecutado el camino completo de punta a punta** (UI → backend → efecto real). Leer el código de la UI no alcanza (caso 2/9: se dijo que el panel enviaba mensajes; los webhooks de n8n nunca existieron).
+9. **Cero residuos de test en chats reales**: al terminar CUALQUIER prueba con un teléfono real (Lucas incluido) se limpian memoria (`n8n_chat_histories`), logs y label humano en el mismo turno, con `scripts/limpiar_numero_demo.py`. Un mensaje de test viejo en el contexto contaminó una prueba real del triaje (4/9). Y `python scripts/check_triaje.py` antes de cualquier PUT.
 
 ## Accesos y endpoints
 

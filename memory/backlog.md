@@ -114,6 +114,11 @@
 - [ ] Renombrar nodo cron "Diario 9AM Arg (cron 0 14 UTC)" — la expresión real es `0 13 * * 1-5`.
 
 ## Done reciente
+- [x] 2026-09-05 **Vigía** (`1UbmAtUMtTBN9Bn3`): alerta a Lucas si el triaje se degrada, el v6
+      tira errores, la instancia queda sorda en horario de clínica, o el triaje está activo sin
+      videos. + `scripts/check_triaje.py` (chequeo único pre-PUT). + reglas 8/9 en CLAUDE.md.
+- [x] 2026-09-05 **Panel envía/togglea** (satélite `jzxb5zUKCaJcvCgp`) y **fix de contexto del
+      clasificador** (episodios cerrados no contaminan). Ver current-state 5/9.
 - [x] 2026-09-02 **Bug real reportado por las secretarias: el bot "tragaba" el pedido de
       alias cuando venía pegado a "Confirmo"** (caso Paulina Villanueva 2/9 + otro casi
       idéntico el 28/8). Causa raíz: Router y Sub-Agent Confirmar se contradecían en vivo
