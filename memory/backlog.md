@@ -11,6 +11,14 @@
 - [ ] Lunes 20/7 08:00 ART: vigilar la primera corrida real del Recordatorio contra v3
       (y que las confirmaciones de los 13 backfilleados matcheen).
 
+## P1 — Panel: mensajes entrantes al instante ("Inbox Live", propuesto 5/9, esperando OK)
+- [ ] Hoy el mensaje del paciente aparece en el panel 30–45 s después de enviado (la memoria
+      lo escribe al final del turno). `scripts/apply_inbox_live.py` (dry-run listo): tabla
+      `mensajes_entrantes_live` + nodo Postgres rama muerta en el v6 + merge en `chat-data.ts`
+      / `conversaciones-data.ts` como burbuja pendiente. SENSIBLE (1 nodo en el v6, sin
+      salidas). Después: bajar el buffer de 22 s es decisión de producto aparte.
+- [x] 2026-09-05 Bug `order ASC` del tail en `chat-data.ts` arreglado y deployado (`cc642c7`).
+
 ## P1 — Panel: enviar mensaje / toggle bot NUNCA funcionó (confirmado 5/9) → RESUELTO 5/9
 - [x] 2026-09-05 Satélite n8n `Panel — acciones staff (send-human / toggle-bot)`
       (`jzxb5zUKCaJcvCgp`, activo, `scripts/create_panel_acciones_staff.py`): webhooks

@@ -50,6 +50,26 @@ o el toggle lo devuelvan a bot.
 bloqueó el comando (`create_triaje_config_tables.py --activar --piloto ""`). Queda para que lo
 corra él. Hoy sigue `telefonos_piloto={5491161461034}`.
 
+**6) Panel "anda choto": no se actualiza sin F5 (Lucas, 5/9 tarde).** Dos causas distintas:
+- **Bug real arreglado y deployado** (`nexora-whatsapp-agent` commit `cc642c7`): el tail "en vivo"
+  de `n8n_chat_histories` en `lib/chat-data.ts` pedía `order id ASC + limit 60` → traía los 60
+  mensajes MÁS VIEJOS; en conversaciones con >60 filas de memoria (13 de 240 sesiones, 6
+  activas este mes) los mensajes nuevos nunca entraban al polling y aparecían recién cuando el
+  Logger los copiaba (hasta 5 min). Ahora DESC. La lista lateral (`conversaciones-data.ts`) ya
+  usaba DESC, estaba bien.
+- **Latencia inherente (no bug, diseño)**: la fila `human` del paciente la escribe la memoria
+  LangChain AL FINAL del turno (buffer 22 s + Router + sub-agent ≈ 30–45 s); hasta entonces el
+  panel no tiene de dónde leer el mensaje entrante. Propuesta lista, NO aplicada:
+  `scripts/apply_inbox_live.py` = tabla `mensajes_entrantes_live` + nodo Postgres `Inbox Live`
+  como rama muerta de `Edit Fields - Extraer Datos` (inserta cada mensaje crudo al entrar) +
+  merge en el panel como burbuja "pendiente". 1 nodo sin salidas, 1 conexión agregada.
+  Requiere OK de Lucas (toca el v6) + cambio en el panel.
+- **Corrección de creencia**: el panel SÍ edita los prompts de los sub-agentes del v6 desde
+  `/agente` (`app/(app)/agente/prompt-actions.ts` → `lib/n8n.ts::setSubAgentePrompt`: GET
+  fresco, cambia solo el systemMessage del nodo, settings filtradas, PUT; banlist
+  `lib/agente-guardrails.ts` antes de guardar; historial y revert en `agente_prompt_log`). Lucas
+  creía que "no se podía". Lo que NO edita el panel: Router, Code nodes, conexiones.
+
 **5) "Quiero que quede re contra funcional, sin caídas" (Lucas)** → robustez verificable:
 - **`Áurea — Vigía (triaje + v6 + entrada)`** (`1UbmAtUMtTBN9Bn3`, activo, cada 15 min,
   `scripts/create_vigia_bot.py`): avisa a Lucas por WhatsApp (dedupe 60 min por clave vía
