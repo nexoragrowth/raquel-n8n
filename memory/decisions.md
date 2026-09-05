@@ -467,3 +467,22 @@ Lucas todos los días — ruido); extender el Health Check existente (mezcla res
 toca un workflow que funciona).
 **Revisable**: sí — umbrales (20 min, 3 h, horario) y destinatario (hoy solo Lucas, patrón
 TEST_MODE del reportero).
+
+## 2026-09-05 — Inbox Live (mensaje entrante al instante) + label humano solo en la conversación abierta
+
+**Decisión 1**: el v6 escribe cada mensaje entrante crudo en `mensajes_entrantes_live` (nodo
+`Inbox Live`, rama muerta desde `Edit Fields - Extraer Datos`, insert parametrizado defineBelow)
+y el panel lo mergea como burbuja pendiente hasta que existe la fila real en memoria.
+**Razón**: la memoria LangChain escribe el mensaje del paciente al FINAL del turno (30–45 s);
+Lucas veía el panel "sin actualizar" y necesitaba F5. Rama muerta = cero impacto en el flujo.
+**Alternativa descartada**: insertar la fila `human` en memoria al entrar (la memoria LangChain
+la duplicaría); bajar el buffer (decisión de producto aparte, backlog P2).
+**Lección**: NUNCA `executeQuery` + `queryReplacement` con texto libre — n8n parte los parámetros
+por coma después de evaluar. Usar insert `defineBelow` (Log Escalacion) o SQL armado en Code con
+`esc()` + `chr(36)` (triaje).
+
+**Decisión 2**: los escritores de label `humano` del panel etiquetan SOLO la conversación abierta
+(o la más reciente); "volver a bot" quita `humano` de TODAS.
+**Razón**: el gate del v6 mira todas las conversaciones y Auto Reactivar solo limpia abiertas →
+un `humano` en una resuelta silencia al bot indefinidamente (pasó con Lucas el 5/9). Blindar el
+gate del v6 queda en backlog P2.

@@ -57,13 +57,29 @@ corra él. Hoy sigue `telefonos_piloto={5491161461034}`.
   activas este mes) los mensajes nuevos nunca entraban al polling y aparecían recién cuando el
   Logger los copiaba (hasta 5 min). Ahora DESC. La lista lateral (`conversaciones-data.ts`) ya
   usaba DESC, estaba bien.
-- **Latencia inherente (no bug, diseño)**: la fila `human` del paciente la escribe la memoria
-  LangChain AL FINAL del turno (buffer 22 s + Router + sub-agent ≈ 30–45 s); hasta entonces el
-  panel no tiene de dónde leer el mensaje entrante. Propuesta lista, NO aplicada:
-  `scripts/apply_inbox_live.py` = tabla `mensajes_entrantes_live` + nodo Postgres `Inbox Live`
-  como rama muerta de `Edit Fields - Extraer Datos` (inserta cada mensaje crudo al entrar) +
-  merge en el panel como burbuja "pendiente". 1 nodo sin salidas, 1 conexión agregada.
-  Requiere OK de Lucas (toca el v6) + cambio en el panel.
+- **Latencia inherente → RESUELTA con "Inbox Live" (aplicado 5/9 ~20:15 ART con OK de Lucas)**:
+  la fila `human` del paciente la escribe la memoria LangChain AL FINAL del turno (≈ 30–45 s);
+  ahora el v6 tiene el nodo Postgres `Inbox Live` (147 nodos) colgado de `Edit Fields - Extraer
+  Datos` como RAMA MUERTA (junto a `Get Paciente Context`), que inserta cada mensaje crudo en
+  `mensajes_entrantes_live` apenas entra; el panel (`chat-data.ts` + `conversaciones-data.ts`,
+  commit `c5b0bf3`, deployado) lo mergea como burbuja pendiente hasta que aparece la fila real
+  (dedup por texto del paciente en ventana de 5 min; `from_me` se ignora porque la rama fromMe ya
+  escribe memoria al instante). E2E: fila a **1.3 s** del webhook; memoria a los 43 s.
+  **Bug encontrado y corregido en el camino**: la 1ª versión usaba `executeQuery` +
+  `queryReplacement` y un texto con coma ("hola, cuanto sale…") desplazó los parámetros
+  (`invalid input syntax for type boolean`) — n8n parte los params por coma DESPUÉS de evaluar.
+  Reescrito como insert parametrizado `columns.mappingMode: defineBelow` (mismo patrón que `Log
+  Escalacion` del Helper). El flujo principal nunca se afectó (onError continue).
+  Script: `scripts/apply_inbox_live.py` (`--tabla`, dry-run, `--apply`).
+- **Hazard preexistente que se manifestó hoy**: `Verificar Label Humano` mira TODAS las
+  conversaciones del contacto (cualquier status) pero `Auto Reactivar` solo limpia las ABIERTAS →
+  un `humano` en una conversación resuelta silencia al bot indefinidamente. Lo disparó la 1ª
+  versión del webhook `panel-toggle-bot`, que etiquetaba las 8 conversaciones de Lucas; él probó
+  el toggle desde la UI (funcionó), Auto Reactivar limpió solo la 272 y las 7 resueltas quedaron
+  `humano` → su "Test" de las 18:29 y mi E2E de las 20:00 murieron en `Humano Atendiendo`.
+  Fix: `Label Chatwoot` del satélite `jzxb5zUKCaJcvCgp` ahora pone `humano` SOLO en la abierta
+  (o la más reciente) y `bot` quita `humano` de TODAS (verificado: humano→solo 272; false→ninguna).
+  Labels de Lucas limpiados. Queda en backlog P2 blindar el gate del v6 contra este caso.
 - **Corrección de creencia**: el panel SÍ edita los prompts de los sub-agentes del v6 desde
   `/agente` (`app/(app)/agente/prompt-actions.ts` → `lib/n8n.ts::setSubAgentePrompt`: GET
   fresco, cambia solo el systemMessage del nodo, settings filtradas, PUT; banlist

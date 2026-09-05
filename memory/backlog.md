@@ -11,13 +11,21 @@
 - [ ] Lunes 20/7 08:00 ART: vigilar la primera corrida real del Recordatorio contra v3
       (y que las confirmaciones de los 13 backfilleados matcheen).
 
-## P1 — Panel: mensajes entrantes al instante ("Inbox Live", propuesto 5/9, esperando OK)
-- [ ] Hoy el mensaje del paciente aparece en el panel 30–45 s después de enviado (la memoria
-      lo escribe al final del turno). `scripts/apply_inbox_live.py` (dry-run listo): tabla
-      `mensajes_entrantes_live` + nodo Postgres rama muerta en el v6 + merge en `chat-data.ts`
-      / `conversaciones-data.ts` como burbuja pendiente. SENSIBLE (1 nodo en el v6, sin
-      salidas). Después: bajar el buffer de 22 s es decisión de producto aparte.
+## P1 — Panel: mensajes entrantes al instante ("Inbox Live") → APLICADO 5/9
+- [x] 2026-09-05 `Inbox Live` en el v6 (147 nodos) + merge en el panel (`c5b0bf3`): el mensaje
+      del paciente aparece a ~1 s de llegar. Ver current-state 5/9 (incluye el bug de
+      queryReplacement con comas que se corrigió en el camino).
 - [x] 2026-09-05 Bug `order ASC` del tail en `chat-data.ts` arreglado y deployado (`cc642c7`).
+- [ ] P2 (producto): bajar el buffer de 22 s ("Buffer: Wait 10s" tiene amount 22) → el bot
+      respondería ~10 s antes; riesgo: mensajes en 2 burbujas se procesan como 2 turnos (clase
+      de bug Confirmar/alias). Decidir con Lucas.
+
+## P2 — Gate humano: label `humano` en conversaciones RESUELTAS silencia al bot para siempre
+- [ ] `Verificar Label Humano` / `Re-check Humano` / `Gate Humano Final` miran TODAS las
+      conversaciones del contacto; `Auto Reactivar` solo limpia las `open`. Caso real 5/9 (Lucas,
+      7 resueltas con humano → bot mudo). Opciones: (a) que los 3 chequeos del v6 consideren
+      solo `status='open'`; (b) que Auto Reactivar limpie también resueltas. SENSIBLE (gate
+      humano del v6). Mitigado hoy en el origen (el webhook del panel ya no etiqueta resueltas).
 
 ## P1 — Panel: enviar mensaje / toggle bot NUNCA funcionó (confirmado 5/9) → RESUELTO 5/9
 - [x] 2026-09-05 Satélite n8n `Panel — acciones staff (send-human / toggle-bot)`

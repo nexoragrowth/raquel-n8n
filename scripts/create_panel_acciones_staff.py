@@ -69,11 +69,14 @@ const message = { type: 'ai', content: TAG + p.mensaje, additional_kwargs: { sou
 return [{ json: { session_id: p.telefono, message: JSON.stringify(message) } }];
 """
 
-LABEL_JS = r"""// Aplica label humano/bot en TODAS las conversaciones del contacto (Verificar Label Humano mira todas).
+LABEL_JS = r"""// Label humano/bot en Chatwoot. REGLA (aprendida 5/9): el gate del v6 (Verificar Label Humano) mira
+// TODAS las conversaciones del contacto y Auto Reactivar solo limpia las ABIERTAS → un `humano` en una
+// conversación resuelta silencia al bot para siempre. Por eso: humano → SOLO la conversación abierta
+// (o la más reciente si no hay abierta, igual que CW Pick Conv del v6); bot → se quita humano de TODAS.
 const p = $('Validar secreto').first().json;
 const TOKEN = "__CW_TOKEN__";
 const base = 'https://chat.raquelrodriguez.com.ar/api/v1/accounts/1';
-const labels = (p.accion === 'toggle' && p.humano === false) ? ['bot'] : ['humano'];
+const aHumano = !(p.accion === 'toggle' && p.humano === false);
 let contactId = null, convs = [], applied = 0, error = null;
 try {
   const s = await this.helpers.httpRequest({ method: 'GET', url: base + '/contacts/search?q=' + p.telefono, headers: { api_access_token: TOKEN }, json: true });
@@ -82,15 +85,20 @@ try {
     contactId = c.id;
     const r = await this.helpers.httpRequest({ method: 'GET', url: base + '/contacts/' + contactId + '/conversations', headers: { api_access_token: TOKEN }, json: true });
     convs = r.payload || [];
-    for (const conv of convs) {
-      const actuales = conv.labels || [];
-      const nuevas = labels[0] === 'humano' ? Array.from(new Set([...actuales.filter(l => l !== 'bot'), 'humano'])) : actuales.filter(l => l !== 'humano').concat(actuales.includes('bot') ? [] : ['bot']);
-      await this.helpers.httpRequest({ method: 'POST', url: base + '/conversations/' + conv.id + '/labels', headers: { api_access_token: TOKEN, 'Content-Type': 'application/json' }, body: { labels: nuevas }, json: true });
-      applied++;
+    const post = async (conv, nuevas) => { await this.helpers.httpRequest({ method: 'POST', url: base + '/conversations/' + conv.id + '/labels', headers: { api_access_token: TOKEN, 'Content-Type': 'application/json' }, body: { labels: nuevas }, json: true }); applied++; };
+    if (aHumano) {
+      const abierta = convs.find(x => x.status === 'open') || convs.slice().sort((a, b) => (b.last_activity_at || 0) - (a.last_activity_at || 0))[0];
+      if (abierta) await post(abierta, Array.from(new Set([...(abierta.labels || []).filter(l => l !== 'bot'), 'humano'])));
+    } else {
+      for (const conv of convs) {
+        const actuales = conv.labels || [];
+        if (!actuales.includes('humano')) continue;
+        await post(conv, actuales.filter(l => l !== 'humano').concat(actuales.includes('bot') ? [] : ['bot']));
+      }
     }
   } else { error = 'contact not found'; }
 } catch (e) { error = String((e && e.message) || e).slice(0, 200); }
-return [{ json: { ok: true, accion: p.accion, telefono: p.telefono, labels, contactId, conversaciones: convs.length, applied, error } }];
+return [{ json: { ok: true, accion: p.accion, telefono: p.telefono, humano: aHumano, contactId, conversaciones: convs.length, applied, error } }];
 """
 
 def build(secret, evo_headers, evo_base, cw_token):
@@ -156,9 +164,17 @@ def live_secrets():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true"); ap.add_argument("--activate", metavar="WF_ID"); ap.add_argument("--write-env", action="store_true")
+    ap.add_argument("--update", metavar="WF_ID", help="PUT sobre el workflow existente reusando el secreto ya generado")
     args = ap.parse_args()
     if args.activate:
         r = api(f"/workflows/{args.activate}/activate", "POST"); print(f"activado: {r.get('id')} active={r.get('active')}"); return
+    if args.update:
+        if not SECRET_FILE.exists(): sys.exit("no hay secreto generado localmente (el nodo vivo lo tiene; regenerar implica cambiar el env del VPS)")
+        secret = SECRET_FILE.read_text().strip()
+        evo_headers, evo_base, cw_token = live_secrets()
+        wf = build(secret, evo_headers, evo_base, cw_token)
+        r = api(f"/workflows/{args.update}", "PUT", {"name": wf["name"], "nodes": wf["nodes"], "connections": wf["connections"], "settings": wf["settings"]})
+        print(f"actualizado: {r.get('id')} active={r.get('active')} nodos={len(r.get('nodes', []))}"); return
     if args.write_env:
         if not SECRET_FILE.exists(): sys.exit("no hay secreto generado (correr --apply primero)")
         secret = SECRET_FILE.read_text().strip()

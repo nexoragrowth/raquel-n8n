@@ -77,10 +77,20 @@ def build(wf):
     new = copy.deepcopy(wf); nodes = new["nodes"]; conns = new["connections"]; names = {n["name"]: n for n in nodes}
     if UPSTREAM not in names: sys.exit(f"ERROR: falta {UPSTREAM!r}")
     up = names[UPSTREAM]
+    # INSERT parametrizado por el nodo (mappingMode defineBelow), MISMO patrón que `Log Escalacion` del
+    # Helper. NO usar executeQuery+queryReplacement: n8n parte los parámetros por coma DESPUÉS de evaluar
+    # → un texto con coma ("hola, cuanto sale") desplaza los parámetros (falló así el 5/9 23:00 UTC).
+    # Dedupe por PK key_id: un duplicado da error de unique → onError continue, sin efecto.
     node = {"id": "inbox-live", "name": NODE, "type": "n8n-nodes-base.postgres", "typeVersion": 2.5,
             "position": [up["position"][0] + 260, up["position"][1] + 380],
-            "parameters": {"operation": "executeQuery", "query": QUERY, "options": {"queryReplacement": REPL}},
-            "credentials": {"postgres": PG_CRED}, "onError": "continueRegularOutput", "alwaysOutputData": False}
+            "parameters": {"schema": {"__rl": True, "value": "public", "mode": "list"},
+                           "table": {"__rl": True, "value": "mensajes_entrantes_live", "mode": "list"},
+                           "columns": {"mappingMode": "defineBelow", "value": {
+                               "key_id": "={{ $json.key_id }}", "telefono": "={{ $json.phone }}",
+                               "texto": "={{ $json.text || '' }}", "from_me": "={{ !!$json.fromMe }}",
+                               "push_name": "={{ $json.pushName || '' }}"}},
+                           "options": {}},
+            "credentials": {"postgres": PG_CRED}, "onError": "continueRegularOutput"}
     cambios = []
     if NODE in names:
         prev = names[NODE]; node["id"] = prev["id"]; node["position"] = prev["position"]; nodes[nodes.index(prev)] = node; cambios.append(f"ACTUALIZA {NODE!r}")
@@ -101,7 +111,7 @@ def main():
     print(f"v6 vivo: {len(wf['nodes'])} nodos, activo={wf['active']}, updatedAt={wf.get('updatedAt')}")
     new, cambios = build(wf)
     print("CAMBIOS:"); [print("  -", c) for c in cambios]
-    print("Query:", QUERY); print("Params:", REPL)
+    print("Insert parametrizado (defineBelow) en mensajes_entrantes_live: key_id, telefono, texto, from_me, push_name")
     if not args.apply: print("[DRY-RUN] no se tocó n8n. --tabla crea la tabla; --apply hace el PUT."); return
     ts = time.strftime("%Y%m%d_%H%M%S"); hist = ROOT / "workflows" / "history"; hist.mkdir(parents=True, exist_ok=True)
     (hist / f"v6_PRE_inbox_live_{ts}.json").write_text(json.dumps(wf, ensure_ascii=False, indent=2), encoding="utf-8")
