@@ -17,7 +17,7 @@ en la conversación abierta/más reciente (no en resueltas). E2E directo OK (PNG
 200 → fila con autor "Lucas"); fila de prueba borrada. Infra: columnas `pacientes.alias_panel` +
 `alias_panel_updated_at`; bucket público `panel-media` (15 MB).
 
-**2) Panel (nexora-whatsapp-agent, commits `b76fbfd` + `a309708`, deployado 6/9 ~19:10 ART, healthy)**:
+**2) Panel (nexora-whatsapp-agent, commits `b76fbfd` + `a309708` + `5ef214b` (chip para adjuntos desde el celular), deployado 6/9 ~19:20 ART, healthy)**:
 - Lista ordenada SOLO por último mensaje (como WhatsApp) + filtro "Todos | No leídos"; preview sin el
   marcador `[ATENCION HUMANA…]` y adjuntos como "📷 caption".
 - Alias manual por número desde el header del chat (lápiz, Enter/Esc, optimista con rollback):
