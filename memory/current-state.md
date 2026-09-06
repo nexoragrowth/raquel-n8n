@@ -1,5 +1,33 @@
 # Estado actual — raquel-n8n
 
+## Sesión 2026-09-06 (tarde) — Panel EN VIVO: Supabase Realtime server-side + SSE (chau polling)
+
+**Pedido de Lucas**: "¿cuánto tardan en llegar los mensajes? ¿se puede hacer live con socket?" → "sí,
+necesito que funcione bien, así no dependemos de otra y luego la podemos hacer mobile app".
+**Antes**: polling 1,5 s (chat) / 2,5 s (lista) con pestaña visible; mensaje del paciente visible a
+2–3 s (Inbox Live ~1,3 s + poll); la lista corría 6 queries cada 2,5 s por pestaña.
+**Ahora (panel commits del 6/9 tarde, deployado)**: el servidor Next abre UNA conexión Realtime al v3
+con la service key (`lib/live/bus.ts`, singleton en globalThis, reconexión con backoff 1→30 s +
+jitter, estado observable) sobre `mensajes_entrantes_live` (INSERT), `n8n_chat_histories` (INSERT) y
+`pacientes` (INSERT/UPDATE), y empuja avisos al navegador por SSE (`GET /api/live`, eventos
+hola/cambio/estado/ping/fin, `?telefono=` filtra, `?probe=1` JSON de estado). El cliente
+(`lib/live/use-live.ts`) refetchea SOLO cuando hay novedad (coalescing 150/600 ms chat, 400/1000 ms
+lista), catch-up al (re)conectar y al volver la pestaña, watchdog 45 s, y cae al polling viejo si el
+stream no está; poll de seguridad 20 s / 30 s cuando sí. Indicador "En vivo / Conectando… /
+Reconectando… / Sin vivo" en el header de la lista. Auth: cookie o `Authorization: Bearer <token>` en
+`/api/live`, `/api/chat/[telefono]` y `/api/conversaciones` (contrato para la app móvil, doc en
+`docs/live.md` del panel). Must-fix de la revisión resuelto: respuestas fuera de orden (secuencia en
+el chat, serialización en la lista).
+**Habilitación en la base**: la publicación `supabase_realtime` del v3 estaba VACÍA; se agregaron las
+3 tablas (`scripts/apply_realtime_publication_v3.py`, sección 9 de `rebuild_v3_schema.sql`).
+**Medido por mí (next dev local contra el Realtime real, 3 inserts con teléfono falso, borrados)**:
+insert en la base → evento en el navegador en 201 / 492 / 486 ms. Bus conectado en ~0,6 s.
+**Pendiente de verificar en prod**: Traefik 3 trae `respondingTimeouts.readTimeout` 60 s por default;
+en HTTP/1.1 podría cortar el stream cada 60 s (el cliente reconecta en 2 s y hace catch-up: degradación,
+no rotura). Si pasa, fix = `--entrypoints.websecure.transport.respondingTimeouts.readTimeout=0` en el
+Traefik del stack n8n (reinicio de Traefik: corta n8n/Chatwoot unos segundos → pedir OK a Lucas).
+Los navegadores usan HTTP/2 con TLS, donde el problema no aplica igual.
+
 ## Sesión 2026-09-06 — Panel "como WhatsApp Web": orden, alias manual, imágenes, autor + roadmap de refactor
 
 **Pedido de Lucas (screenshot, 6/9)**: "mejorar el orden de los chats (quilombo), nombres falopa,

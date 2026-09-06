@@ -19,6 +19,14 @@
 - [ ] C "Dentalink propio": modelo en Supabase → adaptador → doble escritura → cutover con flag
       (decisión de negocio de Raquel/Irina antes de arrancar).
 
+## Panel EN VIVO (SSE + Realtime) → APLICADO 6/9 tarde
+- [x] 2026-09-06 `/api/live` + bus Realtime + hook; polling reemplazado; Bearer en las 3 APIs.
+- [ ] P2 Verificar en prod el readTimeout 60 s de Traefik sobre el stream (ver current-state); si
+      corta, `readTimeout=0` en el Traefik del stack n8n (con OK de Lucas: reinicia el frontal).
+- [ ] P3 App móvil: `POST /api/login` que devuelva el token (hoy solo cookie) y exponer las Server
+      Actions (enviar, toggle, alias, imagen) como `POST /api/*` con Bearer.
+- [ ] P3 `/api/foto` y `/api/whatsapp-status` siguen cookie-only (2 líneas cada una con `sesionDeRequest`).
+
 ## P0
 - [x] 2026-07-18 **Fase 2 v3 COMPLETA**: sb_secret validada → supabaseApi v3
       (`H1PRagttKC5kxSzs`) → 9 nodos REST → Logger activo y sincronizando → KB E2E PASS
