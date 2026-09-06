@@ -55,17 +55,28 @@ const ok = !!SECRET && String(headers["x-panel-secret"] || "") === SECRET;
 const telefono = String(body.telefono || "").replace(/[^0-9]/g, "");
 const mensaje = String(body.mensaje || "").trim();
 const humano = body.humano === true || body.humano === "true";
+// Media (imagen/documento subido desde el panel a Supabase Storage) — opcional.
+const media_url = String(body.media_url || "").trim();
+const media_tipo = ["image", "document", "video"].includes(String(body.media_tipo || "")) ? String(body.media_tipo) : (media_url ? "image" : "");
+const filename = String(body.filename || "").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80) || (media_tipo ? "archivo" : "");
+// Autor = usuario logueado en el panel (lucas / irina / raquel); se muestra en la burbuja.
+const autorRaw = String(body.autor || "").trim().slice(0, 40);
+const autor = autorRaw ? (autorRaw.toLowerCase() === "raquel" ? "Dra. Raquel" : autorRaw.charAt(0).toUpperCase() + autorRaw.slice(1).toLowerCase()) : "la doctora o la secretaria";
 let error = null;
 if (!ok) error = "unauthorized";
 else if (!telefono) error = "telefono requerido";
-else if (accion === "send" && !mensaje) error = "mensaje vacio";
-return [{ json: { ok: !error, error, accion, telefono, mensaje, humano, number: telefono } }];
+else if (accion === "send" && !mensaje && !media_url) error = "mensaje vacio";
+else if (media_url && !/^https:\/\//.test(media_url)) error = "media_url invalida";
+return [{ json: { ok: !error, error, accion, telefono, mensaje, humano, number: telefono, media_url, media_tipo, filename, autor, autor_raw: autorRaw } }];
 """
 
 MEMORIA_JS = r"""// Misma fila que la rama fromMe del v6 (Build fromMe AI memory): el LLM sabe que no es su voz y se calla.
+// Con media: el content lleva "[imagen] <url>" + caption para que el panel lo renderice como imagen
+// también cuando la fila llega vía Logger (que no copia additional_kwargs.media_url).
 const p = $('Validar secreto').first().json;
-const TAG = '[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el PANEL. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: ';
-const message = { type: 'ai', content: TAG + p.mensaje, additional_kwargs: { source: 'wa_outbound', from_iri_or_dra: true, from_panel: true, was_multimedia: false }, response_metadata: {}, tool_calls: [], invalid_tool_calls: [] };
+const TAG = '[ATENCION HUMANA - mensaje enviado por ' + p.autor + ' desde el PANEL. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: ';
+const cuerpo = p.media_url ? ('[' + (p.media_tipo === 'image' ? 'imagen' : p.media_tipo) + '] ' + p.media_url + (p.mensaje ? '\n' + p.mensaje : '')) : p.mensaje;
+const message = { type: 'ai', content: TAG + cuerpo, additional_kwargs: { source: 'wa_outbound', from_iri_or_dra: true, from_panel: true, autor: p.autor_raw || null, was_multimedia: !!p.media_url, media_url: p.media_url || null, media_tipo: p.media_tipo || null }, response_metadata: {}, tool_calls: [], invalid_tool_calls: [] };
 return [{ json: { session_id: p.telefono, message: JSON.stringify(message) } }];
 """
 
@@ -122,7 +133,20 @@ def build(secret, evo_headers, evo_base, cw_token):
          "parameters": {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict", "version": 2},
                                        "conditions": [{"id": "c2", "leftValue": "={{ $json.accion }}", "rightValue": "send", "operator": {"type": "string", "operation": "equals"}}],
                                        "combinator": "and"}, "options": {}}},
-        {"id": "enviar", "name": "Enviar WhatsApp (staff)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1160, 80],
+        {"id": "if-media", "name": "¿Con media?", "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [1160, 200],
+         "parameters": {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict", "version": 2},
+                                       "conditions": [{"id": "c4", "leftValue": "={{ !!$json.media_url }}", "rightValue": True, "operator": {"type": "boolean", "operation": "true", "singleValue": True}}],
+                                       "combinator": "and"}, "options": {}}},
+        {"id": "enviar-media", "name": "Enviar Media (staff)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1400, -60],
+         "parameters": {"method": "POST", "url": evo_base + "/send/media", "sendHeaders": True, "headerParameters": copy.deepcopy(evo_headers),
+                        "sendBody": True, "specifyBody": "json",
+                        "jsonBody": ("={\n  \"number\": {{ JSON.stringify($('Validar secreto').first().json.number) }},\n"
+                                     "  \"type\": {{ JSON.stringify($('Validar secreto').first().json.media_tipo) }},\n"
+                                     "  \"url\": {{ JSON.stringify($('Validar secreto').first().json.media_url) }},\n"
+                                     "  \"caption\": {{ JSON.stringify($('Validar secreto').first().json.mensaje) }},\n"
+                                     "  \"filename\": {{ JSON.stringify($('Validar secreto').first().json.filename) }}\n}"),
+                        "options": {"response": {"response": {"neverError": True}}, "timeout": 60000}}, "credentials": {}, "onError": "continueRegularOutput"},
+        {"id": "enviar", "name": "Enviar WhatsApp (staff)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1400, 80],
          "parameters": {"method": "POST", "url": evo_base + "/send/text", "sendHeaders": True, "headerParameters": copy.deepcopy(evo_headers),
                         "sendBody": True, "specifyBody": "json",
                         "jsonBody": "={\n  \"number\": {{ JSON.stringify($('Validar secreto').first().json.number) }},\n  \"text\": {{ JSON.stringify($('Validar secreto').first().json.mensaje) }}\n}",
@@ -145,7 +169,9 @@ def build(secret, evo_headers, evo_base, cw_token):
         "Webhook panel-toggle-bot": {"main": [[C("Validar secreto")]]},
         "Validar secreto": {"main": [[C("¿Autorizado?")]]},
         "¿Autorizado?": {"main": [[C("¿Es envío?")], [C("Responder 401")]]},
-        "¿Es envío?": {"main": [[C("Enviar WhatsApp (staff)")], [C("Label Chatwoot")]]},
+        "¿Es envío?": {"main": [[C("¿Con media?")], [C("Label Chatwoot")]]},
+        "¿Con media?": {"main": [[C("Enviar Media (staff)")], [C("Enviar WhatsApp (staff)")]]},
+        "Enviar Media (staff)": {"main": [[C("¿Enviado?")]]},
         "Enviar WhatsApp (staff)": {"main": [[C("¿Enviado?")]]},
         "¿Enviado?": {"main": [[C("Armar fila memoria")], [C("Responder 502")]]},
         "Armar fila memoria": {"main": [[C("Guardar en memoria")]]},
