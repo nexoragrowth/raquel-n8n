@@ -499,3 +499,19 @@ modelo en Supabase → adaptador → doble escritura → cutover con flag).
 de comportamiento enterrado en prompts/nodos; consolidar datos y sacar lógica a tablas reduce la
 superficie de fallas y prepara el sistema propio.
 **Revisable**: sí — el orden de B1..B5 es sugerido; Lucas decide qué va primero.
+
+## 2026-09-06 — Panel en vivo: Supabase Realtime server-side + SSE (no polling, no socket propio)
+
+**Decisión**: Lucas pide que el panel sea live de verdad ("así no dependemos de otra y luego la
+podemos hacer mobile app"). Se elige: el servidor Next se suscribe UNA vez por WebSocket a
+Realtime del v3 (service key, nunca en el navegador) sobre `mensajes_entrantes_live` (INSERT),
+`n8n_chat_histories` (INSERT) y `pacientes` (UPDATE), y empuja eventos al navegador por
+Server-Sent Events (`/api/live`); el cliente refetchea solo cuando hay novedad, con polling de
+respaldo si el stream cae. Publicación habilitada con `scripts/apply_realtime_publication_v3.py`.
+**Alternativas descartadas**: polling más rápido (carga a Supabase: 6 queries cada 2,5 s por
+pestaña); WebSocket propio con socket.io (servicio extra, nada que SSE no dé acá); Realtime
+directo desde el navegador (exige anon key + RLS en el v3, que hoy no tiene policies).
+**Razón**: <1 s de latencia, casi cero consultas en reposo, sin infra nueva, atraviesa Traefik
+sin config, y el par SSE + APIs JSON es lo que consumiría una app móvil.
+**Revisable**: sí — si Realtime del v3 se vuelve poco confiable, el plan B es LISTEN/NOTIFY con
+triggers `pg_notify` y una conexión directa a Postgres desde el panel.

@@ -330,3 +330,10 @@ $$;
 --   3. apply_supabase_v3_rewire.py (repuntar credenciales/URLs en n8n)
 -- NO hacen falta resets de secuencia: base nueva, todo arranca de 1.
 -- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 9. Realtime para el panel en vivo (2026-09-06). La publicacion supabase_realtime existe en
+--    todo proyecto Supabase pero SIN tablas; el panel se suscribe server-side a estas 3 y
+--    empuja los cambios al navegador por SSE. Script idempotente: scripts/apply_realtime_publication_v3.py
+-- ---------------------------------------------------------------------------
+alter publication supabase_realtime add table public.mensajes_entrantes_live, public.n8n_chat_histories, public.pacientes;
