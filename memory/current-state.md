@@ -1,5 +1,56 @@
 # Estado actual — raquel-n8n
 
+## Sesión 2026-09-06 — Panel "como WhatsApp Web": orden, alias manual, imágenes, autor + roadmap de refactor
+
+**Pedido de Lucas (screenshot, 6/9)**: "mejorar el orden de los chats (quilombo), nombres falopa,
+poner un nombre manual a cada número, subir imágenes, tiempo real como WhatsApp Web, 100% funcional".
+Y después: "seguí fijándote qué podemos refactorizar/mejorar y que quede bien pro; la idea es armar
+un sistema completo incluyendo nuestro propio Dentalink".
+
+**1) Backend (raquel-n8n, commit `c1b177b`)**: satélite `Panel — acciones staff` (`jzxb5zUKCaJcvCgp`)
+ahora 15 nodos: `panel-send-human` acepta `media_url/media_tipo/filename/autor`; IF `¿Con media?` →
+`Enviar Media (staff)` (`/send/media` de Evolution GO con URL pública) o `/send/text`; la fila de
+memoria lleva `[ATENCION HUMANA - mensaje enviado por <Autor> desde el PANEL …]: [imagen] <url>
+<caption>`
+con kwargs `{source:'wa_outbound', from_panel:true, autor, media_url, media_tipo}`; label `humano` solo
+en la conversación abierta/más reciente (no en resueltas). E2E directo OK (PNG a Storage → webhook →
+200 → fila con autor "Lucas"); fila de prueba borrada. Infra: columnas `pacientes.alias_panel` +
+`alias_panel_updated_at`; bucket público `panel-media` (15 MB).
+
+**2) Panel (nexora-whatsapp-agent, commits `b76fbfd` + `a309708`, deployado 6/9 ~19:10 ART, healthy)**:
+- Lista ordenada SOLO por último mensaje (como WhatsApp) + filtro "Todos | No leídos"; preview sin el
+  marcador `[ATENCION HUMANA…]` y adjuntos como "📷 caption".
+- Alias manual por número desde el header del chat (lápiz, Enter/Esc, optimista con rollback):
+  `displayName` = alias > Dentalink > pushName real > ficha > teléfono. El pushName real sale de
+  `mensajes_entrantes_live.push_name` vía helper compartido `lib/push-names.ts` (sin ventana de 60 min)
+  para lista, chat y dashboard → el nombre ya no "cambia solo" a la hora.
+- Imágenes desde el composer (clip / Ctrl+V / drag&drop), compresión en cliente (>1 MB → JPEG 1600 px),
+  `enviarImagenAction` valida por magic bytes, sube a Storage con timeout y llama al webhook; si n8n
+  rechaza, borra el objeto. Render "[imagen] <url>" con lightbox; guard anti-hotlink para mensajes del
+  paciente.
+- Autor en burbujas de staff: `requireUser()` devuelve el login; "Lucas" / "Irina" / "Dra. Raquel";
+  el placeholder histórico "la doctora o la secretaria" (mensajes del panel anteriores a hoy) se muestra
+  como "Dra. Raquel". Iniciales del avatar por code point (alias con emoji OK).
+- Proceso: Workflow multi-agente (3 lectores → implementador → 2 revisores → fix). Los revisores
+  encontraron 3 bugs reales antes del deploy (autor histórico, nombres inconsistentes lista/chat,
+  tope real del upload `proxyClientMaxBodySize`). Verificación mía: tsc, diff de las actions, 12/12
+  casos de `displayName/displayAutor`, y las queries nuevas corridas contra producción (116 chats,
+  orden OK, chat de Lucas con metadata).
+- **Descubrimiento de infra**: el frontal del panel en el VPS es **Traefik** (el del stack de n8n,
+  labels docker, TLS ACME), NO nginx: el `sites-enabled/panel…` (puerto 80 → 3100) está muerto (el 80
+  lo tiene docker-proxy). Traefik no limita el body → no hay 413 de proxy. `deploy/README.md` corregido.
+
+**3) Pendiente de prueba de Lucas desde la UI** (checklist en el mensaje del 6/9): alias en su número
+(hoy el chat muestra "Test - Jana Test" y la lista "Antonio Manuel": dos fichas de prueba en Dentalink
+con su celular; el alias lo resuelve), enviar una imagen con caption, ver "Lucas" en la burbuja, orden.
+
+**4) Roadmap de refactor** → `docs/roadmap-refactor-2026-09-06.md` (registro único de mensajes,
+higiene del v6, comportamiento como datos, panel WhatsApp Web real, tests; camino al "Dentalink
+propio"). Decisión registrada en `decisions.md`.
+
+**Sigue vigente**: triaje en piloto solo para Lucas (abrirlo a todos = `create_triaje_config_tables.py
+--activar --piloto ""`, lo corre Lucas); `check_triaje.py` 6/9 → TODO SANO.
+
 ## Sesión 2026-09-05 — Triaje: bug real de contaminación de contexto (arreglado) + el panel nunca pudo enviar mensajes
 
 **1) Prueba real de Lucas anoche (4/9 18:43 ART, exec 270770) "Me pincha un alambre de vrackets"

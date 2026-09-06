@@ -1,5 +1,24 @@
 # Backlog — raquel-n8n
 
+## Panel UX "como WhatsApp Web" (pedido 6/9) → APLICADO 6/9
+- [x] 2026-09-06 Orden por último mensaje + filtro No leídos; alias manual (`pacientes.alias_panel`);
+      envío de imágenes (Storage `panel-media` → `/send/media`); autor en burbujas; pushName real
+      compartido (`lib/push-names.ts`). Panel `b76fbfd`/`a309708`, backend `c1b177b`. Deployado.
+- [ ] P2 Lucas: prueba desde la UI (alias, imagen, autor, orden) y ponerle alias a su número.
+- [ ] P3 Imágenes/audios ENTRANTES del paciente renderizados (hoy chip "[IMAGEN] …"): requiere
+      guardar el archivo (base64 del webhook) en Storage desde el v6 → encaja en B1 del roadmap.
+- [ ] P3 Burbuja optimista "enviando…" al mandar desde el panel (hoy aparece al próximo poll ≤1,5 s).
+- [ ] P3 Miniaturas vía `/storage/v1/render/image` si el plan de Supabase lo permite.
+
+## Roadmap de refactor (6/9) → `docs/roadmap-refactor-2026-09-06.md`
+- [ ] B1 Registro único de mensajes (retirar Logger de 5 min) — base del panel y del sistema propio.
+- [ ] B2 Higiene del v6: nodos huérfanos, Banlist Shadow, `` sin `u` en Banlist, continueOnFail en
+      `Existe paciente?`, tokens Chatwoot a credencial, gate humano solo `open`, buffer 22 s.
+- [ ] B3 Canned/config a tablas editables desde el panel (alias/CBU, cuota, admins, JID grupo).
+- [ ] B5 Tests: E2E cierre triaje, `test_e2e_bateria.py` al shape Evolution GO, drift de prompts.
+- [ ] C "Dentalink propio": modelo en Supabase → adaptador → doble escritura → cutover con flag
+      (decisión de negocio de Raquel/Irina antes de arrancar).
+
 ## P0
 - [x] 2026-07-18 **Fase 2 v3 COMPLETA**: sb_secret validada → supabaseApi v3
       (`H1PRagttKC5kxSzs`) → 9 nodos REST → Logger activo y sincronizando → KB E2E PASS
