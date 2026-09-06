@@ -80,6 +80,13 @@ corra él. Hoy sigue `telefonos_piloto={5491161461034}`.
   Fix: `Label Chatwoot` del satélite `jzxb5zUKCaJcvCgp` ahora pone `humano` SOLO en la abierta
   (o la más reciente) y `bot` quita `humano` de TODAS (verificado: humano→solo 272; false→ninguna).
   Labels de Lucas limpiados. Queda en backlog P2 blindar el gate del v6 contra este caso.
+- **Switch bot/humano del panel ahora es instantáneo** (commit panel posterior a `c5b0bf3`):
+  `humanTakeover`/`botActive` se calculaban solo con `conversaciones` (Logger, hasta 5 min) →
+  tras escribir un humano (celular o panel) el panel mostraba "bot activo" aunque el bot ya
+  estuviera callado por el label. Ahora también mira `n8n_chat_histories` en vivo
+  (`[ATENCION HUMANA…]`, sources `wa_outbound`/`human_takeover`) y `mensajes_entrantes_live`
+  con `from_me=true`. El cambio de modo en sí ya era automático en ambos caminos (label humano
+  al instante); lo que fallaba era el indicador.
 - **Corrección de creencia**: el panel SÍ edita los prompts de los sub-agentes del v6 desde
   `/agente` (`app/(app)/agente/prompt-actions.ts` → `lib/n8n.ts::setSubAgentePrompt`: GET
   fresco, cambia solo el systemMessage del nodo, settings filtradas, PUT; banlist
