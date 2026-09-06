@@ -486,3 +486,16 @@ por coma después de evaluar. Usar insert `defineBelow` (Log Escalacion) o SQL a
 **Razón**: el gate del v6 mira todas las conversaciones y Auto Reactivar solo limpia abiertas →
 un `humano` en una resuelta silencia al bot indefinidamente (pasó con Lucas el 5/9). Blindar el
 gate del v6 queda en backlog P2.
+
+## 2026-09-06 — Dirección del proyecto: pulir/refactorizar hacia un sistema completo (agenda propia)
+
+**Decisión**: Lucas (6/9) fija la dirección: seguir puliendo y refactorizando para que quede "pro",
+con la visión de armar un sistema completo que incluya un reemplazo propio de Dentalink (agenda +
+pacientes + citas), "que eso ya lo vamos a ir cocinando". El mapa priorizado con evidencia está en
+`docs/roadmap-refactor-2026-09-06.md` (B1 registro único de mensajes, B2 higiene del v6, B3
+comportamiento como datos, B4 panel WhatsApp Web real, B5 tests; C camino al Dentalink propio:
+modelo en Supabase → adaptador → doble escritura → cutover con flag).
+**Razón**: los bugs de estos días vinieron de fuentes duplicadas (Logger vs memoria vs bandeja) y
+de comportamiento enterrado en prompts/nodos; consolidar datos y sacar lógica a tablas reduce la
+superficie de fallas y prepara el sistema propio.
+**Revisable**: sí — el orden de B1..B5 es sugerido; Lucas decide qué va primero.
