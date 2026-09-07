@@ -10,6 +10,10 @@
 // Storage. Devuelve `{ text, hay_archivo: true, id, key_id, telefono, tipo, mime, path, bytes, … }` +
 // `binary.data` para que "Media: Subir a Storage" lo suba con la credencial supabaseApi de n8n.
 //
+// Desde 2026-09-07 lo comparten las DOS ramas: la del paciente ("Media: Preparar") y la del staff
+// ("Media: Preparar (staff)", rama fromMe). De ahí el filtro de grupos/estados de más abajo (motivo
+// 'grupo_o_estado'), que en la rama del paciente es no-op y en la del staff es la única defensa (R1 del doc).
+//
 // REGLA DE ORO: `text` sale SIEMPRE idéntico al que entró. Si algo falla (sin base64, sin teléfono,
 // archivo enorme, excepción) devuelve `{ text, hay_archivo: false, motivo }` sin binario y el bot sigue
 // EXACTAMENTE como hoy ("Media: Marcar" solo agrega el sufijo ' [MEDIA:<id>]' si el registro en la tabla
@@ -106,6 +110,47 @@ try {
   const telefono = String(ED.phone || '').trim();
   const telPath = telefono.replace(/\D/g, '');
   if (!telefono || !telPath) return sinArchivo('sin_telefono');
+
+  // CHATS QUE NO SON 1:1 — grupo, estado, lista de difusión, canal, LID (2026-09-07, riesgo R1 de
+  // docs/media-entrantes-2026-09-06.md §8.3). El filtro `@g.us` / `status@broadcast` del v6 vive en
+  // "Filtrar duplicados y basura", que cuelga SOLO de "Es fromMe?"[1] (la rama del PACIENTE): la rama
+  // del staff no filtra nada. Sin esto, una foto que la doctora manda al GRUPO DE DERIVACIONES desde el
+  // celular del consultorio (o un estado que publica, o un mensaje a una lista de difusión / un canal /
+  // un chat LID) se subiría al bucket privado bajo el número del grupo o del PROPIO CONSULTORIO, con su
+  // fila en `media_entrantes` y la foto renderizada en una "conversación" fantasma del panel.
+  // Va acá y no en la IF porque este archivo lo comparten las dos ramas y es el único lugar donde el
+  // archivo TODAVÍA no se subió. Para la rama del paciente es no-op (ya viene filtrada aguas arriba).
+  // Va DESPUÉS de `sin_telefono` a propósito: los casos que ya se reportaban así no cambian de motivo.
+  //
+  // Son TRES guards, a propósito (regla dura 5, defensa en profundidad). El (2) solo por sí mismo ya
+  // cierra la rama del staff, pero el (1) y el (3) siguen valiendo para la rama del paciente, donde
+  // "Filtrar duplicados y basura" arrastra exactamente el mismo blacklist incompleto que tenía este
+  // archivo (`@g.us` + igualdad con 'status@broadcast', sin '@broadcast'/'@newsletter' genéricos).
+  const jids = [info.Chat, info.RecipientAlt, info.SenderAlt, telefono].map((j) => String(j || ''));
+
+  // (1) BLACKLIST, las dos ramas: grupo (@g.us), lista de difusión (@broadcast — `endsWith` subsume
+  //     'status@broadcast') y canal (@newsletter). Ninguno de los tres es nunca un chat 1:1.
+  //     NO incluye '@lid' a propósito: en la rama del PACIENTE un `phone` '@lid' es un 1:1 legítimo y
+  //     hoy se sube (columna verbatim + path con dígitos, tests 17b de test_media_nodos.js). Para el
+  //     staff sí se descarta, pero por el guard (2), que es más estricto y no toca al paciente.
+  if (jids.some((j) => j.includes('@g.us') || j.endsWith('@broadcast') || j.endsWith('@newsletter'))) return sinArchivo('grupo_o_estado');
+
+  // (2) WHITELIST, SOLO la rama del staff (ED.fromMe true ⇔ salida [0] de "Es fromMe?", que testea
+  //     exactamente `$json.fromMe === true`). Exige un JID 1:1 en Info.Chat en vez de listar exclusiones:
+  //     cierra de una @g.us, @broadcast, @newsletter, @lid y cualquier familia de JID que WhatsApp
+  //     invente mañana. Es la diferencia entre un blacklist (falla abierto ante lo desconocido) y un
+  //     whitelist (falla cerrado), y acá fallar abierto significa subir el archivo al bucket privado
+  //     bajo el número del PROPIO CONSULTORIO: "Edit Fields - Extraer Datos" recorre
+  //     [Chat, Sender, RecipientAlt, SenderAlt] y se queda con el primero que termina en
+  //     '@s.whatsapp.net'; si Info.Chat no es 1:1, ese primero es Info.Sender = la clínica, que pasa
+  //     el chequeo de largo del guard (3). Resultado: fila en `media_entrantes` y conversación
+  //     fantasma en el panel (R1). No-op para la rama del paciente.
+  //     Chat ausente también cae acá, y está bien: sin Info.Chat el `phone` sale de Info.Sender.
+  if (ED.fromMe && !/@s\.whatsapp\.net$/.test(String(info.Chat || ''))) return sinArchivo('grupo_o_estado');
+
+  // (3) Un jid de grupo son 18 dígitos y uno de estado no tiene ninguno: si algún día Evolution mandara
+  //     el chat en otro campo, el largo del teléfono resultante lo caza igual (los E.164 van de 8 a 15).
+  if (telPath.length < 8 || telPath.length > 15) return sinArchivo('grupo_o_estado');
 
   // Sub-mensaje y tipo. Primero Info.MediaType (lo que mira el Switch), después el sub-key de Message como
   // fallback (caso real 25/8: audio con Info.MediaType = '' — hoy muere antes, pero si algún día pasa, cubre).

@@ -1,5 +1,30 @@
 # Backlog — raquel-n8n
 
+## Adjuntos del STAFF (rama fromMe) — rediseñado 7/9, NADA aplicado (`docs/media-entrantes-2026-09-06.md` §8)
+- [ ] **P1** Con OK de Lucas: `python scripts/apply_media_fromme.py` (dry-run, mostrar el diff) → `--apply`
+      (153 → 159 nodos). ANTES: deploy del panel con la parte E (adjuntos de staff + el refetch tardío de
+      `media` + **el rescate del token**, `rescatarTokensMedia`), que hoy está en el working tree de
+      `nexora-whatsapp-agent` sin commit. El rescate NO es opcional: sin él, cada vez que el cron del Logger
+      cae dentro de la ventana INSERT→UPDATE (~1 adjunto cada 2 semanas, varios % de los videos) la foto se
+      pierde para siempre — `conversaciones` guarda el texto sin token y nunca lo corrige (R14, §8.6).
+- [ ] **P1** Prueba del silenciamiento (§8.4 punto 5): bot encendido, el teléfono de prueba escribe, ~5 s después la
+      doctora manda una foto pesada desde el celular del consultorio → `CW Set Label humano` corre ANTES de
+      `Media: Subir a Storage (staff)` y el bot NO contesta. Bonus: foto al grupo de derivaciones → 0 filas nuevas
+      en `media_entrantes` y `motivo: 'grupo_o_estado'` en la ejecución.
+- [ ] **P2 — OJO ANTES DE CORRER `apply_media_entrantes.py`**: ese script YA NO ES NO-OP. El nodo VIVO
+      `Media: Preparar` (rama del PACIENTE) quedó con el jsCode viejo, sin los guards de JID de
+      `media/preparar.js` (que ahí son no-op porque `Filtrar duplicados y basura` filtra aguas arriba), así que
+      un `--dry-run` hoy dice "ACTUALIZA Media: Preparar" + los otros 5 de la cadena. Es deliberado (el PUT del
+      staff no toca la rama del paciente), pero deja las dos ramas corriendo código distinto para el MISMO
+      archivo: alinearlas en un PUT aparte, con su propio OK. Verificado con `--dry-run` el 7/9.
+- [ ] P3 Guard de largo del teléfono (8-15 dígitos) vs. LID: un LID de 16-17 dígitos se descarta a propósito
+      (los reales suelen ser de 15; un jid de grupo pelado son 18, el margen es de un dígito). Decisión escrita
+      en §8.3 R1 y cubierta por tests. Si algún día aparece un LID largo real, subir el tope y re-correr
+      `test_media_nodos.js` §23.
+- [ ] P2 R13: si Chatwoot no encuentra contacto/conversación (`CW Extract Conv` / `CW Pick Conv` devuelven `[]`),
+      el adjunto del staff no se archiva. Arreglo posible: que esos dos Code nodes emitan un item vacío en vez de
+      `[]` (toca la cadena de silenciamiento → PUT aparte con prueba propia).
+
 ## Retención + uso + audio del staff (7/9) → scripts listos, NADA aplicado (`docs/retencion-y-uso-2026-09-07.md`)
 - [ ] **P1** Orquestador, con OK de Lucas y EN ESTE ORDEN (`docs/retencion-y-uso-2026-09-07.md` §6): **0.**
       `create_panel_acciones_staff.py --update jzxb5zUKCaJcvCgp` (audio + 400 por tipo inválido; antes `--recover-secret
@@ -32,8 +57,12 @@
 - [ ] P3 Cosméticos del render de adjuntos en el panel (no aplicados a propósito): orden cronológico de la galería
       (hoy imágenes primero, después video/audio/doc); coalescing de los 3 eventos live/media/memoria (3 refetch por
       adjunto, aceptable).
-- [ ] P2 Segunda capa anti-eco del token ` [MEDIA:<id>]` en la SALIDA del bot (`Banlist Validator` o `Split en
-      Mensajes`: `replace(/\s*\[MEDIA:[0-9a-f]{16}\]/g,'')`) — cambio aparte, fuera de la rama multimedia.
+- [ ] **P1 (era P2; sube con la rama del staff)** Segunda capa anti-eco del token ` [MEDIA:<id>]` en la SALIDA
+      del bot (`Banlist Validator` o `Split en Mensajes`: `replace(/\s*\[MEDIA:[0-9a-f]{16}\]/g,'')`) — cambio
+      aparte, fuera de la rama multimedia. Sube de prioridad porque ahora es ALCANZABLE: el token vive dentro de
+      filas `[ATENCION HUMANA …]` que el LLM ve por `Build Router Context`, y si ecoa el TAG **completo** junto
+      con el token, `esMensajeDeStaff` da true por el TAG y la burbuja del BOT pinta el adjunto del staff. Antes
+      de este cambio ninguna fila con TAG tenía un token adentro.
 - [ ] P3 Adjuntos del STAFF desde el celular (rama `Es fromMe?[0]`) a Storage: el webhook fromMe trae base64,
       pero es una segunda entrada a `Media: Preparar` + sufijar el placeholder de `Build fromMe AI memory`.
 - [ ] P3 Burbuja optimista "enviando…" al mandar desde el panel (hoy aparece al próximo poll ≤1,5 s).

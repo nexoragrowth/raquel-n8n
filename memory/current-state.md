@@ -1,5 +1,71 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-07 (tarde) — Adjuntos del STAFF (rama fromMe): REDISEÑADO + 2ª ronda de correcciones, sin aplicar
+
+El primer diseño (5 nodos `Media: * (staff)` colgados de `Es fromMe?`[0] + jsCode nuevo en `Build fromMe AI memory`)
+quedó **bloqueado** por dos motivos y se rehízo entero; el rediseño pasó por una **segunda** revisión adversarial
+que encontró otros dos must-fix (abajo). Nada aplicado: falta el OK de Lucas para
+`python scripts/apply_media_fromme.py --apply` (dry-run limpio contra el v6 vivo, 153 → **159 nodos**).
+
+- **Must-fix 1 (silenciamiento)**: el label `humano` de Chatwoot es lo ÚNICO que calla al bot en esta rama, y la
+  cadena Media metía hasta 30 s (timeout de Storage) por delante. Ahora la cadena de silenciamiento
+  (`Es fromMe?`[0] → `Build fromMe AI memory` → `Postgres - Save fromMe` → los 5 `CW *`) **no se toca ni una
+  arista** y los 6 nodos nuevos cuelgan de la salida de `CW Set Label humano`, que hoy no tiene ninguna.
+- **Must-fix 2 (grupos)**: el filtro `@g.us` / `status@broadcast` vive en `Filtrar duplicados y basura`, que cuelga
+  de `Es fromMe?`[1] (rama del paciente): la del staff no filtraba nada. Ahora está en `media/preparar.js`
+  (compartido por las dos ramas, motivo `grupo_o_estado`; no-op para el paciente) + guard de largo 8-15 dígitos.
+- **Must-fix 3 (2ª ronda) — el blacklist de JID estaba incompleto**: cubría `@g.us` y la igualdad exacta con
+  `status@broadcast`, pero NO las listas de difusión (`<id>@broadcast`), los canales (`<id>@newsletter`) ni los
+  chats LID (`<id>@lid`). En los tres, `Extraer Datos` no encuentra un `@s.whatsapp.net` en `Info.Chat` y cae a
+  `Info.Sender` = **el número del propio consultorio**, que pasa el guard de largo: el archivo se subía al bucket
+  privado bajo el número de la clínica (reproducido con el archivo real). Arreglo: además de ampliar el blacklist
+  (`endsWith('@broadcast')` / `'@newsletter'`), la rama del staff ahora exige un **JID 1:1** en `Info.Chat`
+  (`ED.fromMe && !/@s.whatsapp.net$/` → `grupo_o_estado`). Es un **whitelist**: cierra también `@lid` y cualquier
+  familia futura, que es justo lo que un blacklist deja pasar. No-op para la rama del paciente.
+- **Must-fix 4 (2ª ronda) — el token se podía perder PARA SIEMPRE (panel)**: el Logger (`xsXeHp7WLXnFQc3o`, cron
+  5 min) copia `n8n_chat_histories` → `conversaciones` con `ignore-duplicates`; la copia se escribe una vez y
+  **nunca se corrige**. Si el cron cae dentro de la ventana INSERT→UPDATE (~1,4 s por foto, hasta 30 s por video),
+  `conversaciones` queda sin token y el dedup por timestamp del panel **descarta** la fila de memoria que sí lo
+  tiene → la foto no aparece nunca más (ni con F5, ni con el poll de 20 s). Medido: el dedup matchea 190/190 filas
+  en 3 días; 14,7 adjuntos fromMe/día ⇒ ≈1 perdido cada 2 semanas, varios % de los videos. Arreglado **en el
+  panel, sin tocar n8n**: `rescatarTokensMedia` (`lib/media-entrantes.ts`) le pasa a la fila de `conversaciones`
+  los tokens que la memoria tiene y a ella le faltan, antes de descartarla; llamado desde `lib/chat-data.ts` y
+  `lib/conversaciones-data.ts`. Respeta R3 (solo filas que pueden tener adjuntos) y es idempotente.
+- Como el content se escribe ANTES de subir el archivo, el token ` [MEDIA:<id>]` llega por un **UPDATE acotado**
+  (`media/actualizar_memoria_staff.js`, nodo nuevo `Media: Actualizar memoria (staff)`): una sola fila por
+  `id = <el que devuelve el INSERT>`, idempotente (`NOT LIKE '%[MEDIA:%'`), con `media_id`/`media_tipo` en
+  `additional_kwargs` y escape propio (sin `queryReplacement`). SQL validado con `EXPLAIN` read-only contra el v3
+  real (entra por la PK). **Falla cerrado**: sin ese id devuelve el no-op. Había un fallback heurístico por
+  `session_id` + content exacto y se **sacó** — bajo concurrencia (dos adjuntos sin caption al mismo paciente, con
+  el content idéntico) le pegaba el token a la fila equivocada y cada burbuja mostraba la foto de la otra.
+- **Único nodo existente modificado**: `Postgres - Save fromMe`, y solo su `query` (+ ` RETURNING id`). Verificado
+  que hoy devuelve `{success:true}`, que nada aguas abajo usa su `$json` y que no hay ninguna referencia
+  `$('Postgres - Save fromMe')` en los 153 nodos. `Build fromMe AI memory` **no se toca**.
+- Borrados: `media/fromme_memory.js`, `media/fromme_memory_previo.js`, `media/hay_archivo_staff_expr.js`.
+- Panel (parte E, ya aprobada): **no se rehízo**, dos ajustes aditivos. (1) `chat-view.tsx` programa **un** refetch
+  extra a 1,5 s cuando llega un evento `media`, porque el UPDATE del token no genera evento Realtime (la
+  publicación solo lleva INSERT) — cosmético. (2) `rescatarTokensMedia` en `lib/media-entrantes.ts` +
+  `chat-data.ts` + `conversaciones-data.ts` — **no** cosmético: es el must-fix 4. `npx tsc --noEmit` limpio.
+- `apply_media_fromme.py` cierra el círculo DESPUÉS del PUT (`verify_post_put`): re-corre el chequeo de
+  "fuera de alcance" contra lo que n8n REALMENTE guardó y compara **byte a byte** `Build fromMe AI memory` y los
+  5 nodos CW. Antes la garantía dependía de que n8n devolviera los nodos verbatim (verificado empíricamente en 3
+  pares PRE/POST del historial: el único nodo distinto es siempre el que el script tocó).
+- Tests: `test_media_fromme.js` **69/69** (SQL del UPDATE, todos los caminos de no-op incluido el concurrente, lo
+  único que entra al SQL, y los JID que no son 1:1), `test_media_nodos.js` **83/83** (§23: blacklist, whitelist del
+  staff, borde de largo del LID; sin regresión), `test_retencion_y_staff.js` verde, `check_triaje.py` TODO SANO.
+  Doc: `docs/media-entrantes-2026-09-06.md` §8 reescrita (grafo, R1 con las 4 familias de JID, R13, R14 con el
+  Logger, §8.4 con el requisito de Chatwoot, §8.6 con los dos ajustes del panel).
+- **Riesgo aceptado (R13)**: si Chatwoot no encuentra el contacto o la conversación (`CW Extract Conv` /
+  `CW Pick Conv` devuelven `[]`), la cadena Media no corre y el adjunto no se archiva — la fila de memoria queda
+  como hoy. Se prefiere eso antes que demorar el silencio del bot. **Consecuencia práctica para la primera
+  prueba real**: hay que hacerla sobre un chat donde el paciente YA escribió antes (y por eso existe la
+  conversación en Chatwoot); con un número nuevo la cadena Media no corre y parece que el cambio no funciona.
+- **Anotado, NO hecho** (excede el "solo el RETURNING" que autorizó el brief): `Postgres - Save fromMe` no tiene
+  `onError` (default `stopWorkflow`) y está en el camino crítico del silenciamiento — si ese INSERT falla,
+  `CW Set Label humano` nunca corre y el bot no se calla. Es el comportamiento de HOY y el `RETURNING id` no lo
+  empeora, pero ponerle `continueRegularOutput` haría el silenciamiento estrictamente más robusto (y el UPDATE
+  degradaría solo: sin fila insertada no hay id ⇒ no-op). PUT aparte con su propia prueba.
+
 ## 2026-09-07 04:25 ART — APLICADO: Retención + Vigía uso + audio desde el panel (todo en producción)
 
 - **Satélite staff** `jzxb5zUKCaJcvCgp` actualizado (`--update`, 17 nodos): acepta `media_tipo: audio`, tipo

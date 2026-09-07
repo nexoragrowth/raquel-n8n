@@ -613,3 +613,58 @@ verificarlo en iPhone/Android; `errorWorkflow` en Retención (ningún satélite 
 filas); subselect directo a `retencion_log` en el Vigía (rompería la query entera mientras la tabla no exista).
 **Revisable**: sí — `RETENCION_MAX_H` en `EVAL_JS`; el orden de `MIMES_GRABACION` en `lib/audio-mp3.ts` si Evolution/WhatsApp
 confirman que reproducen el AAC fMP4 (entonces se podría saltear la transcodificación en Safari).
+
+## 2026-09-07 (tarde) — Adjuntos del staff: la cadena Media va DESPUÉS del label, y el token por UPDATE
+**Decisión**: (1) los 6 nodos `Media: * (staff)` cuelgan de `CW Set Label humano` (fin de la cadena de
+silenciamiento), no de `Es fromMe?`[0]; la cadena de silenciamiento no se toca. (2) `Build fromMe AI memory` no se
+modifica: el token ` [MEDIA:<id>]` se agrega con un UPDATE posterior acotado a una fila, y `Postgres - Save fromMe`
+gana ` RETURNING id` para identificarla. (3) El filtro de grupos/`status@broadcast` vive en `media/preparar.js`
+(las dos ramas), no en la IF del staff.
+**Razón**: el label de Chatwoot es el ÚNICO mecanismo que calla al bot en la rama fromMe (los tres gates lo leen; no
+hay Redis ni SQL de humano acá, y el nodo `Check Humano Reciente (DB)` no existe desde el 18/7). Cualquier cosa
+delante de él — una subida de 5 MB, o el timeout de 30 s de Storage — puede dejar al bot escribiendo encima de la
+doctora: la falla del incidente Mariela. Y `preparar.js` es el único punto donde el archivo todavía no se subió y
+que comparten las dos ramas.
+**Alternativas descartadas**: colgar la cadena Media de `Es fromMe?`[0] poniendo Chatwoot "primero en el array"
+(depende de cómo n8n desempata dos ramas hermanas: array vs. posición en el canvas; no es una garantía); armar el
+content con el token en `Build fromMe AI memory` (obliga a reescribir el nodo que contiene el TAG y el placeholder,
+riesgo byte-a-byte, y a esperar la subida antes de guardar la memoria); poner el filtro de grupos en la IF del
+staff (deja `preparar.js` capaz de subir un archivo de grupo si algún día se lo llama de otro lado); bajar el
+timeout de Storage a 8 s (mitiga, no cierra).
+**Revisable**: R13 — si molesta que un adjunto no se archive cuando Chatwoot no tiene la conversación, se puede
+hacer que `CW Extract Conv` / `CW Pick Conv` emitan un item vacío en vez de `[]`; es un PUT aparte sobre la cadena
+de silenciamiento, con su propia prueba.
+
+## 2026-09-07 (tarde, 2ª ronda) — Whitelist de JID para el staff, y el token se rescata en el panel
+**Decisión**: (1) en `media/preparar.js`, además de ampliar el blacklist a `@g.us` / `endsWith('@broadcast')` /
+`endsWith('@newsletter')` (las dos ramas), la rama del STAFF exige un **JID 1:1**:
+`if (ED.fromMe && !/@s.whatsapp.net$/.test(info.Chat)) return sinArchivo('grupo_o_estado')`. (2) El UPDATE del
+token **falla cerrado**: sin el `id` que devuelve `Postgres - Save fromMe` no hace nada (se eliminó el fallback
+heurístico por `session_id` + content). (3) El token perdido por el Logger se **rescata en el panel**
+(`rescatarTokensMedia`), no en n8n.
+**Razón**:
+1. Un blacklist falla ABIERTO ante lo desconocido, y acá "abierto" significa subir un archivo del consultorio al
+   bucket privado bajo el número de la propia clínica: `Edit Fields - Extraer Datos` recorre
+   `[Chat, Sender, RecipientAlt, SenderAlt]` y se queda con el primero que termina en `@s.whatsapp.net`; si
+   `Info.Chat` no es 1:1, ese primero es `Info.Sender` = la clínica, que pasa el guard de largo. Reproducido con
+   el archivo real para `@broadcast`, `@newsletter` y `@lid`. Un whitelist cierra la familia entera de una, y las
+   que WhatsApp invente mañana. Solo aplica al staff porque en la rama del paciente un `phone` `…@lid` es un 1:1
+   legítimo que hoy se sube.
+2. Con dos adjuntos SIN caption al mismo paciente, las dos filas de memoria tienen el `content` idéntico (TAG +
+   placeholder): si el INSERT de la ejecución B entra antes del UPDATE de la A, el `ORDER BY id DESC LIMIT 1` de A
+   toma la fila de B y viceversa — dos tokens cruzados, cada burbuja con la foto de la otra. En un chat médico
+   mostrar la foto equivocada es peor que no mostrar ninguna. Y era código muerto: el `RETURNING id` siempre llega.
+3. El Logger (`xsXeHp7WLXnFQc3o`, cron 5 min) copia la memoria a `conversaciones` con `ignore-duplicates`: escribe
+   una vez y **nunca corrige**. Si cae dentro de la ventana INSERT→UPDATE, `conversaciones` queda sin token y el
+   dedup por timestamp del panel descarta la fila de memoria que sí lo tiene ⇒ la foto no aparece **nunca más**
+   (el problema no es cuándo se refetchea sino cuál fuente gana). Medido: dedup 190/190 en 3 días, ventana ~1,4 s
+   por foto y hasta 30 s por video, 14,7 adjuntos fromMe/día ⇒ ≈1 perdido cada 2 semanas.
+**Alternativas descartadas**: quedarse solo con ampliar el blacklist (cierra `@broadcast`/`@newsletter` pero deja
+`@lid` y lo que venga); meter `@lid` en el blacklist compartido (rompe el caso legítimo del paciente, test 17b);
+conservar el fallback agregándole `HAVING count(*) = 1` (más SQL para cubrir un camino que no se ejecuta nunca);
+arreglar el Logger con `AND created_at < now() - interval '60 seconds'` en `PG - SELECT nuevos` (es un PUT a OTRO
+workflow activo, fuera de la rama fromMe y del alcance autorizado — queda como plan B); confiar en el refetch a
+1,5 s o en el poll de 20 s del panel (no sirven: la fuente que gana es `conversaciones`, no el momento del fetch).
+**Revisable**: el tope de 8-15 dígitos del teléfono descarta un LID de 16-17 (los reales suelen ser de 15, y un jid
+de grupo pelado son 18): si aparece un LID largo real, se sube el tope y se re-corre `test_media_nodos.js` §23. El
+plan B del Logger sigue siendo válido si algún día se quiere que `conversaciones` también quede correcta.

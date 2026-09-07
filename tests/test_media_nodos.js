@@ -33,8 +33,10 @@ const TEL = "5491161461034";
 const KEY = "3EB0ABCDEF1234567890AB";
 
 // Arma el $ de n8n con el webhook (Info + Message) y Extraer Datos como los produce el v6 hoy.
-function mkDollar({ mediaType, message, ed = {}, timestamp = "2026-09-06T15:30:00-03:00", preparar = null, extra = {} }) {
-  const info = { ID: KEY, MediaType: mediaType, Type: "media", Timestamp: timestamp, IsFromMe: false };
+function mkDollar({ mediaType, message, ed = {}, timestamp = "2026-09-06T15:30:00-03:00", preparar = null, extra = {}, info: infoExtra = {} }) {
+  // `infoExtra` permite inyectar Chat / RecipientAlt / SenderAlt (grupos, status@broadcast): en un 1:1 el
+  // webhook los trae, pero para los casos de siempre da igual y el filtro los tolera ausentes.
+  const info = { ID: KEY, MediaType: mediaType, Type: "media", Timestamp: timestamp, IsFromMe: false, ...infoExtra };
   const edFull = { phone: TEL, key_id: KEY, text: "", fromMe: false, image_mime: "", document_filename: "", document_mime: "", ...ed };
   return (nombre) => {
     const data = {
@@ -196,6 +198,78 @@ const sinBase64EnJson = (json) => !Object.values(json).some((v) => typeof v === 
   // 22) mp4 con firma pero declarado audio -> audio/mp4 (m4a)
   it = await run("[AUDIO] x", { mediaType: "audio", message: { base64: MP4.toString("base64"), audioMessage: { mimetype: "audio/mp4" } } });
   check("audio/mp4 con ftyp: mime audio/mp4, ext m4a", it.json.tipo === "audio" && it.json.mime === "audio/mp4" && it.json.ext === "m4a", JSON.stringify(it.json));
+
+  // 23) GRUPOS Y ESTADOS (2026-09-07, R1): el filtro vive acá porque este archivo lo comparten las dos ramas
+  //     y la del STAFF (Es fromMe?[0]) no pasa por "Filtrar duplicados y basura". Para la del paciente es no-op.
+  {
+    const GRUPO = "120363407321448469@g.us"; // grupo de derivaciones
+    const img = { base64: JPEG.toString("base64"), imageMessage: { mimetype: "image/jpeg" } };
+    // (a) foto al grupo: Extraer Datos cae a Info.Sender (el número del propio consultorio) → phone válido,
+    //     así que sin el filtro se subiría al bucket bajo el número de la clínica.
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: TEL, fromMe: true }, info: { Chat: GRUPO, Sender: `${TEL}@s.whatsapp.net`, IsFromMe: true } });
+    check("grupo (@g.us en Info.Chat): hay_archivo false, motivo grupo_o_estado, text intacto, sin binary", it.json.hay_archivo === false && it.json.motivo === "grupo_o_estado" && it.json.text === "[IMAGEN] x" && !it.binary, JSON.stringify(it.json));
+    // (b) el jid del grupo llegando como phone (Extraer Datos sin ningún @s.whatsapp.net)
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: GRUPO }, info: { Chat: GRUPO } });
+    check("grupo en el phone: grupo_o_estado (no sube bajo el número del grupo)", it.json.hay_archivo === false && it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    // (c) estado de WhatsApp publicado desde el celular del consultorio
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: TEL, fromMe: true }, info: { Chat: "status@broadcast", Sender: `${TEL}@s.whatsapp.net`, IsFromMe: true } });
+    check("status@broadcast: grupo_o_estado", it.json.hay_archivo === false && it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    // (d) el grupo escondido en RecipientAlt / SenderAlt (por si Evolution moviera el jid de campo)
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, info: { RecipientAlt: GRUPO } });
+    check("grupo en Info.RecipientAlt: grupo_o_estado", it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, info: { SenderAlt: GRUPO } });
+    check("grupo en Info.SenderAlt: grupo_o_estado", it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    // (e) largo del teléfono: 18 dígitos (un jid de grupo sin '@g.us') no pasa; 8 y 15 sí (E.164 real)
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: "120363407321448469" } });
+    check("18 dígitos (jid de grupo pelado): grupo_o_estado", it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: "1234567" } });
+    check("7 dígitos: grupo_o_estado", it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    for (const tel of ["12345678", "549388578694", "541112345678901"]) {
+      it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: tel } });
+      check(`teléfono real de ${tel.length} dígitos: sube (no lo caza el filtro)`, it.json.hay_archivo === true && it.json.path.startsWith(`${tel}/`), JSON.stringify(it.json));
+    }
+    // (e2) LISTAS DE DIFUSIÓN Y CANALES (2026-09-07): familias hermanas de @g.us que el blacklist viejo
+    //      (igualdad con 'status@broadcast') NO cazaba. Acá van con fromMe:false — o sea, la rama del
+    //      PACIENTE —, así que lo que las frena es el blacklist, no el whitelist del staff.
+    for (const jid of ["120363407321448469@broadcast", "1234567890@broadcast", "120363407321448469@newsletter"]) {
+      it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: TEL }, info: { Chat: jid } });
+      check(`${jid}: grupo_o_estado (blacklist, vale para las dos ramas)`, it.json.hay_archivo === false && it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+      it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: TEL }, info: { RecipientAlt: jid } });
+      check(`${jid} en RecipientAlt: grupo_o_estado`, it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    }
+    // (e3) WHITELIST del STAFF: con fromMe true, Info.Chat TIENE que ser un 1:1 '@s.whatsapp.net'.
+    //      Cierra @lid y cualquier familia de JID futura, que un blacklist deja pasar por definición.
+    for (const jid of ["108187302929820@lid", "120363407321448469@newsletter", "1234567890@broadcast", ""]) {
+      it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: TEL, fromMe: true }, info: { Chat: jid, Sender: `${TEL}@s.whatsapp.net`, IsFromMe: true } });
+      check(`staff con Chat '${jid || "(vacio)"}' (no 1:1): grupo_o_estado`, it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    }
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: TEL, fromMe: true }, info: { Chat: `${TEL}@s.whatsapp.net`, IsFromMe: true } });
+    check("staff con Chat 1:1: sube (el whitelist no rompe el caso bueno)", it.json.hay_archivo === true && it.json.from_me === true, JSON.stringify(it.json));
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: TEL, fromMe: true }, info: { Chat: `${TEL}:12@s.whatsapp.net`, IsFromMe: true } });
+    check("staff con Chat 1:1 y sufijo de dispositivo (':12'): sube igual", it.json.hay_archivo === true, JSON.stringify(it.json));
+    // (e4) El whitelist es SOLO del staff: con fromMe false, un '@lid' de PACIENTE sigue subiendo (17b).
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: `${TEL}@lid` }, info: { Chat: `${TEL}@lid` } });
+    check("paciente con jid '@lid': sigue subiendo (el whitelist no toca la rama del paciente)", it.json.hay_archivo === true && it.json.telefono === `${TEL}@lid`, JSON.stringify(it.json));
+    // (e5) BORDE del guard de largo con LID (decisión explícita, 2026-09-07): los LID de WhatsApp suelen
+    //      ser de 15 dígitos y entran; uno de 16-17 se DESCARTA a propósito. Fallar cerrado: un jid de
+    //      grupo pelado son 18 dígitos y el margen es de un solo dígito, así que subir un archivo bajo un
+    //      número que no es un teléfono (conversación fantasma) es peor que perder el adjunto — el chat
+    //      sigue mostrando el chip de siempre, que es el comportamiento de hoy. Si algún día aparece un
+    //      LID largo real, se sube el tope acá y se re-corre este test (queda anotado en el backlog).
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: "108187302929820@lid" }, info: { Chat: "108187302929820@lid" } });
+    check("LID de 15 dígitos (el largo típico): sube", it.json.hay_archivo === true && it.json.path.startsWith("108187302929820/"), JSON.stringify(it.json));
+    for (const lid of ["1234567890123456@lid", "12345678901234567@lid"]) {
+      it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: lid }, info: { Chat: lid } });
+      check(`LID de ${lid.split("@")[0].length} dígitos: grupo_o_estado (descarte deliberado)`, it.json.motivo === "grupo_o_estado", JSON.stringify(it.json));
+    }
+    // (f) NO REGRESIÓN: 1:1 normal con Info.Chat presente sigue subiendo, y los motivos viejos no cambian
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, info: { Chat: `${TEL}@s.whatsapp.net` } });
+    check("1:1 con Info.Chat normal: sube igual que siempre", it.json.hay_archivo === true && it.json.tipo === "image", JSON.stringify(it.json));
+    it = await run("[IMAGEN] x", { mediaType: "image", message: img, ed: { phone: "" }, info: { Chat: GRUPO } });
+    check("sin teléfono Y grupo: gana 'sin_telefono' (el orden de los guards no cambió)", it.json.motivo === "sin_telefono", JSON.stringify(it.json));
+    it = await run("[UBICACION: x]", { mediaType: "location", message: { locationMessage: {} }, info: { Chat: GRUPO } });
+    check("grupo sin archivo: gana 'sin_base64' (el filtro corre después)", it.json.motivo === "sin_base64", JSON.stringify(it.json));
+  }
 
   // ---- Expresión de "Media: Marcar" (sufijo solo si el INSERT devolvió la fila con el mismo id) ----
   const P = { text: "[IMAGEN] TIPO: FOTO_DENTAL DESCRIPCION: x", hay_archivo: true, id: "3fa9c2e1b7d04a58", path: `${TEL}/2026/09/3fa9c2e1b7d04a58.jpg` };
