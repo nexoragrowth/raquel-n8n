@@ -309,14 +309,48 @@ BEGIN
 END;
 $$;
 
+-- ----------------------------------------------------------------------------
+-- 12. media_entrantes — adjuntos del PACIENTE (foto, audio, video, documento,
+--     sticker) que el v6 sube a Supabase Storage (2026-09-06). Una fila por
+--     archivo; `id` (16 hex aleatorio) es lo que viaja en el sufijo
+--     ' [MEDIA:<id>]' del marcador de texto que va al buffer y a la memoria
+--     (n8n_chat_histories / conversaciones). El panel resuelve id -> path y
+--     sirve URLs firmadas (1 h) con la service key; el bucket es PRIVADO.
+--     Bucket: `pacientes-media` (public=false, 50 MB, cualquier mime) — se crea
+--     por la API de Storage, no por SQL: scripts/create_media_entrantes.py.
+--     Escritor: nodo "Media: Registrar" del v6 (scripts/apply_media_entrantes.py).
+--     RLS habilitado SIN policies (solo service_role), como el resto del v3.
+--     (La numeración sigue a la 11; la "sección 10" del pedido original ya era
+--     `servicios`.)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS media_entrantes (
+    id         TEXT PRIMARY KEY CHECK (id ~ '^[0-9a-f]{16}$'),
+    key_id     TEXT,                                  -- Info.ID de WhatsApp (une con mensajes_entrantes_live.key_id)
+    telefono   TEXT NOT NULL,                         -- = Extraer Datos.phone tal cual (mismo valor que mensajes_entrantes_live.telefono / session_id)
+    from_me    BOOLEAN NOT NULL DEFAULT false,        -- true = lo mandó el consultorio (fuera de alcance hoy)
+    tipo       TEXT NOT NULL CHECK (tipo IN ('image','video','audio','document','sticker')),
+    mime       TEXT,                                  -- normalizado (sin '; codecs=…'), corregido por magic bytes
+    bucket     TEXT NOT NULL DEFAULT 'pacientes-media',
+    path       TEXT NOT NULL,                         -- <telefono>/<yyyy>/<mm>/<id>.<ext>
+    bytes      INTEGER,
+    filename   TEXT,                                  -- original (documentos) o <id>.<ext>
+    caption    TEXT,                                  -- texto que acompañó al adjunto
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_entrantes_key_id      ON media_entrantes (key_id);
+CREATE INDEX IF NOT EXISTS idx_media_entrantes_tel_created ON media_entrantes (telefono, created_at DESC);
+ALTER TABLE media_entrantes ENABLE ROW LEVEL SECURITY;
+
 -- ============================================================================
 -- Verificación post-run (correr a mano, no forma parte del DDL):
 --
 --   SELECT table_name FROM information_schema.tables
 --    WHERE table_schema='public' ORDER BY 1;
 --   -- esperadas: conversaciones, documents, escalaciones_log, knowledge_base,
---   --            n8n_chat_histories, pacientes, peticiones,
+--   --            media_entrantes, n8n_chat_histories, pacientes, peticiones,
 --   --            recordatorios_enviados, servicios, urgencias_log
+--   --            (+ mensajes_entrantes_live, cuyo DDL vive en scripts/apply_inbox_live.py)
 --
 --   SELECT proname, pg_get_function_arguments(oid) FROM pg_proc
 --    WHERE proname = 'match_documents';
@@ -333,7 +367,8 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- 9. Realtime para el panel en vivo (2026-09-06). La publicacion supabase_realtime existe en
---    todo proyecto Supabase pero SIN tablas; el panel se suscribe server-side a estas 3 y
+--    todo proyecto Supabase pero SIN tablas; el panel se suscribe server-side a estas 4 y
 --    empuja los cambios al navegador por SSE. Script idempotente: scripts/apply_realtime_publication_v3.py
+--    (media_entrantes sumada el 2026-09-06 tarde: INSERT = adjunto del paciente ya en Storage)
 -- ---------------------------------------------------------------------------
-alter publication supabase_realtime add table public.mensajes_entrantes_live, public.n8n_chat_histories, public.pacientes;
+alter publication supabase_realtime add table public.mensajes_entrantes_live, public.n8n_chat_histories, public.pacientes, public.media_entrantes;

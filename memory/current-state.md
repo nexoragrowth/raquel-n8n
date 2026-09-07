@@ -1,5 +1,45 @@
 # Estado actual — raquel-n8n
 
+## Sesión 2026-09-06 (noche) — Adjuntos del paciente a Storage (`media_entrantes`): scripts listos, NADA aplicado
+
+**Pedido de Lucas ("sí hacelo")**: que el panel muestre la foto / el video / el audio / el documento que manda el
+PACIENTE (hoy el v6 descarta el archivo y el panel muestra un chip con la descripción del bot).
+**Diseño y contrato**: `docs/media-entrantes-2026-09-06.md`. **Entregado (lado bot, sin PUT ni escrituras)**:
+- `media/preparar.js` (jsCode de `Media: Preparar`), `media/marcar_expr.js`, `media/subida_ok_expr.js` — fuente única
+  que embebe el apply y corren los tests. `tests/test_media_nodos.js` → **45/45 OK** (jpeg/png/mp4/ptt con
+  `; codecs=opus`/pdf/sticker PNG-disfrazado-de-webp/ubicación sin base64/base64 vacío/mime desconocido/
+  documentWithCaptionMessage/MediaType vacío/>20 MB/excepción → texto intacto siempre).
+- `scripts/apply_media_entrantes.py` (dry-run default / `--apply` / `--rollback-wiring` / `--rollback <PRE>`):
+  6 nodos `Media: *` entre los 4 Set Marker y `Merge Multimedia` (que pasa a 2 entradas: Marcar→0,
+  Passthrough→1). **Dry-run contra el v6 vivo OK**: 147→153 nodos, 0 cambios fuera de la rama, webhookId
+  preservado, host v3 coincidente en 4 fuentes, credenciales copiadas de nodos vivos.
+- `scripts/create_media_entrantes.py` (bucket PRIVADO `pacientes-media` 50 MB + tabla + índices + RLS sin
+  policies + publicación Realtime; `--estado`/`--apply`, idempotente) — solo compilado, NO corrido.
+- `apply_realtime_publication_v3.py` con `media_entrantes` en `TABLAS`; `rebuild_v3_schema.sql` §12.
+**Contrato del marcador**: a cada marcador existente se le agrega AL FINAL ` [MEDIA:<16 hex>]` solo si el INSERT
+salió bien; si falla cualquier paso el texto queda idéntico a hoy. El panel (repo hermano) resuelve el id vía
+`/api/media/<id>` con URL firmada 1 h.
+**Ronda de revisión (misma noche, corrector)** — MUST_FIX resueltos en el panel: (1) caption duplicado en la burbuja
+PENDIENTE (el fallback a `media_entrantes.caption` ahora solo aplica si el texto no trae nada suelto:
+`captionFila` en `AdjuntosBlock`); (2) los adjuntos se cuelgan SOLO a filas `rol === 'user'` (un eco del token en
+una respuesta del bot ya no pinta la foto en la burbuja verde; ídem defensivo en el dedupe de la lista).
+NICE_TO_HAVE aplicados — bot: `telefono` verbatim (= Inbox Live / session_id; el path usa solo dígitos), sticker
+no-imagen (Lottie) → `application/octet-stream`, `Media: Marcar` rescata el texto del Set Marker si Preparar muriera
+fuera de su try/catch, header `cache-control: max-age=3600` en la subida, tests 45 → **54/54**; panel: `Vary: Cookie`
+en el 302, re-probe de `media_entrantes` en cada recreación del canal (con tope 5 s), sticker octet-stream → chip,
+foto-como-archivo sin chip redundante, `ChipDescarga` sin `target=_blank`, gap único, `adjuntoDeFila` valida el id,
+preview "📷 Foto · caption" también en la burbuja pendiente; docs: orden de despliegue panel → tabla → reinicio →
+v6 y verificación post-apply obligatoria (`prepareBinaryData`/`RETURNING *`). NO aplicados (piden OK aparte o son
+cosméticos): 2ª capa anti-eco en `Banlist Validator` (P2), orden cronológico de la galería, coalescing de eventos.
+Dry-run re-corrido contra el v6 vivo: 147 → 153 nodos, 0/0 fuera de la rama, webhookId OK. `tsc` verde.
+**Próximos pasos (en orden, con OK de Lucas)**: 0) deploy del panel nuevo ANTES que nada (el actual mostraría el
+token crudo); 1) `create_media_entrantes.py --apply` → `--estado` + `apply_realtime_publication_v3.py --estado`; 2)
+reiniciar el panel (escucha `media`); 3) `apply_media_entrantes.py --apply`; 4) prueba real desde el celular de Lucas
+(foto+caption, audio, PDF, sticker, ubicación) mirando la salida de `Media: Preparar` (`motivo` ≠ `error:*`) y de
+`Media: Registrar` (fila con `id`/`bucket`), y limpieza en el mismo turno (`limpiar_numero_demo.py` + filas/objetos
+de prueba); 5) decidir la 2ª capa anti-eco del token en `Banlist Validator` (R3 del doc) y los adjuntos del staff
+(fromMe, P3).
+
 ## Sesión 2026-09-06 (tarde) — Panel EN VIVO: Supabase Realtime server-side + SSE (chau polling)
 
 **Pedido de Lucas**: "¿cuánto tardan en llegar los mensajes? ¿se puede hacer live con socket?" → "sí,

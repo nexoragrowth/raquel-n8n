@@ -7,6 +7,8 @@ key a estas 3 tablas y empuja los cambios al navegador por SSE (/api/live):
   - mensajes_entrantes_live (INSERT)  → mensaje del paciente / staff desde el celular
   - n8n_chat_histories     (INSERT)  → respuestas del bot, staff desde el panel, triaje
   - pacientes              (UPDATE)  → modo bot/humano, alias, leído/no-leído
+  - media_entrantes        (INSERT)  → adjunto del paciente subido a Storage por el v6 (2026-09-06,
+                                       scripts/create_media_entrantes.py también la agrega al crearla)
 
 Idempotente: agrega solo las que faltan. `--estado` muestra sin cambiar. `--quitar` las saca.
 Usa SUPABASE_DB_* del .env (Postgres directo, psycopg2).
@@ -17,7 +19,7 @@ import sys
 import psycopg2
 from dotenv import load_dotenv
 
-TABLAS = ["mensajes_entrantes_live", "n8n_chat_histories", "pacientes"]
+TABLAS = ["mensajes_entrantes_live", "n8n_chat_histories", "pacientes", "media_entrantes"]
 
 
 def conectar():

@@ -515,3 +515,41 @@ directo desde el navegador (exige anon key + RLS en el v3, que hoy no tiene poli
 sin config, y el par SSE + APIs JSON es lo que consumiría una app móvil.
 **Revisable**: sí — si Realtime del v3 se vuelve poco confiable, el plan B es LISTEN/NOTIFY con
 triggers `pg_notify` y una conexión directa a Postgres desde el panel.
+
+## 2026-09-06 — Adjuntos del paciente: el v6 los sube a Storage privado y deja ` [MEDIA:<id>]` en el marcador
+
+**Decisión**: los archivos que manda el PACIENTE (foto, audio, video, documento, sticker) se suben desde el v6
+al bucket PRIVADO `pacientes-media` con la credencial supabaseApi de n8n (mismo `Message.base64` que ya llega
+en el webhook de Evolution GO), se registran en `media_entrantes` (id 16 hex aleatorio) y el marcador de texto
+existente recibe AL FINAL el sufijo ` [MEDIA:<id>]` — solo si el INSERT salió bien. El panel firma URLs de 1 h.
+Cadena nueva (6 nodos "Media: *") entre los 4 Set Marker y `Merge Multimedia`; el Merge pasa de 5 a 2 entradas
+con ambas conectadas. Adjuntos del staff (fromMe) quedan fuera por ahora.
+**Razón**: Lucas quiere ver el adjunto real en el panel ("sí hacelo"); el archivo ya viaja desencriptado en
+cada webhook (100 % en 2048 execs), así que no hace falta llamar a `/message/downloadmedia` (nunca verificado).
+Privado porque son bocas y comprobantes. El sufijo al final del marcador no toca los prefijos que miran los
+gates/prompts, y un id hex no puede formar ninguna palabra que testeen Canned Sidecar / Gate Pago / Triaje.
+**Alternativas descartadas**: bucket público (privacidad); guardar el base64 en la tabla (6× el tamaño en la
+fila de la ejecución y en Postgres); Merge con 5 entradas y 3 sueltas (sin evidencia de cómo se comporta en
+executionOrder v1; con 2 conectadas se reproduce el patrón probado en producción); `executeQuery` +
+`queryReplacement` para el INSERT (parte por coma: lección 5/9); marcador nuevo en vez de sufijo (rompería
+Pre-filtro Cierre y los prompts que miran `[IMAGEN`/`[DOCUMENTO`/`[AUDIO`).
+**Revisable**: sí — el tope de 20 MB, el timeout 30 s, la 2ª capa anti-eco del token en la salida (pendiente
+P2) y sumar la rama fromMe (P3).
+
+## 2026-09-06 — media_entrantes: `telefono` verbatim, sticker no-imagen como octet-stream, Marcar con red de seguridad
+
+**Decisión** (ronda de revisión del mismo día): (a) `media_entrantes.telefono` guarda `Extraer Datos.phone` TAL CUAL
+(no solo dígitos) y únicamente el `path` del objeto se sanea a dígitos; (b) un sticker cuyo contenido no es
+PNG/WEBP/GIF (Lottie) se sube con mime `application/octet-stream`; (c) `Media: Marcar` cae al `text` del Set Marker
+que ejecutó si `Media: Preparar` devolvió `{error}` sin `text`; (d) la subida manda `cache-control: max-age=3600`;
+(e) el panel cuelga adjuntos solo a filas del paciente (`rol user`) y el 302 de `/api/media` lleva `Vary: Cookie`.
+**Razón**: (a) Inbox Live, la memoria (`session_id`) y el Logger usan `phone` crudo y el panel cruza con `.eq`; si
+algún día llega `…@lid`, con dígitos solos los adjuntos de ese paciente nunca resolverían. (b) el panel pintaría un
+`<img>` roto; con mime genérico lo muestra como chip "Sticker". (c) hoy inalcanzable (el try/catch cubre todo el
+código) pero un kill del sandbox dejaría al Router un mensaje vacío. (d) Storage sirve `no-cache` si no se manda; la
+firma dura 1 h así que cachear 1 h es coherente. (e) riesgo R3 (eco del token por el bot) sin 2ª capa todavía: la
+foto del paciente no debe aparecer en la burbuja verde; y un `<img>` cacheado no debe seguir resolviendo tras logout.
+**Alternativas descartadas**: sanear también la columna (rompe el cruce con el panel); rechazar stickers Lottie
+(se pierde el archivo); filtrar el token en `Banlist Validator` ya (fuera de la rama multimedia: pide OK aparte, P2).
+**Revisable**: sí — si Extraer Datos garantiza dígitos, (a) es inocua; (c) se puede quitar si el runner demuestra
+que nunca emite `{error}` sin `text`.

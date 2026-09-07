@@ -5,8 +5,18 @@
       envío de imágenes (Storage `panel-media` → `/send/media`); autor en burbujas; pushName real
       compartido (`lib/push-names.ts`). Panel `b76fbfd`/`a309708`, backend `c1b177b`. Deployado.
 - [ ] P2 Lucas: prueba desde la UI (alias, imagen, autor, orden) y ponerle alias a su número.
-- [ ] P3 Imágenes/audios ENTRANTES del paciente renderizados (hoy chip "[IMAGEN] …"): requiere
-      guardar el archivo (base64 del webhook) en Storage desde el v6 → encaja en B1 del roadmap.
+- [ ] **P1** Adjuntos ENTRANTES del paciente a Storage (`media_entrantes`) — scripts listos, revisados y corregidos
+      el 6/9 noche (`docs/media-entrantes-2026-09-06.md`, tests 54/54, dry-run 147→153 nodos). Falta, con OK de
+      Lucas y EN ESTE ORDEN: deploy del panel nuevo → `create_media_entrantes.py --apply` (+ `--estado` de la
+      publicación) → reiniciar el panel → `apply_media_entrantes.py --apply` → prueba real mirando la salida de
+      `Media: Preparar`/`Media: Registrar` en la primera ejecución + limpieza (regla dura 9).
+- [ ] P3 Cosméticos del render de adjuntos en el panel (no aplicados a propósito): orden cronológico de la galería
+      (hoy imágenes primero, después video/audio/doc); coalescing de los 3 eventos live/media/memoria (3 refetch por
+      adjunto, aceptable).
+- [ ] P2 Segunda capa anti-eco del token ` [MEDIA:<id>]` en la SALIDA del bot (`Banlist Validator` o `Split en
+      Mensajes`: `replace(/\s*\[MEDIA:[0-9a-f]{16}\]/g,'')`) — cambio aparte, fuera de la rama multimedia.
+- [ ] P3 Adjuntos del STAFF desde el celular (rama `Es fromMe?[0]`) a Storage: el webhook fromMe trae base64,
+      pero es una segunda entrada a `Media: Preparar` + sufijar el placeholder de `Build fromMe AI memory`.
 - [ ] P3 Burbuja optimista "enviando…" al mandar desde el panel (hoy aparece al próximo poll ≤1,5 s).
 - [ ] P3 Miniaturas vía `/storage/v1/render/image` si el plan de Supabase lo permite.
 
