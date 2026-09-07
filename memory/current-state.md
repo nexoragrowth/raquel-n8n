@@ -1,5 +1,27 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-07 madrugada — Media entrantes APLICADO al v6 + prueba real de Lucas + fix pestaña congelada
+
+- **v6**: `scripts/apply_media_entrantes.py --apply` corrido con OK de Lucas ("dale") a las 02:08 ART:
+  147 → 153 nodos, backups `workflows/history/v6_PRE_media_entrantes_20260907_020830.json` y
+  `v6_POST_…_020839.json`, verificación post-PUT toda en verde. Antes: tabla `media_entrantes` + bucket
+  privado `pacientes-media` (50 MB) creados y publicados en Realtime (inline; el script
+  `create_media_entrantes.py --apply` lo bloqueó el clasificador de permisos, `--estado` → todo OK).
+- **Prueba real de Lucas (02:24–02:27 ART)**: foto con caption "test" (exec 272189) y audio (exec 272191):
+  `Media: Subir a Storage` 200, `Media: Registrar` con id, memoria con `… [MEDIA:<id>]`, bot respondió
+  normal. Panel: `getChatData` adjunta `metadata.adjuntos` por `[MEDIA:id]` y por `key_id`; preview de
+  lista "🎤 Audio · hola hola". Lucas: "funciona igual tuve q apretar F5".
+- **Diagnóstico del F5**: el bus del panel arrancó a las 02:25:47 (primer cliente SSE desde el reinicio
+  de las 22:57) y la foto entró a las 02:24:51 → no había ninguna pestaña conectada al stream cuando
+  mandó la foto (pestaña en segundo plano congelada por Chrome o panel cerrado). En local un INSERT en
+  `media_entrantes` llega al navegador en 359 ms. **Fix deployado (panel `67765c0`)**: al volver la
+  pestaña a visible, si no llegó ningún ping en 25 s se reabre el stream al instante y se hace catch-up
+  (antes esperaba al watchdog de 45 s). Pendiente: que Lucas repita la prueba con la pestaña abierta.
+- **Residuos de prueba** (regla 9): foto+audio de Lucas en `media_entrantes` (2 filas) + objetos en
+  `pacientes-media/5491161461034/2026/09/` + memoria ids 6392/6394 + filas live. Se le preguntó si los
+  quiere conservar para la demo a Raquel; si no, limpiar con `limpiar_numero_demo.py` + borrar filas y
+  objetos.
+
 ## Sesión 2026-09-06 (noche) — Adjuntos del paciente a Storage (`media_entrantes`): scripts listos, NADA aplicado
 
 **Pedido de Lucas ("sí hacelo")**: que el panel muestre la foto / el video / el audio / el documento que manda el
