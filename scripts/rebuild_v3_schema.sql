@@ -335,12 +335,39 @@ CREATE TABLE IF NOT EXISTS media_entrantes (
     bytes      INTEGER,
     filename   TEXT,                                  -- original (documentos) o <id>.<ext>
     caption    TEXT,                                  -- texto que acompañó al adjunto
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    borrado_at TIMESTAMPTZ                            -- 2026-09-07: lo marca el satélite Retención cuando borró el objeto de Storage
 );
 
 CREATE INDEX IF NOT EXISTS idx_media_entrantes_key_id      ON media_entrantes (key_id);
 CREATE INDEX IF NOT EXISTS idx_media_entrantes_tel_created ON media_entrantes (telefono, created_at DESC);
 ALTER TABLE media_entrantes ENABLE ROW LEVEL SECURITY;
+
+-- Retención (2026-09-07): bases creadas antes de esa fecha no tienen la columna; el satélite la necesita
+-- (SELECT ... WHERE borrado_at IS NULL) y el panel la lee para mostrar "Adjunto vencido" / responder 410.
+-- Mismo DDL que scripts/create_retencion_satelite.py --ddl.
+ALTER TABLE media_entrantes ADD COLUMN IF NOT EXISTS borrado_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_media_entrantes_vivos_created ON media_entrantes (created_at) WHERE borrado_at IS NULL;
+
+-- ----------------------------------------------------------------------------
+-- 13. retencion_log — una fila por bucket/tabla y por corrida del satélite
+--     "Áurea — Retención (archivos y bandeja)" (2026-09-07, cron 04:30 Jujuy):
+--     bucket = 'pacientes-media' (adjuntos del paciente > 90 días),
+--     'panel-media' (adjuntos del staff > 90 días) o 'mensajes_entrantes_live'
+--     (bandeja > 365 días). borrados/fallidos por corrida; detalle = notas
+--     ("> 90 días", errores del DELETE de Storage, smoke). Lucas recibe WhatsApp
+--     SOLO si fallidos > 0. Escritor: nodo "Registrar retencion_log"
+--     (scripts/create_retencion_satelite.py). RLS habilitado SIN policies.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS retencion_log (
+    id         SERIAL PRIMARY KEY,
+    corrida_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    bucket     TEXT,
+    borrados   INT NOT NULL DEFAULT 0,
+    fallidos   INT NOT NULL DEFAULT 0,
+    detalle    TEXT
+);
+ALTER TABLE retencion_log ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
 -- Verificación post-run (correr a mano, no forma parte del DDL):
@@ -349,7 +376,7 @@ ALTER TABLE media_entrantes ENABLE ROW LEVEL SECURITY;
 --    WHERE table_schema='public' ORDER BY 1;
 --   -- esperadas: conversaciones, documents, escalaciones_log, knowledge_base,
 --   --            media_entrantes, n8n_chat_histories, pacientes, peticiones,
---   --            recordatorios_enviados, servicios, urgencias_log
+--   --            recordatorios_enviados, retencion_log, servicios, urgencias_log
 --   --            (+ mensajes_entrantes_live, cuyo DDL vive en scripts/apply_inbox_live.py)
 --
 --   SELECT proname, pg_get_function_arguments(oid) FROM pg_proc

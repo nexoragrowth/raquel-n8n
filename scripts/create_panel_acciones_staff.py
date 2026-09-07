@@ -17,6 +17,13 @@ QUÉ HACE:
   POST /webhook/panel-toggle-bot  -> valida secreto -> label `humano` (humano=true) o `bot` (false)
       en TODAS las conversaciones del contacto -> 200 {ok:true}
   Efecto: exactamente el mismo que si la Dra./Irina escribieran desde el WhatsApp del consultorio.
+  Con media (imagen / AUDIO / video / documento subido por el panel a Storage `panel-media`): body {telefono, mensaje?,
+      media_url (https), media_tipo: image|audio|video|document, filename, autor} -> /send/media type=media_tipo
+      (verificado 7/9: 'audio' responde 200; 'ptt' no existe en Evolution GO) -> memoria "[imagen|audio|video|document] <url>\n<caption>".
+  Respuestas: 200 ok · 401 secreto incorrecto · 400 pedido mal armado (telefono requerido / mensaje vacio / media_url
+      invalida / media_tipo invalido: un tipo desconocido con URL NO cae a image, 7/9) · 502 Evolution no confirmó el envío.
+  Compatibilidad: el cambio del 7/9 es hacia atrás compatible (el panel viejo siempre manda media_tipo 'image'), por eso
+      el --update del satélite va ANTES del deploy del panel con audio (si no, un audio saldría como type 'image').
 
 SECRETOS: el secreto del panel se genera en --apply, se embebe en el nodo y se escribe en
 /opt/nexora-panel/.env.production del VPS por ssh (--write-env). Nunca se imprime ni se guarda acá.
@@ -27,6 +34,8 @@ USO:
   python scripts/create_panel_acciones_staff.py --apply         # crea (inactivo) + genera secreto en .secret local temporal
   python scripts/create_panel_acciones_staff.py --activate <id>
   python scripts/create_panel_acciones_staff.py --write-env     # agrega N8N_PANEL_WEBHOOK_BASE/SECRET al VPS (usa el secreto generado)
+  python scripts/create_panel_acciones_staff.py --recover-secret <id>  # si %TEMP% perdió el secreto: lo copia del nodo vivo (GET)
+  python scripts/create_panel_acciones_staff.py --update <id>   # PUT (name/nodes/connections/settings) reusando el secreto local
 """
 import argparse, copy, json, os, secrets, subprocess, sys, urllib.request
 from pathlib import Path
@@ -55,10 +64,17 @@ const ok = !!SECRET && String(headers["x-panel-secret"] || "") === SECRET;
 const telefono = String(body.telefono || "").replace(/[^0-9]/g, "");
 const mensaje = String(body.mensaje || "").trim();
 const humano = body.humano === true || body.humano === "true";
-// Media (imagen/documento subido desde el panel a Supabase Storage) — opcional.
+// Media (imagen / audio / video / documento subido desde el panel a Supabase Storage) — opcional. El tipo va tal cual a
+// /send/media de Evolution GO (7/9: 'audio' = nota de voz/archivo de audio, 200 OK; 'ptt' no existe). Un tipo desconocido
+// con URL es error 400 ('media_tipo invalido'): el panel SIEMPRE manda image|audio, y caer a 'image' mandaría a Evolution
+// una URL que no es imagen hacia un paciente real (antes del 7/9 caía a image; ya no protege a nadie).
+const TIPOS_MEDIA = ["image", "audio", "document", "video"];
 const media_url = String(body.media_url || "").trim();
-const media_tipo = ["image", "document", "video"].includes(String(body.media_tipo || "")) ? String(body.media_tipo) : (media_url ? "image" : "");
-const filename = String(body.filename || "").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80) || (media_tipo ? "archivo" : "");
+const media_tipo = !media_url ? "" : (TIPOS_MEDIA.includes(String(body.media_tipo || "")) ? String(body.media_tipo) : "");
+// filename saneado a [A-Za-z0-9._-], máximo 80 chars CONSERVANDO la extensión (WhatsApp/Evolution la usan para el mime del audio/documento).
+const fnRaw = String(body.filename || "").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 200);
+const fnExt = (fnRaw.match(/\.[A-Za-z0-9]{1,5}$/) || [""])[0];
+const filename = (fnRaw.slice(0, fnRaw.length - fnExt.length).slice(0, 80 - fnExt.length) + fnExt) || (media_tipo ? "archivo" : "");
 // Autor = usuario logueado en el panel (lucas / irina / raquel); se muestra en la burbuja.
 const autorRaw = String(body.autor || "").trim().slice(0, 40);
 const autor = autorRaw ? (autorRaw.toLowerCase() === "raquel" ? "Dra. Raquel" : autorRaw.charAt(0).toUpperCase() + autorRaw.slice(1).toLowerCase()) : "la doctora o la secretaria";
@@ -67,12 +83,14 @@ if (!ok) error = "unauthorized";
 else if (!telefono) error = "telefono requerido";
 else if (accion === "send" && !mensaje && !media_url) error = "mensaje vacio";
 else if (media_url && !/^https:\/\//.test(media_url)) error = "media_url invalida";
+else if (media_url && !media_tipo) error = "media_tipo invalido";
 return [{ json: { ok: !error, error, accion, telefono, mensaje, humano, number: telefono, media_url, media_tipo, filename, autor, autor_raw: autorRaw } }];
 """
 
 MEMORIA_JS = r"""// Misma fila que la rama fromMe del v6 (Build fromMe AI memory): el LLM sabe que no es su voz y se calla.
-// Con media: el content lleva "[imagen] <url>" + caption para que el panel lo renderice como imagen
-// también cuando la fila llega vía Logger (que no copia additional_kwargs.media_url).
+// Con media: el content lleva "[imagen] <url>" / "[audio] <url>" / "[video] <url>" / "[document] <url>" (+ '\n' + caption si hay)
+// para que el panel lo renderice como imagen/audio/video/documento también cuando la fila llega vía Logger (que no
+// copia additional_kwargs.media_url). Solo 'image' se traduce a 'imagen'; los demás tipos van tal cual (PANEL_MEDIA_RE del panel).
 const p = $('Validar secreto').first().json;
 const TAG = '[ATENCION HUMANA - mensaje enviado por ' + p.autor + ' desde el PANEL. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: ';
 const cuerpo = p.media_url ? ('[' + (p.media_tipo === 'image' ? 'imagen' : p.media_tipo) + '] ' + p.media_url + (p.mensaje ? '\n' + p.mensaje : '')) : p.mensaje;
@@ -128,7 +146,14 @@ def build(secret, evo_headers, evo_base, cw_token):
          "parameters": {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict", "version": 2},
                                        "conditions": [{"id": "c1", "leftValue": "={{ $json.ok }}", "rightValue": True, "operator": {"type": "boolean", "operation": "true", "singleValue": True}}],
                                        "combinator": "and"}, "options": {}}},
-        respond("resp-401", "Responder 401", [920, 560], 401, '={{ JSON.stringify({ ok: false, error: $json.error }) }}'),
+        # Secreto incorrecto -> 401 (el panel lo muestra como "sin autorización"); pedido mal armado (teléfono, mensaje vacío,
+        # media_url http, media_tipo desconocido) -> 400 con el error en el body (el panel lo muestra como error genérico + detalle).
+        {"id": "if-secreto", "name": "¿Sin secreto?", "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [920, 560],
+         "parameters": {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict", "version": 2},
+                                       "conditions": [{"id": "c5", "leftValue": "={{ $json.error }}", "rightValue": "unauthorized", "operator": {"type": "string", "operation": "equals"}}],
+                                       "combinator": "and"}, "options": {}}},
+        respond("resp-401", "Responder 401", [1160, 480], 401, '={{ JSON.stringify({ ok: false, error: $json.error }) }}'),
+        respond("resp-400", "Responder 400", [1160, 640], 400, '={{ JSON.stringify({ ok: false, error: $json.error }) }}'),
         {"id": "if-send", "name": "¿Es envío?", "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [920, 200],
          "parameters": {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict", "version": 2},
                                        "conditions": [{"id": "c2", "leftValue": "={{ $json.accion }}", "rightValue": "send", "operator": {"type": "string", "operation": "equals"}}],
@@ -151,24 +176,25 @@ def build(secret, evo_headers, evo_base, cw_token):
                         "sendBody": True, "specifyBody": "json",
                         "jsonBody": "={\n  \"number\": {{ JSON.stringify($('Validar secreto').first().json.number) }},\n  \"text\": {{ JSON.stringify($('Validar secreto').first().json.mensaje) }}\n}",
                         "options": {"response": {"response": {"neverError": True}}, "timeout": 30000}}, "credentials": {}, "onError": "continueRegularOutput"},
-        {"id": "if-enviado", "name": "¿Enviado?", "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [1400, 80],
+        {"id": "if-enviado", "name": "¿Enviado?", "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [1640, 20],
          "parameters": {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict", "version": 2},
                                        "conditions": [{"id": "c3", "leftValue": "={{ !!($json.data && $json.data.Info && $json.data.Info.ID) }}", "rightValue": True, "operator": {"type": "boolean", "operation": "true", "singleValue": True}}],
                                        "combinator": "and"}, "options": {}}},
-        respond("resp-502", "Responder 502", [1640, 320], 502, '={{ JSON.stringify({ ok: false, error: "evolution_send_failed" }) }}'),
-        {"id": "memoria", "name": "Armar fila memoria", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1640, 80], "parameters": {"jsCode": MEMORIA_JS}},
-        {"id": "pg", "name": "Guardar en memoria", "type": "n8n-nodes-base.postgres", "typeVersion": 2.5, "position": [1880, 80],
+        respond("resp-502", "Responder 502", [1880, 320], 502, '={{ JSON.stringify({ ok: false, error: "evolution_send_failed" }) }}'),
+        {"id": "memoria", "name": "Armar fila memoria", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1880, 80], "parameters": {"jsCode": MEMORIA_JS}},
+        {"id": "pg", "name": "Guardar en memoria", "type": "n8n-nodes-base.postgres", "typeVersion": 2.5, "position": [2120, 80],
          "parameters": {"operation": "executeQuery", "query": "INSERT INTO n8n_chat_histories(session_id, message) VALUES ($1, $2::jsonb)",
                         "options": {"queryReplacement": "={{ $json.session_id }}, ={{ $json.message }}"}},
          "credentials": {"postgres": PG_CRED}, "onError": "continueRegularOutput", "alwaysOutputData": True},
-        {"id": "label", "name": "Label Chatwoot", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2120, 200], "parameters": {"jsCode": LABEL_JS.replace("__CW_TOKEN__", cw_token)}},
-        respond("resp-200", "Responder 200", [2360, 200], 200, '={{ JSON.stringify($json) }}'),
+        {"id": "label", "name": "Label Chatwoot", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2360, 200], "parameters": {"jsCode": LABEL_JS.replace("__CW_TOKEN__", cw_token)}},
+        respond("resp-200", "Responder 200", [2600, 200], 200, '={{ JSON.stringify($json) }}'),
     ]
     connections = {
         "Webhook panel-send-human": {"main": [[C("Validar secreto")]]},
         "Webhook panel-toggle-bot": {"main": [[C("Validar secreto")]]},
         "Validar secreto": {"main": [[C("¿Autorizado?")]]},
-        "¿Autorizado?": {"main": [[C("¿Es envío?")], [C("Responder 401")]]},
+        "¿Autorizado?": {"main": [[C("¿Es envío?")], [C("¿Sin secreto?")]]},
+        "¿Sin secreto?": {"main": [[C("Responder 401")], [C("Responder 400")]]},
         "¿Es envío?": {"main": [[C("¿Con media?")], [C("Label Chatwoot")]]},
         "¿Con media?": {"main": [[C("Enviar Media (staff)")], [C("Enviar WhatsApp (staff)")]]},
         "Enviar Media (staff)": {"main": [[C("¿Enviado?")]]},
@@ -187,15 +213,29 @@ def live_secrets():
     cw = next(h["value"] for h in names["Re-check Humano"]["parameters"]["headerParameters"]["parameters"] if h["name"] == "api_access_token")
     return enviar["parameters"]["headerParameters"], enviar["parameters"]["url"].split("/send/")[0], cw
 
+def recover_secret(wf_id):
+    """Copia el secreto del nodo vivo `Validar secreto` (const SECRET = "...") a SECRET_FILE, sin imprimirlo. Solo GET.
+    Para cuando %TEMP% se limpió y hay que correr --update sin regenerar el secreto (que obligaría a tocar el env del VPS)."""
+    import re
+    wf = api(f"/workflows/{wf_id}")
+    nodo = next((n for n in wf["nodes"] if n["name"] == "Validar secreto"), None)
+    m = re.search(r'const SECRET = "([^"]+)"', (nodo or {}).get("parameters", {}).get("jsCode", ""))
+    if not m or m.group(1) in ("", "__PANEL_SECRET__", "***PREVIEW***"): sys.exit("no encontré un secreto válido en el nodo vivo 'Validar secreto'")
+    SECRET_FILE.write_text(m.group(1))
+    print(f"secreto recuperado del workflow {wf_id} ({len(m.group(1))} chars) -> {SECRET_FILE}. Ahora sí: --update {wf_id}")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true"); ap.add_argument("--activate", metavar="WF_ID"); ap.add_argument("--write-env", action="store_true")
     ap.add_argument("--update", metavar="WF_ID", help="PUT sobre el workflow existente reusando el secreto ya generado")
+    ap.add_argument("--recover-secret", metavar="WF_ID", help="copia el secreto del nodo vivo a %%TEMP%%/panel_webhook_secret.txt (GET; no lo imprime)")
     args = ap.parse_args()
     if args.activate:
         r = api(f"/workflows/{args.activate}/activate", "POST"); print(f"activado: {r.get('id')} active={r.get('active')}"); return
+    if args.recover_secret:
+        recover_secret(args.recover_secret); return
     if args.update:
-        if not SECRET_FILE.exists(): sys.exit("no hay secreto generado localmente (el nodo vivo lo tiene; regenerar implica cambiar el env del VPS)")
+        if not SECRET_FILE.exists(): sys.exit(f"no hay secreto generado localmente: correr --recover-secret {args.update} (lo copia del nodo vivo) y repetir")
         secret = SECRET_FILE.read_text().strip()
         evo_headers, evo_base, cw_token = live_secrets()
         wf = build(secret, evo_headers, evo_base, cw_token)

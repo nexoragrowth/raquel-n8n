@@ -54,7 +54,7 @@ print("3) n8n")
 base = (env("N8N_API_BASE") or require("N8N_BASE_URL")).rstrip("/"); key = require("N8N_API_KEY")
 def n8n(p):
     with urllib.request.urlopen(urllib.request.Request(f"{base}/api/v1{p}", headers={"X-N8N-API-KEY": key}), timeout=60) as r: return json.loads(r.read().decode())
-for wid, nombre in (("O155MqHgOSaNZ9ye", "v6"), ("Gm7ofyGohOJ2bI44", "sombra triaje"), ("jzxb5zUKCaJcvCgp", "panel acciones staff"), ("S5U6tSipzlgFHCkf", "helper notify grupo"), ("Yjl6kyLnALhIfbFX", "health check")):
+for wid, nombre in (("O155MqHgOSaNZ9ye", "v6"), ("Gm7ofyGohOJ2bI44", "sombra triaje"), ("jzxb5zUKCaJcvCgp", "panel acciones staff"), ("S5U6tSipzlgFHCkf", "helper notify grupo"), ("Yjl6kyLnALhIfbFX", "health check"), ("1UbmAtUMtTBN9Bn3", "vigía"), ("TKByjzVE8rGKTioT", "retención archivos")):
     try:
         w = n8n(f"/workflows/{wid}"); (ok if w.get("active") else bad)(f"{nombre}: active={w.get('active')} nodos={len(w.get('nodes', []))}")
     except Exception as e: bad(f"{nombre}: {e}")

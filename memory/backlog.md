@@ -1,5 +1,24 @@
 # Backlog — raquel-n8n
 
+## Retención + uso + audio del staff (7/9) → scripts listos, NADA aplicado (`docs/retencion-y-uso-2026-09-07.md`)
+- [ ] **P1** Orquestador, con OK de Lucas y EN ESTE ORDEN (`docs/retencion-y-uso-2026-09-07.md` §6): **0.**
+      `create_panel_acciones_staff.py --update jzxb5zUKCaJcvCgp` (audio + 400 por tipo inválido; antes `--recover-secret
+      jzxb5zUKCaJcvCgp` si falta `%TEMP%/panel_webhook_secret.txt`; con el satélite viejo un audio del panel nuevo sale como
+      `type: image`) → 1. `create_retencion_satelite.py --dry-run` → 2. `--ddl` → 3. deploy del panel (audio MP3 / borrado_at /
+      chip vencido confirmado / 410) + prueba real de audio al celular de Lucas + limpieza (regla 9) → 4. `--apply` → smoke
+      `POST /webhook/trigger-retencion-manual {"smoke":true}` (2 DELETE con 200 `[]`, `marcados 0`, 3 filas `fallidos 0` en
+      `retencion_log`, sin WhatsApp) → 5. `--activate <id>` → sumar el id a `scripts/check_triaje.py` → 6. hora de la primera
+      corrida → 7. `create_vigia_bot.py --update 1UbmAtUMtTBN9Bn3` + `trigger-vigia-manual` (`retencion_tabla true`, sin
+      `retencion_no_corrio`).
+- [ ] P2 Verificar la hora de la primera corrida automática de Retención (04:30 ART esperado; si corre 01:30 ART la instancia
+      ignora `settings.timezone` → `CRON = "30 7 * * *"` sin `TZ` y `--update`).
+- [ ] P2 Verificar en un iPhone y un Android que el MP3 del panel (lamejs, 48 kHz) se reproduce como audio en WhatsApp; si
+      Evolution/WhatsApp también reproducen el AAC fMP4 de Safari/Chrome, evaluar saltear la transcodificación en Safari.
+- [ ] P3 lamejs es LGPL-3.0 dentro del panel propietario (chunk dinámico aparte, anotado en `decisions.md`); alternativa MIT
+      si molesta.
+- [ ] P3 Huérfanos en `pacientes-media` (objeto sin fila en `media_entrantes`): listar desde `storage.objects` como panel-media.
+- [ ] P3 `limpiar_numero_demo.py`: opción para borrar `media_entrantes` + objetos del teléfono (hoy a mano).
+
 ## Panel UX "como WhatsApp Web" (pedido 6/9) → APLICADO 6/9
 - [x] 2026-09-06 Orden por último mensaje + filtro No leídos; alias manual (`pacientes.alias_panel`);
       envío de imágenes (Storage `panel-media` → `/send/media`); autor en burbujas; pushName real

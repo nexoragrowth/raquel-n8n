@@ -1,5 +1,52 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-07 madrugada (02:50→) — Retención + alertas de uso + audio del staff: scripts listos, NADA aplicado
+
+**Pedido de Lucas**: "¿todo lo de hoy puede saturar la base? dejame todo para que funcione y se autoregule" + mandar AUDIO
+desde el panel. Medido: base 20 MB de 500, Storage 9 MB de 1 GB (plan free); lo único que crece en serio son los adjuntos
+(video WhatsApp hasta 16 MB). Diseño y operación: `docs/retencion-y-uso-2026-09-07.md`.
+**Entregado lado bot (sin PUT/POST, sin escrituras, sin mensajes)**:
+- `scripts/create_retencion_satelite.py` → satélite `Áurea — Retención (archivos y bandeja)` (17 nodos, cron 04:30 Jujuy
+  vía `settings.timezone`, webhook manual `trigger-retencion-manual` con `{"smoke": true}` para ejercitar el DELETE sin
+  borrar nada): adjuntos del paciente > 90 días (DELETE REST `/storage/v1/object/pacientes-media` con supabaseApi
+  `H1PRagttKC5kxSzs` → `borrado_at = now()`), objetos de `panel-media` > 90 días (listados desde `storage.objects`, nunca
+  borrados por SQL), `mensajes_entrantes_live` > 365 días, log en `retencion_log` y WhatsApp a Lucas SOLO si falló.
+  `--dry-run` (default) / `--ddl` / `--apply` (exige DDL) / `--activate` / `--update`. JS en `retencion/*.js`.
+  **Dry-run corrido contra el v6 vivo y la base**: host v3 coincidente en 4 fuentes, borraría HOY 0/0/0, DDL falta.
+- DDL idempotente (`media_entrantes.borrado_at` + índice parcial + `retencion_log`): en el script (`--ddl`),
+  `rebuild_v3_schema.sql` §12/§13 y `create_media_entrantes.py` (creación fresca).
+- `scripts/create_vigia_bot.py`: `Query señales` suma `db_bytes` / `storage_bytes` / `storage_pacientes_bytes`;
+  `EVAL_JS` con `ventanaMin` por alerta (históricas 60 min) y 3 alertas nuevas con dedupe 24 h: `supabase_db_alto`
+  (> 400 MB), `supabase_storage_alto` (> 800 MB) y `vigia_query_rota` (la query no devolvió nada → el Vigía queda ciego).
+  Query validada con SELECT real (storage.objects legible con el rol del pooler). Falta `--update 1UbmAtUMtTBN9Bn3`.
+- `scripts/create_panel_acciones_staff.py`: `Validar secreto` acepta `media_tipo` `audio`, filename conserva la extensión
+  al recortar a 80, tipo vacío si no hay `media_url`; `Armar fila memoria` ya escribía `[audio] <url>\n<caption>`
+  (comentario actualizado). Falta `--update jzxb5zUKCaJcvCgp` (necesita el secreto local en `%TEMP%`).
+- `tests/test_retencion_y_staff.js` → **98/98 OK** (Validar/Memoria del staff, Vigía, Retención). `py_compile` OK.
+**Revisión y corrección (7/9 ~06:00, ambos repos, nada aplicado)**: (1) el smoke del alta avisaba en falso: con 0 vencidos
+`ids=[]` → `queryReplacement ''` → n8n no pushea `$1` (`there is no parameter $1`) → `marcados NaN` → WhatsApp; ahora
+`Q_MARCAR_PARAM = ids.join('|') || '-'` y `resumen.js` no exige el UPDATE sin ids (test con el comportamiento real). (2)
+`Q_PACIENTES` filtra `bucket = 'pacientes-media'` (sin starvation), `Q_PANEL` excluye `is_delete_marker`; `resumen.js` no cuenta
+el path fantasma del smoke y deja **advertencia** (aviso sin fallido) si Storage devolvió 0 de N reales. (3) `--dry-run` sigue
+contando aunque n8n no responda. (4) Vigía: `retencion_no_corrio` (24 h) si `retencion_log` existe y no tiene fila en 26 h,
+leído con `to_regclass` + `query_to_xml` para no romper la query mientras la tabla no exista (SELECT validado). (5) Staff:
+`media_tipo` desconocido con URL → error 400 (`¿Sin secreto?` → `Responder 401`/`Responder 400`, 17 nodos; antes caía a
+`image` y mandaba a Evolution una URL no-imagen al paciente); `--recover-secret <id>` copia el secreto del nodo vivo a `%TEMP%`.
+(6) Panel: lock síncrono del mic (`iniciandoRef`/`montadoRef`, doble click o cambio de chat con el prompt abierto dejaba un
+stream grabando); formato ÚNICO MP3 48 kHz (webm/opus primero, AAC de Safari también se transcodifica; `OfflineAudioContext`
+a 48 kHz: con un headset BT a 8 kHz lamejs sacaba MPEG-2.5 que el server rechazaba; el server ahora acepta cualquier sync de
+capa III); chip "vencido" solo con 404/410 confirmado (`clasificarFalla`: HEAD a `/api/media` sin seguir el 302 / GET de 1
+byte a la URL pública; Supabase responde `400 {"statusCode":"404"}` para un objeto ausente, verificado) y chip neutro "No se
+pudo reproducir acá · abrir" para el resto; `<audio>` del staff `preload="none"`; `video/*` rechazado salvo OGG con
+Opus/Vorbis; mic se oculta solo si `permissions.query` da `denied`; `NotSupportedError` prueba el siguiente mime. `tsc` y
+`pnpm build` verdes.
+**Orden de despliegue** (orquestador, con OK de Lucas; detalle en `docs/retencion-y-uso-2026-09-07.md` §6): **0.** staff
+`--update jzxb5zUKCaJcvCgp` (antes `--recover-secret` si falta `%TEMP%/panel_webhook_secret.txt`) → 1. `--dry-run` → 2. `--ddl`
+→ 3. deploy del panel + prueba real de audio (Chrome → `.mp3`) + limpieza → 4. `--apply` → smoke `{"smoke":true}` (2×200 `[]`,
+`marcados 0`, 3 filas `fallidos 0`, sin WhatsApp) → 5. `--activate <id>` + `check_triaje.py` → 6. hora de la primera corrida
+(04:30 ART) → 7. Vigía `--update 1UbmAtUMtTBN9Bn3` + `trigger-vigia-manual` (esperado: `retencion_tabla true`, sin
+`retencion_no_corrio`). El staff `--update` va PRIMERO: con el satélite viejo un audio del panel nuevo sale como `type: image`.
+
 ## 2026-09-07 madrugada — Media entrantes APLICADO al v6 + prueba real de Lucas + fix pestaña congelada
 
 - **v6**: `scripts/apply_media_entrantes.py --apply` corrido con OK de Lucas ("dale") a las 02:08 ART:

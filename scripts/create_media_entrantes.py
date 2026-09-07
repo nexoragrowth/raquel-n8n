@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS public.{TABLA} (
     bytes      INTEGER,
     filename   TEXT,                                                -- original (documentos) o <id>.<ext>
     caption    TEXT,                                                -- texto que acompañó al adjunto
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    borrado_at TIMESTAMPTZ                                          -- lo marca el satélite Retención al borrar el objeto (create_retencion_satelite.py --ddl la agrega en bases viejas)
 );
 {INDICES["idx_media_entrantes_key_id"]};
 {INDICES["idx_media_entrantes_tel_created"]};

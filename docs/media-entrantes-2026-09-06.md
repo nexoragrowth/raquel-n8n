@@ -80,6 +80,10 @@ El prefijo no cambia (Pre-filtro Cierre, Router y Sub-Agent Confirmar miran `[IM
   RLS habilitado **sin policies** (como el resto del v3). Agregada a la publicación `supabase_realtime`
   (también en `TABLAS` de `apply_realtime_publication_v3.py`).
 - `--estado` devuelve exit 0 si bucket privado + tabla + índices + RLS + publicación están; `--apply` es idempotente.
+- **Retención (2026-09-07)**: columna `borrado_at TIMESTAMPTZ NULL` (+ índice parcial `idx_media_entrantes_vivos_created`) que
+  marca el satélite `Áurea — Retención` cuando borró el objeto de Storage (adjuntos > 90 días, lote de 200 por noche). DDL
+  idempotente: `scripts/create_retencion_satelite.py --ddl` y `rebuild_v3_schema.sql` §12/§13 (`retencion_log`). Diseño y
+  operación: `docs/retencion-y-uso-2026-09-07.md`.
 
 ## 5. Límites y observaciones con evidencia
 - Tamaños reales (13 días, 2048 execs): imagen ≤ 706 KB, ptt ≤ 608 KB (297 s), documento ≤ 2,2 MB, sticker ≤ 486 KB, video
@@ -98,6 +102,14 @@ El prefijo no cambia (Pre-filtro Cierre, Router y Sub-Agent Confirmar miran `[IM
   Pedir OK a Lucas como cambio aparte (regla dura 5: dos capas).
 - Bugs preexistentes que NO se tocan: `contactsArrayMessage` no detectado por Extraer Datos; audio con `Info.MediaType=''`
   muere en `Filtrar duplicados y basura` (Preparar ya lo cubriría si llegara).
+- **Adjuntos vencidos (2026-09-07)**: a los 90 días el objeto se borra de `pacientes-media` y la fila queda con `borrado_at`.
+  El panel trae `borrado_at` en `getChatData` y muestra el chip "Adjunto vencido (se guardan 90 días)" en vez de la imagen;
+  `/api/media/<id>` responde **410 Gone** si `borrado_at` no es null (404 sigue siendo "no existe"). Un `UPDATE` no dispara evento
+  en vivo (el bus escucha INSERT): el chip aparece al próximo refetch. Los adjuntos del staff (`panel-media`, públicos) también se
+  borran a los 90 días; la URL queda en la memoria y el panel cae al chip cuando Storage confirma que el objeto no está. El chip
+  "vencido" se reserva para un 404/410 confirmado por el servidor (`HEAD /api/media/<id>` sin seguir el 302; GET de 1 byte a la
+  URL pública): el `onError` de `<audio>/<video>/<img>` solo no distingue "borrado" de "este navegador no lo reproduce" (las notas
+  ogg/opus del paciente en Safari), y en ese caso el panel muestra "No se pudo reproducir acá · abrir" con link de descarga.
 
 ## 6. Cómo probar (regla dura 8: camino completo, y 9: limpiar residuos)
 **Orden de despliegue (obligatorio, panel ANTES que v6)**: el panel deployado hoy (HEAD `2e5c8c0`) mostraría el token

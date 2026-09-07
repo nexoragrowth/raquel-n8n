@@ -553,3 +553,63 @@ foto del paciente no debe aparecer en la burbuja verde; y un `<img>` cacheado no
 (se pierde el archivo); filtrar el token en `Banlist Validator` ya (fuera de la rama multimedia: pide OK aparte, P2).
 **Revisable**: sí — si Extraer Datos garantiza dígitos, (a) es inocua; (c) se puede quitar si el runner demuestra
 que nunca emite `{error}` sin `text`.
+
+## 2026-09-07 — Retención propia (90/90/365 días) en un satélite n8n + alertas de uso en el Vigía, en vez de subir de plan
+
+**Decisión**: lo único que puede saturar el Supabase v3 free (500 MB base / 1 GB storage) son los adjuntos; se crea el
+satélite `Áurea — Retención (archivos y bandeja)` (cron 04:30 Jujuy) que borra adjuntos del paciente
+(`pacientes-media`) y del staff (`panel-media`) con más de 90 días y filas de `mensajes_entrantes_live` con más de
+365, en lotes de 200, marcando `media_entrantes.borrado_at` y dejando `retencion_log`; avisa a Lucas SOLO si falló.
+El Vigía suma `supabase_db_alto` (> 400 MB) y `supabase_storage_alto` (> 800 MB) con dedupe de 24 h (`ventanaMin`
+por alerta) y `vigia_query_rota` (si la query única falla, ninguna alerta puede salir). Memoria y `conversaciones`
+no se tocan (40 MB/año).
+**Razón**: Lucas pidió "que funcione y se autoregule"; 90 días cubre cualquier seguimiento clínico razonable y el
+panel muestra "Adjunto vencido" en vez de romperse. Storage se borra SOLO por la API REST (borrar `storage.objects`
+por SQL deja el blob en S3 y sigue contando); `panel-media` se lista desde `storage.objects` porque `/object/list`
+es jerárquico y devuelve carpetas sin `created_at`; un objeto ya inexistente cuenta como OK (si no, se reintentaría
+cada noche). ids al UPDATE unidos por `|` (n8n parte `queryReplacement` por coma). Zona horaria vía
+`settings.timezone` (comportamiento documentado del Schedule Trigger) con verificación de la primera corrida.
+**Alternativas descartadas**: subir a Pro ya (USD 25/mes por 9 MB usados); borrar por SQL; `POST /object/list` con
+`prefix ''`; borrar solo lo que Storage confirmó (deja huérfanas reintentando); avisar a Lucas en cada corrida (ruido).
+**Revisable**: sí — `DIAS_*`, `LOTE`, `CRON`/`TZ` son constantes + `--update`; los umbrales del Vigía son
+`DB_ALTO_MB` / `STORAGE_ALTO_MB` en `EVAL_JS`.
+
+## 2026-09-07 — Audio del staff desde el panel: `/send/media` type `audio`, formato m4a/mp3, memoria `[audio] <url>`
+
+**Decisión**: el satélite `Panel — acciones staff` acepta `media_tipo: audio` y lo pasa tal cual a `/send/media`
+de Evolution GO; el content de la memoria es `[audio] <url>` (+ `\n` + caption), mismo patrón que `[imagen]`.
+`filename` saneado conserva la extensión al recortar a 80 chars. El panel graba con MediaRecorder, manda m4a tal cual y
+transcodifica webm/opus → mp3 en el navegador (lamejs) antes de subir a `panel-media`.
+**Razón**: verificado 7/9 con un envío real: `type: 'audio'` → 200; `'ptt'` → 500 "invalid media type"; no existe
+`/send/audio`. WhatsApp reproduce mp3 / m4a / ogg-opus; webm no es confiable en iOS. Sin la extensión, WhatsApp
+puede no reconocer el mime del audio/documento.
+**Alternativas descartadas**: transcodificar en el servidor (ffmpeg en el container del panel: peso y CPU en el VPS);
+subir el webm crudo (iOS); marcador nuevo en la memoria (el panel ya parsea `[tipo] <url>`).
+**Revisable**: sí — si Evolution GO suma `ptt` real (nota de voz con forma de onda) se cambia el `type`.
+
+## 2026-09-07 — Revisión de retención/audio: smoke con `'-'`, `media_tipo` inválido = 400, MP3 único, "vencido" solo confirmado
+
+**Decisión** (correcciones tras el mapa de lectura del 7/9, ambos repos, nada aplicado):
+1. `Pacientes: marcar borrado_at` recibe `ids.join('|') || '-'`: un `queryReplacement` vacío hace que n8n no pushee `$1`
+   (`stringToArray` filtra entradas vacías → `there is no parameter $1`) y el smoke del alta avisaba en falso. Se eligió el
+   parámetro `'-'` y no un IF antes del UPDATE para que el smoke ejercite TODOS los nodos (`marcados 0` real).
+2. `Validar secreto` del satélite staff responde `media_tipo invalido` (400 vía `¿Sin secreto?` → `Responder 400`) ante un
+   tipo desconocido con URL; ya no cae a `image`. Compatible hacia atrás; su `--update` va ANTES del deploy del panel.
+3. El panel manda SIEMPRE MP3 (mono 64 kbps, 48 kHz vía `OfflineAudioContext`): MediaRecorder pide webm/opus primero y el
+   AAC de Safari también se transcodifica; solo `audio/mpeg` pasa tal cual. El server acepta cualquier frame sync de capa III.
+4. El chip "Adjunto vencido (se guardan 90 días)" solo con 404/410 confirmado por el servidor; otra falla → chip neutro
+   "No se pudo reproducir acá · abrir" con link.
+5. Vigía: `retencion_no_corrio` (26 h, dedupe 24 h) leído con `to_regclass` + `query_to_xml`; Retención: advertencia (sin
+   fallido) si Storage devolvió 0 de N reales; `Q_PACIENTES` filtra bucket; `--recover-secret` en el script del staff.
+6. lamejs 1.2.1 es **LGPL-3.0** dentro del panel propietario: va en un chunk dinámico aparte (`import()` de `lib/lamejs-cjs.cjs`),
+   se deja anotado; alternativa MIT si algún día molesta (Opus→OGG nativo de Firefox, o transcodificar en el server).
+**Razón**: el harness mockeaba el UPDATE con `{marcados:0}` y tapaba el `$1` faltante (verificado en n8n 2.9.4, mismo
+typeVersion); el camino principal del staff (Chrome Windows → AAC fMP4 crudo) era el NO probado, el MP3 (111 frames MPEG-1
+contiguos) sí; `MediaError.code` es 4 para 404, 410, bytes corruptos y contenedor no soportado, así que un `onError` solo
+mostraba "vencido" a las notas ogg/opus del paciente en Safari; `new AudioContext()` toma la frecuencia del dispositivo de
+salida (8 kHz con un headset BT en HFP) y lamejs codificaba MPEG-2.5 que el server rechazaba sin explicación.
+**Alternativas descartadas**: IF antes del UPDATE (el smoke no ejercitaría el UPDATE); seguir mandando `.m4a` de Chrome sin
+verificarlo en iPhone/Android; `errorWorkflow` en Retención (ningún satélite lo usa; el Vigía ya vigila la ausencia de
+filas); subselect directo a `retencion_log` en el Vigía (rompería la query entera mientras la tabla no exista).
+**Revisable**: sí — `RETENCION_MAX_H` en `EVAL_JS`; el orden de `MIMES_GRABACION` en `lib/audio-mp3.ts` si Evolution/WhatsApp
+confirman que reproducen el AAC fMP4 (entonces se podría saltear la transcodificación en Safari).
