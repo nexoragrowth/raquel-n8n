@@ -1,5 +1,27 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-07 04:25 ART — APLICADO: Retención + Vigía uso + audio desde el panel (todo en producción)
+
+- **Satélite staff** `jzxb5zUKCaJcvCgp` actualizado (`--update`, 17 nodos): acepta `media_tipo: audio`, tipo
+  desconocido → 400 "media_tipo invalido", sin secreto → 400. E2E: OGG a `panel-media` + webhook audio → 200
+  (Lucas recibió el audio), `ptt` → 400. Residuo del E2E borrado (memoria 6396, objeto, label humano → bot).
+- **DDL** aplicado (`--ddl`): `media_entrantes.borrado_at` + índice parcial + `retencion_log`.
+- **Panel** `191381b` deployado: micrófono en el composer (MediaRecorder → MP3 mono con lamejs; único
+  formato saliente porque Evolution GO no tiene ptt y WhatsApp reproduce mp3 en todos los teléfonos),
+  clip acepta mp3/m4a/ogg/wav, `enviarAudioAction`, render `[audio]/[video]/[document] <url>` del staff,
+  adjuntos vencidos (410 → chip "Adjunto vencido (se guardan 90 días)"). Falta la prueba real del
+  micrófono desde Chrome por Lucas (y verificar que el mp3 suene en iPhone/Android: P2).
+- **Satélite Retención** `TKByjzVE8rGKTioT` creado y ACTIVO (cron 04:30 Jujuy): smoke por webhook
+  `trigger-retencion-manual {"smoke":true}` → 200/200, marcados 0, 3 filas en `retencion_log`, sin WhatsApp.
+  Primera corrida real: 2026-09-07 04:30 ART (verificar `retencion_log` / startedAt). Días: 90 pacientes-media,
+  90 panel-media, 365 bandeja (constantes arriba de `create_retencion_satelite.py`).
+- **Vigía** `1UbmAtUMtTBN9Bn3` actualizado (`--update`) y disparado a mano: señales db_bytes 21,4 MB,
+  storage 9,2 MB, retencion_tabla true, 0 alertas. Alertas nuevas: base > 400 MB, storage > 800 MB,
+  retención sin correr 26 h, query rota (dedupe 24 h). `check_triaje.py` ahora también vigila Vigía y Retención.
+- Números medidos hoy (para responder "¿satura?"): base 20 MB / 500, storage 9 MB / 1 GB, n8n SQLite 2,8 GB
+  (poda 14 días por default), disco VPS 63 GB libres.
+- Pendiente de Lucas: probar el micrófono; decidir si conserva sus mensajes de prueba (foto+audio del 02:24).
+
 ## 2026-09-07 madrugada (02:50→) — Retención + alertas de uso + audio del staff: scripts listos, NADA aplicado
 
 **Pedido de Lucas**: "¿todo lo de hoy puede saturar la base? dejame todo para que funcione y se autoregule" + mandar AUDIO
