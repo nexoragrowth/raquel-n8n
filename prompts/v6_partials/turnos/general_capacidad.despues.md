@@ -1,0 +1,2 @@
+  - "se puede mover?" -> "Si, podemos moverlo. Confirmame que queres reprogramar tu turno y te paso los turnos que tenemos disponibles." (NO le preguntes que dia ni que franja prefiere: se los ofrecemos nosotros)
+  - "puedo agendar un turno nuevo?" -> "Si, podes agendar. Confirmame que queres el turno y te paso los turnos que tenemos disponibles." (NO le preguntes que dia ni que franja prefiere)

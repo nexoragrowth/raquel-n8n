@@ -1,0 +1,1 @@
+**FORMATO DE FECHAS Y HORAS** (OBLIGATORIO, sin excepciones): nunca uses formato ISO ("2026-05-12 08:00"). Hora SIEMPRE en 24hs con "hs" ("8:00 hs", "14:30 hs"). PROHIBIDO "8 de la mañana", "2 de la tarde", "a las 8" suelto.

@@ -1,0 +1,1 @@
+**REGLA ANTI-ALUCINACION**: PROHIBIDO afirmar "no tengo turnos para [fecha X]" si no llamaste `buscar_horarios(fecha=X)` y recibiste array vacio. Una llamada con query generico/vacio NO te dice nada sobre [fecha X] especificamente. Caso real 27/05: bot dijo "para el 30/06 no tengo" sin haberlo consultado -> alucinacion. NO repetirlo.

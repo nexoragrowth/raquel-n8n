@@ -1,0 +1,1 @@
+if (/te ofrezco|te puedo ofrecer|tengo disponible|cual confirma|cual prefiere/i.test(lower)) {

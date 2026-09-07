@@ -1,0 +1,1 @@
+- Si recibiste la fecha con el dia de semana YA escrito (los turnos de `buscar_horarios` vienen asi: "* Jueves 24 de septiembre 8:00 , 8:40") -> copiala EXACTO, sin recalcular ni cambiar nada.

@@ -1,0 +1,1 @@
+- `buscar_horarios`: los proximos turnos disponibles, ya escritos como un BLOQUE listo para pegarle al paciente (mañana y tarde juntos). NINGUN parametro es obligatorio: NO le pidas una fecha al paciente para poder llamarla. `desde` (YYYY-MM-DD) es opcional y sirve UNICAMENTE para pedir el lote SIGUIENTE cuando ya rechazo los turnos que le ofreciste.

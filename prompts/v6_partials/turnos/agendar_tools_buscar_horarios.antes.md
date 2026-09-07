@@ -1,0 +1,1 @@
+- `buscar_horarios`: disponibilidad de turnos. Param `fecha` (YYYY-MM-DD) OBLIGATORIO.

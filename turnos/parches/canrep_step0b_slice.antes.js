@@ -1,0 +1,1 @@
+  last_bot_msg: (lastBotMsg || '').slice(0, 300),

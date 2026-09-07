@@ -1,5 +1,39 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-07 20:55 ART — APLICADO: formato de turnos pedido por la Dra. Raquel (3 workflows)
+
+**Pedido textual de Raquel (WhatsApp, 15:39-15:55)**: no nombrar Dentalink al paciente; ofrecer el bloque
+agrupado por mañana/tarde con al menos 2 de cada una, las más próximas; y NO preguntar franja ni fecha
+("nosotros atendemos en horarios y días específicos... solo procedemos en decirles qué turnos disponemos
+y ellos eligen"). Bloque final en `docs/turnos-formato-2026-09-07.md`.
+
+**Aplicado con `scripts/apply_turnos_formato_raquel.py --apply`** (backups PRE/POST de los 3 en
+workflows/history/, todas las verificaciones post-PUT en verde):
+- `Sub-WF - Buscar Horarios Validado` (GuDQ9VmKWZvQnerV): 6 → 22 nodos. `Format Slots` arma el bloque
+  listo para copiar; el token de Dentalink SALE del jsCode (ahora paginado por cursor en nodos
+  httpRequest con la credencial "Header Auth account 3"): de hasta 91 llamadas (~80 s) a 6 como techo
+  (~2 s típico). `fecha` deja de ser obligatoria (sin fecha = hoy, Jujuy) y aparece `desde` para el
+  lote siguiente.
+- `Sub-WF - CancelarReprogramar` (5cAWJxiWJ50hxEq3): 6 nodos editados. **De acá salían las 3 capturas**,
+  no del `Sub-Agent Cancelar` (que está HUÉRFANO, sin conexión de entrada, desde hace meses). Step 5 ya
+  no pregunta franja/fecha; Step 0b aprende a reconocer el bloque y arrastra el lote; al 2º rechazo escala.
+  `Step 6b: GET Agendas` (httpRequest) → `Step 6b: Buscar Horarios (bloque)` (executeWorkflow): **único
+  cambio estructural, lo primero a mirar en la prueba real**.
+- `v6` (O155MqHgOSaNZ9ye): 8 campos, 0 conexiones. Tool `buscar_horarios` reescrita; prompts de Agendar
+  (10 fragmentos), Cancelar, General y Formatting Agent; `Necesita Formatting?` y `Split en Mensajes`
+  con 3 capas para que el bloque llegue INTACTO (bypass + guard determinístico + regla del prompt).
+
+**Bugs latentes encontrados y arreglados en el camino** (no los pidió nadie, habrían roto el pedido):
+- Step 0b del canrep no reconocía el bloque nuevo → el paciente elegía un turno y se perdía.
+- `last_bot_msg` se guardaba cortado a 300 chars; el bloque mide ~230 + el saludo → se cortaba en
+  "Por la tarde".
+- El paciente que rechazaba el bloque recibía el MISMO bloque indefinidamente, sin escalar nunca.
+- `siguiente_desde` usaba el máximo de las dos franjas → el lote 2 se salteaba mañanas más próximas.
+
+**Pendiente**: prueba real punta a punta (pedir turno / "a la tarde" / "ninguno me sirve" / reprogramar)
+y limpieza con `limpiar_numero_demo.py`. Tests: `tests/test_turnos_formato.js` 87 checks; los 5 suites
+del repo en verde.
+
 ## 2026-09-07 (tarde) — Adjuntos del STAFF (rama fromMe): REDISEÑADO + 2ª ronda de correcciones, sin aplicar
 
 El primer diseño (5 nodos `Media: * (staff)` colgados de `Es fromMe?`[0] + jsCode nuevo en `Build fromMe AI memory`)
