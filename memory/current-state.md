@@ -1,5 +1,42 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-08 16:15 ART — Recordatorio DISTINTO para las CONSULTAS: scripts listos, tests verdes, dry-run limpio, NADA aplicado
+
+**Pedido textual de la Dra. (WhatsApp 09:20)**: los turnos con "puntito amarillo" son consultas (primera visita); a esos
+mandarles un recordatorio propio que deje claro que "la confirmación es sí o sí con el pago" (bloque textual en
+`docs/recordatorio-consultas-2026-09-08.md` §1). Workflow: `Recordatorio de Turno 48HS` (`7RqTApkvVavRmq3R`, ACTIVO).
+
+- **Detección**: `motivo_atencion` EMPIEZA con "consulta" (`/^consulta\b/i`, trim; corrección de la tarde: el substring
+  `/consulta/i` tomaba "Control post consulta" y le habría pedido el pago a un paciente en tratamiento). Verificado sobre
+  66 citas próximas + 57 enviadas en 14 días: el único motivo con esa palabra es `Consulta Ortodoncia ` (con espacio
+  final); `tratamiento_sin_asignar` es 0 en todas (no sirve). Las 5 consultas de los últimos 14 días recibieron el genérico.
+- **Precio dinámico** desde `knowledge_base` id 21 (la Dra. lo edita en el panel): subconsulta `precio_contenido` en el SQL
+  de `Gate - Leer config` (NO se puede insertar un nodo entre `Solo citas activas` y `Preparar mensaje`: emparejamiento
+  por `$itemIndex`), leída con try/catch. Camino manual (webhook) → fallback `$50.000`.
+- **3 nodos, 0 conexiones**: `Preparar mensaje` (jsCode = `recordatorios/preparar_mensaje.js`), `Gate - Leer config`
+  (`recordatorios/gate_leer_config.sql`), `Insert recordatorios_enviados` (+ `motivo_atencion` text, `es_consulta` boolean).
+  Todo lo que NO es consulta queda BYTE A BYTE (tests contra el snapshot vivo `recordatorios/preparar_mensaje.vivo_2026-09-08.js`).
+- **Script** `scripts/apply_recordatorio_consultas.py`: `--dry-run` (default) / `--ddl` / `--apply` / `--rollback`. **Orden
+  obligatorio `--ddl` → `--apply`** (el Postgres v2.6 valida contra la tabla viva y el Insert corre después del envío).
+  Hoy la tabla NO tiene las columnas (dry-run: "FALTA --ddl"). DDL también en `rebuild_v3_schema.sql` §4.
+- Tests: `tests/test_recordatorio_consultas.js` **87/87** (74 + 13 de la ronda de corrección); los otros 5 suites sin
+  regresión (83/69/98/45/87).
+- **Ronda de corrección (misma tarde, 2026-09-08)**: regex de detección anclado (`/^consulta\b/i`); regex del precio
+  `/\$\s*(\d{1,3}(?:[.,]\d{3})+|\d{4,})/` (cualquier cantidad de espacios; "$50mil"/"$5" → fallback en vez de "$50");
+  script: `flag_vivo()` con mensaje claro si falta la línea TEST_MODE, `gate_suspender_intacto` mira la query REAL del
+  nodo, `--rollback` solo acepta un PRE (nombre `_PRE_` + jsCode = snapshot vivo; un POST re-aplicaría); doc §6.4:
+  el primer envío real con el bloque nuevo sale por el CRON (si se aplica el 8/9 → mié 9/9 08:00 ART → vie 11/9, cita
+  8899 consulta) y hay checklist de revisión + rollback listo; panel: `V3Recordatorio` con `motivo_atencion?` /
+  `es_consulta?` opcionales (solo tipos, sin UI). NO aplicado: `motivo_atencion || null` (sin poder probar el null en el
+  Postgres v2.6 punta a punta), R7 (decisión de negocio), alinear el regex del v6 (PUT aparte).
+- **Hechos que corrigen premisas**: el cron es `0 13 * * 1-5` sin timezone → corre **08:00 ART lunes a viernes** (instancia
+  UTC+2), no 9:00; el 24h NUNCA sale por cron (57/57 fueron 72h) → la variante consulta-24h solo por webhook manual.
+- **Pendiente**: (1) Lucas confirma con la Dra. que puntito amarillo = motivo `Consulta Ortodoncia`; (2) la Dra. valida la
+  frase del 24h; (3) OK → `--ddl` → `--apply` → prueba real: crear en Dentalink una cita "Consulta Ortodoncia" para
+  `Test - Lucas Silva` (608) y `POST /webhook/trigger-recordatorios-manual {"fecha_target":"YYYY-MM-DD","id_paciente_filter":[608]}`
+  (ints; NO usar el botón "adelantar" del panel: va a todos) → limpieza regla 9 + borrar las filas de
+  `recordatorios_enviados` de la cita + anular la cita. Decisión abierta R7: el bot confirma cualquier "confirmo" sin pago.
+
 ## 2026-09-07 20:55 ART — APLICADO: formato de turnos pedido por la Dra. Raquel (3 workflows)
 
 **Pedido textual de Raquel (WhatsApp, 15:39-15:55)**: no nombrar Dentalink al paciente; ofrecer el bloque

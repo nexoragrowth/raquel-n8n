@@ -51,3 +51,10 @@
 - **¿Qué formato quiere Lucas para consolidar Dentalink+KB "en un formato unificado" para que
   Raquel lo revise?** Mencionado como action item el 15/8, sin definir todavía si es un doc,
   una vista nueva del panel, o un export.
+- **¿El "puntito amarillo" de Dentalink es exactamente el motivo de atención `Consulta Ortodoncia`?** (8/9) Es lo
+  único que distingue una primera visita en la API (`tratamiento_sin_asignar` es 0 en todas). Si hay otro motivo de
+  primera visita o consultas cargadas sin motivo (`No registra motivo`, 1 hoy), reciben el genérico. Bloquea el `--apply`
+  de `apply_recordatorio_consultas.py`. La regla quedó ANCLADA (`/^consulta\b/i`): si la Dra. nombra un motivo que no
+  empieza con "consulta" (p. ej. "Primera Consulta"), hay que ajustar la línea `const es_consulta` y los tests.
+- **¿El bot debe dejar de confirmar consultas sin comprobante?** (8/9, R7) El template nuevo dice "si ya está abonado
+  responda confirmo", pero el Sub-Agent Confirmar marca confirmado cualquier "confirmo". Decisión de la Dra./Lucas.

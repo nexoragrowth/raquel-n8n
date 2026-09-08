@@ -668,3 +668,42 @@ workflow activo, fuera de la rama fromMe y del alcance autorizado — queda como
 **Revisable**: el tope de 8-15 dígitos del teléfono descarta un LID de 16-17 (los reales suelen ser de 15, y un jid
 de grupo pelado son 18): si aparece un LID largo real, se sube el tope y se re-corre `test_media_nodos.js` §23. El
 plan B del Logger sigue siendo válido si algún día se quiere que `conversaciones` también quede correcta.
+
+## 2026-09-08 — Recordatorio de consultas: detección por `motivo_atencion`, precio vía el SQL del Gate, regex tolerante
+
+**Decisión**: (1) una cita es consulta si `motivo_atencion` contiene "consulta" (i, trim); (2) el precio de la consulta se
+lee de `knowledge_base` id 21 con una subconsulta en `Gate - Leer config` (no con un nodo nuevo) y `Preparar mensaje` lo
+toma con try/catch, fallback `$50.000`; (3) el regex del precio es `/\$\s?(\d[\d.,]*)/` (+ recorte de punto final), NO el
+`/\$[\d.,]+/` estricto del v6; (4) las columnas nuevas de `recordatorios_enviados` son nullable y las filas viejas quedan NULL.
+**Razón**: (1) es el único campo que lo distingue (`tratamiento_sin_asignar` = 0 en 66/66; las consultas también traen
+`nombre_tratamiento: 'Nuevo plan de tratamiento'`). (2) `Preparar mensaje` empareja la cita por
+`$("Solo citas activas").all()[$itemIndex]`: cualquier nodo intercalado rompe el emparejamiento (regresión real del 11/8);
+el Gate corre una vez por corrida y ya tiene credencial Postgres. (3) con el regex estricto, "$ 55.000" (espacio) caía al
+fallback y el paciente recibía un precio VIEJO en silencio; el tolerante devuelve lo mismo que el v6 en todo lo que el v6
+matchea. (4) 5 de las últimas 57 enviadas eran consultas: backfillear `false` sería mentir.
+**Alternativas descartadas**: `tratamiento_sin_asignar` / `nombre_tratamiento` (no discriminan); nodo `Precio (KB)` antes de
+`Preparar mensaje` (rompe `$itemIndex`); hardcodear `$50.000` (la Dra. lo edita en el panel); cambiar el regex del v6
+para alinearlos (PUT al v6 fuera de alcance); `es_consulta NOT NULL DEFAULT false`.
+**Revisable**: sí — si la Dra. confirma otro motivo para el puntito amarillo se ajusta la regla (un solo regex en
+`recordatorios/preparar_mensaje.js`); si se suma el nodo de precio para el camino manual (R4), `Preparar mensaje` lo toma
+como segunda fuente.
+
+## 2026-09-08 (corrección, misma tarde) — Recordatorio de consultas: regex anclado al inicio y precio solo con importe real
+
+**Decisión**: (1) `es_consulta = /^consulta\b/i` (anclado al inicio de `motivo_atencion` trimmeado) en lugar del substring
+`/consulta/i` de la mañana; (2) el regex del precio pasa a `/\$\s*(\d{1,3}(?:[.,]\d{3})+|\d{4,})/`: cualquier cantidad de
+espacios después del `$` y solo importes con miles (`dd.ddd`/`dd,ddd`) o de 4+ dígitos; (3) `--rollback` del script solo
+acepta un archivo con `_PRE_` en el nombre cuyo 'Preparar mensaje' sea el snapshot vivo conocido; (4) el primer envío real
+con el bloque nuevo se revisa a mano la mañana del primer cron post-apply (doc §6.4), con el rollback listo.
+**Razón**: (1) el substring daba `true` para "Control post consulta" o "Consultar precio" → le pediría el pago de la
+consulta a un paciente en tratamiento; con el anclaje el error posible es el inverso (una consulta con otro motivo recibe el
+genérico de hoy, sin daño). Cubre el 100% de los motivos reales de Dentalink ('Consulta Ortodoncia '). (2) `\s?` dejaba
+"$  70.000" en el fallback y `\d[\d.,]*` imprimía "$50" para "$50mil". (3) un `Recordatorio_POST_*.json` tiene el id
+del WF y pasaba el guard: "revertir" desde ahí re-aplicaba. (4) la prueba manual por webhook no pasa por el Gate: el camino
+KB → precio se ejercita por primera vez en producción, con un paciente real.
+**Alternativas descartadas**: igualdad exacta con 'Consulta Ortodoncia' (más frágil ante un cambio de picklist en Dentalink);
+`motivo_atencion || null` en la salida (no se pudo verificar punta a punta que el Postgres v2.6 acepte null, y el Insert
+corre después del envío; Dentalink manda 'No registra motivo', no null); alinear el regex del v6 (PUT aparte, backlog P3);
+sumar "Tipo: consulta" a la NOTA INTERNA de `Guardar en Chat Memory` (4º nodo, fuera del alcance declarado; backlog P3).
+**Revisable**: sí — si la Dra. nombra un motivo de primera visita que no empiece con "consulta", se cambia la línea
+`const es_consulta` de `recordatorios/preparar_mensaje.js` y los casos de motivo de `tests/test_recordatorio_consultas.js`.

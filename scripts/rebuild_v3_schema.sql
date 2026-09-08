@@ -128,6 +128,15 @@ CREATE TABLE IF NOT EXISTS recordatorios_enviados (
 CREATE INDEX IF NOT EXISTS idx_recordatorios_telefono   ON recordatorios_enviados (telefono);
 CREATE INDEX IF NOT EXISTS idx_recordatorios_cita_fecha ON recordatorios_enviados (id_cita_dentalink, fecha_turno);
 
+-- Consultas (2026-09-08, pedido de la Dra. Raquel): las citas cuyo motivo_atencion EMPIEZA con "consulta" (/^consulta\b/i)
+-- (primera visita, "puntito amarillo" en Dentalink) reciben un recordatorio distinto que exige el pago para
+-- confirmar. El WF guarda el motivo tal cual (trim) y el flag para trazabilidad y para el panel. Filas
+-- anteriores quedan NULL (= desconocido; NO backfillear como false: 5 de las últimas 57 eran consultas).
+-- Mismo DDL que scripts/apply_recordatorio_consultas.py --ddl (idempotente; correr ANTES del --apply:
+-- el nodo Postgres v2.6 valida las columnas contra la tabla viva y el Insert corre DESPUÉS del envío).
+ALTER TABLE recordatorios_enviados ADD COLUMN IF NOT EXISTS motivo_atencion TEXT;
+ALTER TABLE recordatorios_enviados ADD COLUMN IF NOT EXISTS es_consulta     BOOLEAN;
+
 -- ----------------------------------------------------------------------------
 -- 5. knowledge_base — KB curada de la clínica (35 docs en v2). La consume el
 --    nodo Supabase Vector Store del v6 (retrieve-as-tool `buscar_conocimiento`,

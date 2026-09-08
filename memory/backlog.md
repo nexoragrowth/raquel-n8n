@@ -1,5 +1,29 @@
 # Backlog — raquel-n8n
 
+## Recordatorio para CONSULTAS (pedido Dra. 8/9) — scripts listos, NADA aplicado (`docs/recordatorio-consultas-2026-09-08.md`)
+- [ ] **P1** Lucas confirma con la Dra.: ¿"puntito amarillo" = motivo de atención `Consulta Ortodoncia` exactamente? ¿Hay otro
+      motivo de primera visita? Y que valide la frase del 24h (§3.2 del doc; hoy no la recibe nadie: el cron es +2 días hábiles).
+- [ ] **P1** Con OK: `python scripts/apply_recordatorio_consultas.py` (dry-run) → `--ddl` → `check_triaje.py` → `--apply` →
+      prueba real por webhook manual con cita "Consulta Ortodoncia" de `Test - Lucas Silva` (608) (payload en §6.3) →
+      limpieza regla 9 + filas de `recordatorios_enviados` de la cita + anular la cita en Dentalink.
+- [ ] **P1** La mañana siguiente al `--apply` (si es el 8/9: miércoles 9/9 08:00 ART → fecha_target viernes 11/9, cita 8899
+      `Consulta Ortodoncia `, paciente real): revisar la ejecución del cron (doc §6.4: Gate con `precio_contenido`, Preparar
+      mensaje con `precio_origen: 'kb'` / `es_consulta: true`, filas del Insert) y tener `--rollback <PRE>` listo antes de
+      las 08:00. La prueba manual (§6.3) NO pasa por el Gate: ese camino se ve por primera vez en producción.
+- [ ] P2 Precio en el camino MANUAL = fallback `$50.000` (R4): nodo `Precio consulta (KB)` entre `Webhook Manual Recordatorios`
+      y `Fecha Mañana` + segunda fuente en `Preparar mensaje`. PUT aparte.
+- [ ] P2 Decisión de negocio (R7): el Sub-Agent Confirmar marca confirmado en Dentalink cualquier "confirmo" sin verificar
+      pago; para consultas la regla "sí o sí con el pago" queda solo en el texto. ¿Debe el bot exigir comprobante?
+- [ ] P3 `Guardar en Chat Memory`: sumar "Tipo: consulta (se confirma con el pago)" a la NOTA INTERNA para el Sub-Agent Confirmar.
+- [ ] P3 R2 preexistente: `Preparar mensaje` empareja la cita por `$itemIndex` con `¿Ya se recordó?` en el medio (0 skips en 14
+      días); `$('Solo citas activas').item.json` con fallback sería más robusto. PUT aparte.
+- [ ] P3 Panel: mostrar `motivo_atencion` / `es_consulta` en la vista de recordatorios (los tipos opcionales ya están en
+      `lib/v3/database.types.ts` `V3Recordatorio`, 8/9; sin UI todavía, sin commit en ese repo).
+- [ ] P3 Alinear el regex del precio del v6 (`Extraer Horarios y Precio`, `/\$[\d.,]+/` estricto) con el del recordatorio
+      (tolera "$ 55.000"): con ese texto en la KB el bot diría $50.000 y el recordatorio $55.000. PUT al v6 aparte.
+- [ ] P3 `motivo_atencion || null` en la salida de `Preparar mensaje` (hoy `''` cuando la cita no trae el campo; Dentalink
+      manda `No registra motivo`, no null). Solo después de probar que el Postgres v2.6 acepta null punta a punta.
+
 ## Adjuntos del STAFF (rama fromMe) — rediseñado 7/9, NADA aplicado (`docs/media-entrantes-2026-09-06.md` §8)
 - [ ] **P1** Con OK de Lucas: `python scripts/apply_media_fromme.py` (dry-run, mostrar el diff) → `--apply`
       (153 → 159 nodos). ANTES: deploy del panel con la parte E (adjuntos de staff + el refetch tardío de
