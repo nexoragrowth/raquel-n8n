@@ -1,5 +1,26 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-10 01:40 ART — Triaje de urgencias ABIERTO A TODOS los pacientes
+
+Lucas corrió `python scripts/create_triaje_config_tables.py --activar` (sin `--piloto`: en PowerShell
+`--piloto ""` da error de argparse porque se come las comillas; omitirlo ya deja la allow-list vacía =
+todos). `triaje_config`: activo=true, telefonos_piloto=[], modo='piloto', aviso_pasivo=false.
+`check_triaje.py` -> TODO SANO (los 2 videos de alambre_pincha HTTP 200, v6 159 nodos, 7 satélites activos).
+
+**Disparador**: el 9/9 entró la primera urgencia real de un paciente (…0362) — "Necesito un turno urgente
+con la dra... se salió el alambre 🥺" (17:50) y una foto de la boca (19:12). Las dos quedaron
+`razon='fuera_piloto'` en `triaje_urgencias_log` (ids 14 y 15) y escalaron al grupo sin video.
+
+**Límite vigente**: solo `alambre_pincha` tiene videos (op1 y op2, activos). `bracket_suelto`,
+`alambre_girado` y `ligadura_pincha` siguen con `activo=false` y caption '[PENDIENTE]' -> esos casos
+escalan igual. La urgencia del 9/9 es de esa familia. Pendiente: que Raquel mande los 3 videos
+(bracket_suelto primero: es el más frecuente junto con alambre_pincha en el análisis de 60 días).
+Cuando lleguen: `scripts/upload_urgencia_video_supabase.py` + UPDATE de caption/activo +
+`tests/test_triaje_textos_banlist.py --db`.
+
+**A vigilar los próximos días**: primera urgencia real que caiga en alambre_pincha (tiene que recibir el
+video op1 sin escalar), y `triaje_urgencias_log` por casos degradados (el Vigía avisa solo).
+
 ## 2026-09-08 16:15 ART — Recordatorio DISTINTO para las CONSULTAS: scripts listos, tests verdes, dry-run limpio, NADA aplicado
 
 **Pedido textual de la Dra. (WhatsApp 09:20)**: los turnos con "puntito amarillo" son consultas (primera visita); a esos
