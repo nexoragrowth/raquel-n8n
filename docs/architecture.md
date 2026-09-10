@@ -62,7 +62,7 @@ Webhook
 
 **Reglas críticas implementadas:**
 - **Kill-switch estricto**: solo admins desde su WA personal con `!fromMe`. Comandos: `/bot off`, `/bot on`, `/bot status`.
-- **Bot enabled global**: Redis key `bot:status`. Se controla via kill-switch o auto-reactivar (1h sin humano).
+- **Bot enabled global**: Redis key `bot:status`. Se controla via kill-switch o auto-reactivar (1h sin humano — **pasando a 24h**, pedido de Lucas 2026-09-10, script listo en `scripts/apply_auto_reactivar_24h.py` pendiente de `--apply`; ver `docs/handoff-humano-24h-2026-09-10.md`. Actualizar este número cuando se aplique).
 - **Dentalink up**: Redis key `dentalink:status` actualizada por workflow Health Check.
 - **Rate limit**: 10 msgs/15min por phone. Key Redis `rate:{phone}`.
 - **fromMe filter**: cuando humano habla (desde Chatwoot/WA Web/WA Mobile), persiste con TAG `[ATENCION HUMANA - ...]` + aplica label `humano` en Chatwoot. Rama termina, bot no responde.
@@ -210,7 +210,7 @@ Cuando la conversation se marca `resolved` en Chatwoot:
 |---|---|
 | `Yjl6kyLnALhIfbFX` Health Check | Cron cada N min. Ping a Dentalink + Evolution. Setea `dentalink:status` en Redis. |
 | `QsGBGkZdGu5gTdBf` Daily Summary | Cron 8 AM. Manda resumen de recordatorios del día al grupo de admins. |
-| `fosfga62zNaN0qrx` Auto Reactivar | Si pasa 1h sin actividad humana en una conversación con label humano → quita label, bot vuelve. |
+| `fosfga62zNaN0qrx` Auto Reactivar | Si pasa 1h sin actividad humana en una conversación con label humano → quita label, bot vuelve. **Pasando a 24h** (pendiente `--apply`, ver `docs/handoff-humano-24h-2026-09-10.md`). |
 
 ---
 
