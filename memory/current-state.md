@@ -1,5 +1,25 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-16 16:29 ART — APLICADO: Auto Reactivar de 1h a 24h (handoff humano modelo Intercom/Podium)
+
+Lucas confirmó "24hs para todo, confiar en el botón masivo" (el riesgo de que una escalación del bot
+autosilencie hasta 24h en vez de 60-75 min, ver `docs/handoff-humano-24h-2026-09-10.md`, se acepta:
+el botón masivo del panel es la mitigación). Aplicado con `scripts/apply_auto_reactivar_24h.py --apply`:
+
+- `Auto Reactivar Bot` (fosfga62zNaN0qrx): `ONE_HOUR` 1*3600 → 24*3600. Único cambio, 4 nodos intactos,
+  cron cada 15 min intacto, label `no_bot` sigue siendo la vía de escape. Backups PRE/POST en
+  `workflows/history/auto_reactivar_{PRE,POST}_auto_reactivar_24h_20260916_162947.json`.
+  8/8 verificaciones en verde antes y después del PUT. `check_triaje.py` → TODO SANO.
+- Panel (`nexora-whatsapp-agent`, ya deployado desde el 10/9, commit `31cbb4d`): botón "Devolver
+  todos al bot" en la lista de conversaciones (contador en vivo, confirmación, excluye `no_bot` vía
+  Chatwoot si hay credenciales, mensaje honesto con éxitos/fallidos) + `HUMANO_MS` ya alineado a 24h
+  en `chat-data.ts`/`conversaciones-data.ts` (estaba desincronizado hasta la corrección del 10/9;
+  ahora coincide con lo recién aplicado).
+
+**A vigilar los próximos días**: que ninguna escalación del bot quede autosilenciada más de lo que
+Raquel tolera sin usar el botón masivo; si se vuelve un problema real (no solo teórico), la alternativa
+documentada es un corte corto (1-2h) solo para escalaciones del bot, distinto del handoff humano real.
+
 ## 2026-09-10 01:40 ART — Triaje de urgencias ABIERTO A TODOS los pacientes
 
 Lucas corrió `python scripts/create_triaje_config_tables.py --activar` (sin `--piloto`: en PowerShell
