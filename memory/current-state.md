@@ -1,5 +1,24 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-17 08:55 ART — Segundo video de triaje cargado: alambre_girado
+
+Raquel mandó por WhatsApp un video nuevo para la carpeta de urgencias (17/9 ~05:21): "el alambre se
+deslizó haciendo que quede de un lado más largo que del otro" + recomendación de usar pinza de cejas.
+Mapea exacto a la categoría `alambre_girado` del clasificador (`triaje/prompt_clasificador.md`), que
+seguía sin video desde el 6/9.
+
+Subido y activado: `scripts/upload_urgencia_video_supabase.py` → bucket `urgencias-videos`,
+`alambre_girado/opcion1.mp4` (6.063.734 bytes, HTTP 200 verificado). `triaje_videos` UPDATE:
+url + caption (estilo Asiri, mismo patrón que alambre_pincha) + `activo=true`. Verificado:
+`test_triaje_textos_banlist.py --db` (16 textos, 0 disparos) y `check_triaje.py` → TODO SANO,
+video alambre_girado/op1 HTTP 200.
+
+**Estado de videos ahora**: alambre_pincha (op1+op2) y alambre_girado (op1) ACTIVOS. Siguen
+pendientes: `bracket_suelto` y `ligadura_pincha` (el primero es el más frecuente del análisis de
+60 días junto con alambre_pincha — sigue siendo la prioridad para pedirle a Raquel). Lucas dijo
+"luego descargo el otro ni bien termines" — está bajando un segundo video de Raquel, probablemente
+para una de esas dos categorías: confirmar con la descripción que mande antes de subirlo.
+
 ## 2026-09-16 16:29 ART — APLICADO: Auto Reactivar de 1h a 24h (handoff humano modelo Intercom/Podium)
 
 Lucas confirmó "24hs para todo, confiar en el botón masivo" (el riesgo de que una escalación del bot
