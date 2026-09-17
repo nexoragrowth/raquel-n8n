@@ -1,5 +1,28 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-17 (mañana, segundo video) — alambre_pincha gana una Opción 3
+
+Raquel mandó otro video: "Alambre delantero que pincha porque se salió la protección de los extremos"
+(cera de ortodoncia en la punta, con algodón como alternativa si no hay cera). Cae dentro de la
+definición YA existente de `alambre_pincha` en el clasificador ("...o se le salió el protector de la
+punta"), y no requiere ningún cambio de código: `triaje/decidir.js` ya calcula `next` genéricamente
+(`videosDe(tipo)` sin límite fijo de opciones), así que agregar una Opción 3 fue solo un INSERT.
+
+Subido a `alambre_pincha/opcion3.mp4` (3.942.895 bytes) y activado. `test_triaje_textos_banlist.py --db`
+(18 textos, 0 disparos) y `check_triaje.py` → TODO SANO, los 3 videos de alambre_pincha HTTP 200.
+
+**Punto para decidir con Raquel (no técnico)**: esta Opción 3 recomienda lo MISMO que la Opción 1 (cera
+en la punta), solo que con una explicación más específica (protector desprendido en brackets solo
+anteriores) y el agregado del algodón como alternativa. Hoy el flujo la manda recién si el paciente dijo
+que la Opción 1 Y la Opción 2 no le sirvieron — pero si su causa real es "se salió el protector", la
+Opción 2 (reinsertar el alambre con pinza) no aplica y es una vuelta de más. Alternativas para cuando
+Raquel tenga tiempo: (a) dejarlo así (funciona, solo es un paso extra); (b) fusionar el contenido del
+algodón dentro de la Opción 1; (c) agregar una pregunta guiada en la Opción 1 que distinga este caso y
+salte directo a la Opción 3. No se tocó nada de eso hoy — se agregó tal cual, sin romper lo que ya andaba.
+
+**Estado de videos ahora**: alambre_pincha con 3 opciones, alambre_girado con 1. Pendientes:
+bracket_suelto, ligadura_pincha.
+
 ## 2026-09-17 08:55 ART — Segundo video de triaje cargado: alambre_girado
 
 Raquel mandó por WhatsApp un video nuevo para la carpeta de urgencias (17/9 ~05:21): "el alambre se
