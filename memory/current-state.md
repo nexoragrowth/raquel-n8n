@@ -1,5 +1,32 @@
 # Estado actual — raquel-n8n
 
+## 2026-10-01 (madrugada) — Fix: Banlist bloqueaba la dirección cuando el paciente contestaba "Todo"
+
+**Caso real** (escalaciones_log id 258, session …1991, 00:44): bot preguntó "¿turnos, tratamientos,
+precios, horarios, formas de pago o dirección?"; paciente contestó "Todo"; el Banlist bloqueó la
+respuesta completa porque el paciente no repitió literalmente la palabra "dirección" (la excepción de
+junio solo mira el texto del ÚLTIMO mensaje del paciente). Escaló al grupo; **nadie le había contestado
+al paciente** al momento de revisarlo — pendiente que Raquel/Irina le respondan a mano (incluida la
+dirección: Balcarce 37, 2do piso).
+
+**Fix aplicado** (`scripts/apply_fix_banlist_direccion_todo.py --apply`, único campo tocado en
+`Banlist Validator`, 0 nodos/conexiones fuera de ahí, backups PRE/POST en workflows/history/):
+`pacientePidioDireccion` suma una segunda condición — si el **turno anterior del BOT** (leído del `ctx`
+que ya arma `Build Router Context`, mismo contexto, sin queries nuevas) ofreció "dirección" como opción
+de un menú, Y el paciente contesta con un **catch-all corto y genérico** (todo/todos/toda/las dos/ambas),
+se cuenta como pedido explícito.
+
+**Deliberadamente NO se tocó** la excepción para "sí"/"dale"/"ok" sueltos: son el tipo exacto de
+respuesta del incidente real de mayo (confirmación de turno, no pedido de info) y ampliar la excepción
+ahí reabriría ese riesgo. Seguro por diseño: la memoria nunca guarda un output que el propio Banlist
+bloqueó (queda el canned de escalación en su lugar), así que el contexto que lee el fix solo puede traer
+menciones de "dirección" que ya pasaron el filtro antes (legítimas).
+
+Nota: al aplicar se descubrió que el regex de `pacientePidioDireccion` ya había sido ampliado por otra
+sesión/proceso entre que lo leí la primera vez y la aplicación (ahora incluye "dónde es", "cómo llego",
+"ubi", "maps" — comentario "ROUND 14" en el código). El script se ajustó al contenido real antes de
+aplicar; no se pisó ese trabajo.
+
 ## 2026-09-30 — Las 4 categorías del triaje de urgencias quedan con video activo
 
 Se completaron las dos que faltaban:
