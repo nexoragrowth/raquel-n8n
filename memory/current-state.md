@@ -1,5 +1,36 @@
 # Estado actual — raquel-n8n
 
+## 2026-09-30 — Las 4 categorías del triaje de urgencias quedan con video activo
+
+Se completaron las dos que faltaban:
+
+- **`ligadura_pincha`** (video "Ligadura de alambre que pincha.mp4", 42 MB): caption reutiliza
+  TEXTUALMENTE la técnica de cera/algodón que Raquel ya había aprobado tres veces para `alambre_pincha`
+  (op1 y op3) — mismo mecanismo (algo fino que pincha), misma solución. Confianza alta: no es contenido
+  nuevo, es su propio texto aplicado a un caso análogo, a pedido explícito de Lucas ("basate en los otros").
+- **`bracket_suelto`** (video "WhatsApp Video 2026-09-30 at 7.07.54 PM.mp4", 6,7 MB): **sin texto de
+  Raquel**. Lucas pidió 3 veces, de forma explícita y reafirmada, que lo redactara yo mismo ("inventatelos
+  basado en la estructura estandar... aplicados a estos"). Mecanismo DISTINTO a los otros 3 (acá es una
+  pieza despegada, no algo que pincha), así que no se podía extrapolar con la misma confianza. Se escribió
+  con el criterio más conservador posible: NO manipular ni recolocar el bracket (riesgo de lastimarse o
+  tragarlo), guardar la pieza si se desprendió del todo, venir a control, y solo cera/algodón si molesta
+  mientras tanto — ninguna maniobra activa. **Es el único de los 4 textos del triaje que no tiene
+  validación de Raquel. Pendiente: que ella lo revise cuando pueda** (está en
+  `triaje_videos` tipo `bracket_suelto` opción 1); si lo corrige, actualizar con
+  `scripts/upload_urgencia_video_supabase.py` no hace falta (el archivo ya está subido), solo el UPDATE
+  del caption en la tabla + `test_triaje_textos_banlist.py --db` + `check_triaje.py`.
+
+**Las 4 categorías del clasificador de urgencias ya tienen video activo**: alambre_pincha (3 opciones),
+alambre_girado, ligadura_pincha, bracket_suelto. `check_triaje.py` → los 6 videos HTTP 200, banlist
+limpio (22 textos). El único ❌ que sigue apareciendo en el chequeo es un error de OpenAI aislado del
+24/9 (exec 286089, ya resuelto, sin ejecuciones con error desde entonces) — no relacionado con esto.
+
+**Lección de proceso de hoy**: subí y activé por error el video de bracket_suelto cuando en realidad
+el archivo correcto era otro (confundí "WhatsApp Video 2026-09-29..." con contenido no relacionado);
+se detectó porque Lucas lo reprodujo y no coincidía, se borró del Storage antes de que ningún paciente
+lo viera (la fila nunca llegó a estar activa). Para videos de triaje: SIEMPRE confirmar el nombre exacto
+del archivo con Lucas antes de subir, nunca asumir por fecha/orden de descarga.
+
 ## 2026-09-17 (mañana, segundo video) — alambre_pincha gana una Opción 3
 
 Raquel mandó otro video: "Alambre delantero que pincha porque se salió la protección de los extremos"
