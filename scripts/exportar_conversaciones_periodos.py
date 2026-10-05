@@ -37,6 +37,13 @@ OUT = ROOT / "data" / "conversaciones"
 ART = timezone(timedelta(hours=-3))
 STAFF = {"5491161461034": "tel_LUCAS", "5493885786946": "tel_IRINA", "5493513976787": "tel_DRA"}
 RX_PREFIJO_STAFF = re.compile(r"^\[ATENCION HUMANA[^\]]*\]:?\s*", re.I)
+# El sub-flujo Cancelar/Reprogramar del bot guarda sus respuestas con source='wa_outbound' (la misma marca que los mensajes del
+# staff), asi que llegan como "staff". Se reclasifican como bot por su voz inconfundible (plantillas de Asiri).
+RX_VOZ_BOT = re.compile(
+    r"soy asiri|secretaria virtual|tengo disponibles en dentalink|tenemos los pr[oó]ximos turnos disponibles|"
+    r"con este n[uú]mero tengo registrad|no te encuentro turnos|no encuentro un turno|^listo, su turno .{0,60}(queda|qued[oó]) (cancelado|confirmado)|"
+    r"^le confirmo:|ese horario no est[aá] disponible", re.I)
+RX_NUMEROS = re.compile(r"\d{7,}")  # telefonos, DNI, CBU, ids: no hacen falta para analizar y son datos personales
 
 
 def seudonimo(tel):
@@ -58,6 +65,16 @@ def rol_normalizado(rol, fuente, texto_original, meta):
         if RX_PREFIJO_STAFF.match(texto_original or "") or source in ("wa_outbound", "human_takeover") or fuente == "whatsapp_secretaria":
             return "staff"
         return "bot"
+    if rol == "system":
+        # filas internas del bot: las notas de recordatorio llevan el texto del recordatorio enviado al paciente
+        t0 = (texto_original or "").lstrip()
+        if t0.startswith("[NOTA INTERNA"):
+            return "interno"  # contexto que el bot guarda tras enviar un recordatorio: no lo vio el paciente
+        if t0.startswith("[TEST"):
+            return "recordatorio_test"  # pruebas del workflow de recordatorios (no son pacientes reales)
+        if fuente == "bot_reminder" or source == "reminder_note" or re.search(r"recordamos su turno|recordatorio", t0, re.I):
+            return "recordatorio"
+        return "interno"
     return rol or "desconocido"
 
 
@@ -76,7 +93,7 @@ def main():
         cur = conn.cursor()
         cur.execute(
             "SELECT id, telefono, rol, mensaje, fuente, timestamp, metadata FROM public.conversaciones "
-            "WHERE timestamp >= now() - (%s || ' days')::interval AND rol <> 'system' "
+            "WHERE timestamp >= now() - (%s || ' days')::interval "
             "ORDER BY telefono, timestamp, id", (str(maximo),))
         filas = cur.fetchall()
         cur.execute("SELECT min(timestamp), max(timestamp), count(*) FROM public.conversaciones")
@@ -92,12 +109,15 @@ def main():
         if clave in vistos:
             continue
         vistos.add(clave)
-        txt = RX_PREFIJO_STAFF.sub("", texto or "").strip()
+        txt = RX_NUMEROS.sub("<nº>", RX_PREFIJO_STAFF.sub("", texto or "").strip())
         if not txt:
             continue
+        rol_final = rol_normalizado(rol, fuente, texto, meta)
+        if rol_final == "staff" and RX_VOZ_BOT.search(txt):
+            rol_final = "bot"
         p = seudonimo(tel)
         mapa[p] = re.sub(r"\D", "", tel or "")
-        mensajes.append({"p": p, "ts": ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc), "rol": rol_normalizado(rol, fuente, texto, meta),
+        mensajes.append({"p": p, "ts": ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc), "rol": rol_final,
                          "texto": txt, "fuente": fuente, "id": id_})
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -144,7 +164,9 @@ def main():
         "- **rol**: `paciente` escribio el paciente · `bot` respondio Asiri · `staff` escribio la Dra./secretaria (desde el celular del consultorio o el panel) · `recordatorio` mensaje automatico del cron de recordatorios.",
         "- Los telefonos son seudonimos (`p_xxxxxx`; `tel_LUCAS`, `tel_IRINA`, `tel_DRA` son el staff). `mapa_pacientes.json` dice a quien corresponde cada uno: es solo para uso local.",
         "- Se quito el prefijo interno `[ATENCION HUMANA ...]` de los mensajes del staff. Los marcadores `[IMAGEN]`, `[AUDIO]`, `[DOCUMENTO]`, `[MEDIA:id]` quedan tal cual (describen adjuntos).",
-        "- Los textos NO se modificaron: pueden contener nombres, DNI y datos de salud que escribio el paciente.", "",
+        "- Los textos casi no se tocaron: se tapan las secuencias de 7 o mas digitos (telefonos, DNI, CBU) como `<nº>`; los NOMBRES y datos de salud que escribio el paciente siguen ahi.",
+        "- Ojo con `staff` vs `bot`: el sub-flujo de cancelar/reprogramar del bot guarda sus respuestas con la marca de los mensajes del staff (bug conocido). Se reclasificaron como `bot` las que tienen voz inconfundible de Asiri; puede quedar alguna sin detectar.",
+        "- `recordatorio` = el mensaje automatico que recibio el paciente; `interno` = nota del bot (no la vio el paciente); `recordatorio_test` = pruebas del workflow (ignorar).", "",
         "## Para que sirve", "",
         "Armar la matriz de casos normales y casos borde por funcion (agendar, confirmar, cancelar/reprogramar, precios y pagos, urgencias, general) "
         "y ver en que punto el bot deja de convertir (silencio, modo humano, derivacion) cuando el paciente ya queria cerrar.", "",

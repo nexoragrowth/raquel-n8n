@@ -72,6 +72,13 @@
 
 **Resultado de auditoría**: `audit_kb_detail.py` reporta 0 filas con flags sospechosos de software interno, marcas inventadas o colores de agenda.
 
+## 2026-10-05 ~10:00 ART — Mapa de casos por función (datos reales 90 días) + bug del sub-flujo Cancelar
+
+- `docs/casos-por-funcion.md`: foto real (quién contesta primero por función) y catálogo de ~70 casos normales/borde (CONF, AGE, REP, PAG, URG, GEN, ADJ) con contexto a sembrar, esperado y prohibido. Scripts: `exportar_conversaciones_periodos.py` (30/60/90 d, con roles paciente/bot/staff/recordatorio, números largos tapados) y `analizar_conversaciones_por_funcion.py` (→ `data/conversaciones/resumen_por_funcion.md`, local).
+- **Foto (90 d):** confirmar tras recordatorio 95% resuelto por el bot; se pierde conversión en adjuntos (18% bot, espera 19 h), comprobantes (40%, 60 min), saludo/pide info (50%, 51 min) y agendar (55%). Pacientes 1.516 · bot 756 · personas 6.410 mensajes.
+- **Bug nuevo (P1, en backlog):** Step 8a del sub-WF Cancelar guarda las respuestas del bot con `source: 'wa_outbound'` (marca del staff): en el panel aparecen como escritas por la Dra. y cuentan como modo humano.
+- Deploy del panel: siempre manual con `bash deploy/redeploy.sh` desde la máquina de Lucas (GitHub Actions no se usa: pide pagar).
+
 ## 2026-10-05 ~08:30 ART — Panel DESPLEGADO + export de conversaciones (30/60/90 días) + push del repo del bot BLOQUEADO
 
 - **Panel desplegado en el VPS** (`bash deploy/redeploy.sh`, commit `cc1250a` ya en origin/main de nexora-whatsapp-agent): healthy, `/login` 200. La pantalla `/agente` muestra "Todavía no está habilitado" hasta aplicar la tabla de directrices (sigue pendiente `apply_agente_directrices_db.py --apply` y luego `..._n8n.py --apply`).

@@ -19,6 +19,7 @@
       pasarla a una credencial de n8n, rotarla y no commitear el script con el literal.
 - [ ] P1 **Banlist antes del Formatting Agent**: hoy un LLM reescribe el texto después del regex.
       Volver a correr el Banlist después del Formatting, o no pasar los canned por el Formatting.
+- [ ] P1 **El sub-flujo Cancelar/Reprogramar guarda las respuestas del bot con `source: 'wa_outbound'`** (Step 8a del sub-WF `5cAWJxiWJ50hxEq3`), la marca que el panel y el Logger usan para los mensajes del STAFF: en el panel aparecen como escritas por la Dra./secretaria (azul), cuentan como "modo humano reciente" y `Clear Old Memory` no las limpia (33 de 43 respuestas rápidas del "staff" a cancelaciones eran de Asiri). Arreglo: cambiar el source a otro valor (p. ej. `bot_subwf`) en Step 8a; revisar luego los comentarios del panel que dicen que `wa_outbound` lo escribe solo `Build fromMe AI memory`.
 - [ ] **APLICAR directrices editables** (construido, probado offline, sin aplicar): 1) `python scripts/apply_agente_directrices_db.py --apply`
       2) `python scripts/apply_agente_directrices_n8n.py --apply` 3) prueba real (saludo solo + anuncio) 4) deploy del panel
       (`/opt/nexora-panel`, env `PANEL_ADMINS` opcional). Incluye: anuncio y menú sin Formatting Agent, canned en memoria.
