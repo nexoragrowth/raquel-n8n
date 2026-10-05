@@ -56,5 +56,9 @@
   primera visita o consultas cargadas sin motivo (`No registra motivo`, 1 hoy), reciben el genérico. Bloquea el `--apply`
   de `apply_recordatorio_consultas.py`. La regla quedó ANCLADA (`/^consulta\b/i`): si la Dra. nombra un motivo que no
   empieza con "consulta" (p. ej. "Primera Consulta"), hay que ajustar la línea `const es_consulta` y los tests.
+- **¿Cuándo vuelve el bot después de que un humano toma el chat?** (05/10) Desde el desacople de
+  Chatwoot, `human_takeover` solo vuelve a false con el toggle del panel. El 16/09 se había
+  decidido reactivar a las 24 h (modelo Intercom/Podium). ¿Se mantiene esa regla o la Dra./Irina
+  prefieren devolverle el chat al bot a mano? Decisión de Lucas y la Dra.
 - **¿El bot debe dejar de confirmar consultas sin comprobante?** (8/9, R7) El template nuevo dice "si ya está abonado
   responda confirmo", pero el Sub-Agent Confirmar marca confirmado cualquier "confirmo". Decisión de la Dra./Lucas.

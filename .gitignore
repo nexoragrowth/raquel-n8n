@@ -36,3 +36,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Datos reales de pacientes (exports de conversaciones para analisis con IA): NUNCA al repo
+data/
+docs/dataset_conversaciones*.json

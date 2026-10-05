@@ -707,3 +707,56 @@ corre después del envío; Dentalink manda 'No registra motivo', no null); aline
 sumar "Tipo: consulta" a la NOTA INTERNA de `Guardar en Chat Memory` (4º nodo, fuera del alcance declarado; backlog P3).
 **Revisable**: sí — si la Dra. nombra un motivo de primera visita que no empiece con "consulta", se cambia la línea
 `const es_consulta` de `recordatorios/preparar_mensaje.js` y los casos de motivo de `tests/test_recordatorio_consultas.js`.
+
+## 2026-10-05 — Desacople Total de Chatwoot: Unificación en Supabase (`pacientes.human_takeover`)
+
+**Decisión**:
+1. Eliminar Chatwoot por completo de la ruta crítica del bot (`v6`), de las acciones del staff (`panel-acciones-staff`) y del escalador (`helper-notify-grupo`).
+2. Establecer `pacientes.human_takeover` (booleano en Supabase v3) como la **Única Fuente de Verdad** del estado humano/bot de cada paciente.
+3. Desactivar en n8n los flujos satélites `Human Takeover` (`w7BBpZeEwZnpCX1q`) y `Auto Reactivar` (`fosfga62zNaN0qrx`).
+
+**Razón**:
+1. **Eliminar el ghosting**: El desincronismo entre los labels de Chatwoot (`humano`) y el panel web hacía que mensajes legítimos de pacientes murieran en `Humano Atendiendo (no hacer nada)` en n8n sin que nadie supiera por qué.
+2. **Performance y Latencia**: Se eliminaron 4 llamadas HTTP síncronas por cada mensaje entrante (búsqueda de contacto, lista de conversaciones, labels). El nuevo check es una consulta directa a Postgres que tarda ~30ms en vez de 1500ms.
+3. **Mantenibilidad y Servidor**: Permite decomisionar el container de Chatwoot (Ruby on Rails + Redis + Postgres propios) en el VPS, ahorrando ~1.5 GB de RAM y complejidad operativa.
+
+**Alternativas descartadas**:
+- Mantener Chatwoot sincronizado bidireccionalmente con Supabase (complejo, propenso a carreras y fallos de red).
+- Usar un flag en Redis (se pierde ante reinicios de container y no tiene persistencia relacional con el historial del paciente).
+
+**Revisable**: No. La arquitectura converge definitivamente al Next.js panel (`nexora-whatsapp-agent`) conectado a Supabase.
+
+## 2026-10-05 — Saneamiento Integral de Knowledge Base en Supabase (Eliminación de Placeholders Técnicos)
+
+**Decisión**:
+1. Purgar de la base de conocimiento vectorial (`knowledge_base`) cualquier concepto operativo interno o jerga de software: nombres de plataformas médicas (`Dentalink`), colores de agendas de consultorio (`punto amarillo flúor`, `punto verde`, `punto negro`) y comandos del bot (`/bot off`).
+2. Eliminar la marca "ASIRI" del listado médico de sistemas de alineadores transparentes (ID 29). Dejar exclusivamente marcas reales de ortodoncia (Invisalign, Keep Smiling, Angel Aligner).
+3. Modificar el plazo ilimitado de reserva a un horizonte estándar de consultorio médico (30 a 60 días de antelación máxima) en lugar de permitir reservas a un año vista (ID 2).
+4. Re-vectorizar inmediatamente todos los registros actualizados con OpenAI `text-embedding-3-small` (1536 dimensiones) para que el RAG del bot recupere contexto coherente y fidedigno.
+
+**Razón**:
+Los embeddings de la base de conocimiento son consultados directamente por el LLM (`Sub-Agent General` vía `buscar_conocimiento`). Dejar instrucciones operativas de pantalla o software en texto plano provocaba que el modelo alucinara respondiendo al paciente sobre colores internos del calendario o inventara marcas comerciales ficticias.
+
+**Alternativas descartadas**:
+- Filtrar por prompt (inseguro y gasta tokens innecesarios).
+- Borrar las filas por completo (hubiera quitado información necesaria sobre turnos y tipos de atención).
+
+**Revisable**:
+Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventana de agenda distinta.
+
+## 2026-10-05 — El modo humano lo decide un solo mecanismo determinístico (flag + ventana de 24 h); la memoria no le da órdenes al LLM
+
+**Decisión (Lucas, con propuesta de Claude):** el aviso `[ATENCION HUMANA …]` que se guarda en `n8n_chat_histories` cuando escribe el staff deja de incluir la orden "Mantente en silencio y NO respondas … hasta que un admin diga /bot on". Si el bot calla o responde lo decide `pacientes.human_takeover` + `human_takeover_at` (ventana de 24 h), leído igual en los tres puntos: entrada (`Consultar Takeover Paciente`), `Gate Humano Final` y `Triaje: Decidir`.
+**Razón:** con pacientes reales (era A, 13 días) el bot callaba el 78% de las veces con el aviso en los últimos 4 turnos vs 20% sin él; el LLM trataba la memoria como un takeover oculto que no vence (ej. exec 289847: la paciente elige un horario y recibe `[NO_REPLY]`).
+**Alternativas descartadas:** (1) tag `[Mensaje del staff del consultorio]:` — el panel detecta y parsea los mensajes del staff por el prefijo `[ATENCION HUMANA` y "enviado por X desde el PANEL"; (2) aplicar solo el cambio del texto sin unificar la ventana — pasadas las 24 h el agente corría (reservar_turno incluido) y el gate final descartaba el mensaje, dejando turnos reservados sin aviso.
+**Efecto colateral aceptado:** las filas viejas de memoria conservan la orden hasta salir de la ventana de 10 mensajes (o hasta correr `scripts/sql_marcador_staff_filas_viejas.sql`).
+**Revisable:** sí. Medir después: tasa de `[NO_REPLY]` con aviso reciente en las ejecuciones nuevas.
+
+## 2026-10-05 — Las directrices de Asiri son datos en Supabase que el bot lee en cada mensaje (no prompts editados por PUT desde el panel)
+
+**Decisión (Lucas pidió que lo editado en el panel cambie al agente; Claude propuso el mecanismo):** el panel guarda "directrices" (menú de bienvenida, indicaciones adicionales) en la tabla `agente_directrices` (Supabase v3); n8n las trae junto con la KB (`UNION ALL` de las filas `dir:<clave>` en `Get KB Horarios y Precio`) y los prompts las leen por expresión (`dir_menu_bienvenida`, `dir_notas`). El prompt completo solo se edita desde el panel por administradores (`PANEL_ADMINS`), con protecciones.
+**Razón:** (1) un PUT de todo el workflow desde el panel puede pisar otro cambio simultáneo (ya pasó el 05/10 con el envío); (2) un textarea libre permite borrar variables `{{ }}` (precio, alias, horarios) y el bot sigue "andando" sin ese dato; (3) como dato queda con autor, historial y se aplica al instante; (4) coherente con "textos exactos en tabla" del roadmap B3 y con el triaje (`triaje_config`).
+**El menú de bienvenida pasa a ser texto fijo** (deterministico, sin modelo ni Formatting Agent) cuando es un saludo solo en conversación nueva: lo que la Dra. ve en el panel es lo que recibe el paciente. Con conversación previa sigue por el agente General, que usa el mismo texto por expresión.
+**Las respuestas fijas ahora se guardan en la memoria del chat** (antes no: el panel no las mostraba y el bot no sabía qué había mandado).
+**Alternativas descartadas:** editar el prompt crudo con PUT desde el panel para todo el equipo; guardar las directrices como filas de `knowledge_base` (se vectorizan y aparecerían en las búsquedas; mezcla conceptos).
+**Revisable:** sí. Pendiente de aplicar (ver current-state).

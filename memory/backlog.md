@@ -1,5 +1,84 @@
 # Backlog — raquel-n8n
 
+## P0 — hallazgos 2026-10-05 (verificados, nada aplicado; detalle en current-state)
+- [x] 2026-10-05 05:49Z **El bot no enviaba respuestas** (01:09 → 02:49 ART; `Loop Mensajes` conectado
+      por la salida equivocada tras el desacople). Aplicado `apply_fix_loop_mensajes_salida.py --apply`.
+- [ ] **Prueba real del envío** desde el número de Lucas + limpiar residuos (`limpiar_numero_demo.py`).
+- [ ] **El takeover de 24 h no vence nunca** (el gate final lee el booleano crudo y, al bloquear,
+      re-arma el takeover vía `notify-grupo`): un solo lugar que lo venza (cron/pg_cron) y lectores
+      simples. Arreglar antes del martes 06/10 a la mañana (primeros takeovers de 24 h).
+- [ ] **Corregir `apply_desacoplar_chatwoot.py`** (o marcarlo como no re-ejecutable): compacta las
+      salidas vacías de las conexiones. Buscar el mismo patrón en otros scripts.
+- [ ] **Reactivación de `human_takeover`**: hoy no vuelve nunca a false (Auto Reactivar está
+      desactivado desde el desacople de Chatwoot). Definir la política (¿24 h como se decidió el
+      16/09?) e implementarla con un `human_takeover_at`, más una limpieza de los `true` viejos.
+      Mientras tanto, revisar el contador "modo humano" del panel.
+- [ ] **`Parse Intent`**: que el override de reprogramar no pise `urgencia_dolor` y que no
+      dispare con "pasar" suelto. Agregar test con los casos del 05/10.
+- [ ] **Key de Supabase escrita a mano** en `Gate Humano Final` y en `apply_desacoplar_chatwoot.py`:
+      pasarla a una credencial de n8n, rotarla y no commitear el script con el literal.
+- [ ] P1 **Banlist antes del Formatting Agent**: hoy un LLM reescribe el texto después del regex.
+      Volver a correr el Banlist después del Formatting, o no pasar los canned por el Formatting.
+- [ ] **APLICAR directrices editables** (construido, probado offline, sin aplicar): 1) `python scripts/apply_agente_directrices_db.py --apply`
+      2) `python scripts/apply_agente_directrices_n8n.py --apply` 3) prueba real (saludo solo + anuncio) 4) deploy del panel
+      (`/opt/nexora-panel`, env `PANEL_ADMINS` opcional). Incluye: anuncio y menú sin Formatting Agent, canned en memoria.
+- [ ] P1 **El anuncio sale por `direct_canned` pero el Formatting Agent igual lo reescribe** (3 de 3 ejecuciones:
+      294587, 294600, 294615; el texto enviado ≠ fila 40 de la KB: "Hola. Soy Asiri… Gracias por comunicarse", emojis
+      cambiados). Falta que `Necesita Formatting?` saltee los `direct_canned`. Además la regex del gate solo
+      reconoce la frase exacta (los reales también escriben "hola mas info", "quiero mas info") y el texto de la
+      fila trae "$50.000" a mano.
+- [ ] P1 **Regla de cierres perdida en la curación del General**: "Muchas gracias, impecable!" a veces se
+      contesta ("¡Gracias a usted! ¿Desea agendar un turno…?", exec 294609) y a veces calla (294577); `Pre-filtro
+      Cierre` no lo atrapa. El caso original TC-08/TC-09 esperaba `[NO_REPLY]`.
+- [ ] P0 **Rate limit con puerta trasera**: `Rate Limit Prep` saltea el límite si el payload trae
+      `data.source = 'test_e2e_suite'`. Sin autenticación en el webhook, cualquiera puede mandar mensajes sin tope
+      (gasto de OpenAI + el bot responde por el WhatsApp de la clínica al número que el atacante ponga: riesgo de
+      bloqueo del número). Quitar el bypass o exigir el secreto del webhook; para los tests, usar un teléfono
+      de prueba reservado y el modo prueba.
+- [ ] **P0 seguridad: el webhook del bot no autentica** (`Webhook Validator` solo exige el secreto si existe la env
+      `EVOLUTION_WEBHOOK_SECRET`, que no está seteada: el runner de tests entró con una `apikey` inventada).
+      `Kill-switch Check` decide "admin" por el teléfono que trae el propio payload → cualquiera que conozca un
+      número admin puede mandar `/bot off` (misma clase que la causa 1 del incidente Mariela) o hacerse pasar por
+      un paciente. Arreglo: setear `EVOLUTION_WEBHOOK_SECRET` en n8n y en Evolution GO (header) — probar con un
+      mensaje real antes de cerrar. Lo mismo vale para los otros ~30 webhooks sin auth.
+- [ ] P1 **Runner `tests/test_runner_aislado.py` (otra sesión, 05/10)**: (a) TC-04 da PASS por falso positivo (exec
+      294508: el bot dijo "Ese horario no está disponible" y re-ofreció; la regex pasó por "8:00" de otro horario):
+      sembrar con horarios reales; (b) asserta sobre `Split en Mensajes`, no sobre la respuesta de
+      `Evolution API - Enviar Mensaje` (K1 habría pasado); (c) dispara producción contra el teléfono de Lucas
+      (manda WhatsApp reales) y borra su memoria; (d) un intento por caso, sin tolerancia al no-determinismo.
+- [ ] P1 **Editor de prompts del panel (`/agente`)**: `guardarPromptAction` valida longitud ≥50 y banlist, hace PUT y
+      loguea, pero NO protege las expresiones `{{ … }}` (precio, alias, horarios dinámicos), NO chequea `versionId`
+      (puede pisar un cambio concurrente) y NO corre tests antes de publicar. No activar edición libre tal cual:
+      exponer campos estructurados (saludo, menú, respuesta al anuncio, tono) como datos.
+- [ ] P1 **El aviso `[ATENCION HUMANA … Mantente en silencio y NO respondas … hasta que un admin diga /bot on]`
+      guardado en la memoria funciona como un takeover oculto**: el LLM lo obedece (78% de silencios con el
+      aviso en los últimos 4 turnos vs 20% sin él, pacientes reales, era A; ej. exec 289847: la paciente elige
+      horario y recibe `[NO_REPLY]`). No vence nunca y no depende de la ventana de 24 h. Decidir: sacar la
+      orden del texto del aviso (dejar solo "Mensaje del staff: …") y que mande el flag determinístico.
+- [ ] P1 **Agendar**: (a) `ver_turnos_paciente` NO está conectada a Sub-Agent Agendar pero el prompt le
+      manda usarla contra doble reserva; (b) `reservar_turno` escribe en Dentalink antes del gate final: si
+      el gate descarta el mensaje, el turno queda reservado y el paciente sin aviso (exec 285150);
+      (c) la descripción de la tool habla de `id_estado`/`nota` y el body real manda `comentario`, con
+      dentista, sucursal y sillón fijos en 1 y duración 40. Embudo real (13 días, sin Lucas): 10 pacientes
+      llegaron a Agendar, 3 vieron horarios, 1 reservó.
+- [ ] P1 **Mensaje de anuncio "¡Hola! Quiero más información"**: que lo responda un gate determinístico
+      con el texto de la fila de KB (categoría `conversacion`), sin LLM ni Formatting Agent, en vez de
+      depender de que el modelo busque en la KB. El texto trae "$50.000" a mano (duplica la KB de precio).
+- [ ] P1 **Bajar Chatwoot del VPS** — chequeos de Redis y panel hechos 05/10 (no son del bot); falta el
+      valor de `CHATWOOT_ENABLED` en `growth-engine-evolution-api`. (pedido de Lucas 05/10; 4 containers: rails, sidekiq, postgres,
+      redis). Verificado en el snapshot: ningún workflow ACTIVO llama a Chatwoot (solo quedan textos
+      en `escalar_a_secretaria`, `Triaje: Decidir` y `Step 7` del sub-WF Cancelar). Los workflows del
+      bot usan la credencial `Postgres Supabase Nexora v3`; la vieja `Postgres account` solo la usan
+      los TEST/ADMIN. **Sin verificar (solo se ve en el VPS):** a qué contenedor apunta la credencial
+      `Redis account` del v6 (buffer, kill-switch, rate limit, triaje). Si fuera `chatwoot-redis`,
+      apagarlo tumba el bot. Orden: (1) chequear qué Redis tiene `dentalink:status`, env de los otros
+      containers y `CHATWOOT_*` en `/opt/nexora-panel/.env.production` (el botón masivo del panel
+      consulta Chatwoot si están seteadas); (2) `docker stop` de rails+sidekiq y probar el bot;
+      (3) dump de la base (tiene 5 meses de conversaciones de pacientes: fuera del repo);
+      (4) recién después borrar containers y volúmenes. Avisar a Irina.
+- [ ] P1 **Automatizar los 8 casos tipo** en la batería (con el shape de Evolution GO) y correrlos
+      contra los prompts curados.
+
 ## Recordatorio para CONSULTAS (pedido Dra. 8/9) — scripts listos, NADA aplicado (`docs/recordatorio-consultas-2026-09-08.md`)
 - [ ] **P1** Lucas confirma con la Dra.: ¿"puntito amarillo" = motivo de atención `Consulta Ortodoncia` exactamente? ¿Hay otro
       motivo de primera visita? Y que valide la frase del 24h (§3.2 del doc; hoy no la recibe nadie: el cron es +2 días hábiles).
