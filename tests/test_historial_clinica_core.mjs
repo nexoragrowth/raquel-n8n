@@ -42,7 +42,13 @@ t('P1 pidió una persona (cita literal): silencia (tomar) y limpia el estado', r
 r = humano('pidio_persona', 'prefiero hablar con la doctora', 'No, prefiero hablar con la doctora');
 t('P2 "prefiero hablar con la doctora" (delega): silencia', r.avisar.tomar === true, r);
 r = humano('urgencia', 'me duele mucho la muela', 'Me duele mucho la muela desde anoche');
-t('P3 urgencia verificada: silencia y le dice a Asiri que no opine del síntoma', r.avisar.tomar === true && /NO des indicaciones/.test(r.resultado.para_asiri), r);
+t('P3 pasar_a_humano con urgencia NO silencia: va al triaje (sin aviso propio, sin borrar estado) y Asiri calla', r.avisar === null && r.limpiar === false && r.triaje && r.triaje.motivo === 'pasar_a_humano_urgencia' && r.resultado.derivado_a_triaje === true && /\[NO_REPLY\]/.test(r.resultado.para_asiri) && /NO des indicaciones|no des indicaciones/.test(r.resultado.para_asiri), r);
+r = C.decidir({ accion: 'triaje', cita_textual: 'se me salió el alambre y me pincha', texto_paciente: 'Hola, se me salió el alambre y me pincha' });
+t('T1 derivar_triaje: marca de triaje con la frase del paciente, sin aviso al grupo y sin silenciar', r.triaje && r.triaje.motivo === 'derivar_triaje' && r.triaje.cita === 'se me salió el alambre y me pincha' && r.avisar === null && r.limpiar === false && r.resultado.ok === true, r);
+r = C.decidir({ accion: 'triaje', cita_textual: '', texto_paciente: 'está incómoda, no come' });
+t('T2 caso Mariela ("está incómoda, no come", sin palabra clave): deriva igual; si falta la frase usa el mensaje', r.triaje && r.triaje.cita === 'está incómoda, no come', r);
+r = C.decidir({ accion: 'triaje', cita_textual: 'me duele', texto_paciente: 'me duele', modo: 'sombra' });
+t('T3 sombra: deja la marca (la lee solo el cerebro de esta ejecución) y lo dice simulado', r.triaje && r.resultado.simulado === true && r.avisar === null, r);
 r = humano('baja_de_datos', 'no me escriban más', 'Por favor no me escriban más');
 t('P4 baja de datos verificada', r.avisar.tomar === true, r);
 r = humano('queja', 'esto es una vergüenza', 'Esto es una vergüenza, me hicieron esperar una hora');
@@ -56,7 +62,7 @@ t('P8 motivo que no existe ("error de herramienta"): NO silencia', r.avisar.toma
 r = humano('pidio_persona', 'ok', 'ok');
 t('P9 cita demasiado corta: NO silencia', r.avisar.tomar === false, r);
 r = humano('urgencia', 'quiero cambiar el turno', 'quiero cambiar el turno para la tarde');
-t('P10 "urgencia" sin síntoma en el texto: NO silencia', r.avisar.tomar === false, r);
+t('P10 "urgencia" sin síntoma en el texto: NO silencia (va al triaje, que la reclasifica; ante la duda es lo seguro)', r.avisar === null && r.limpiar === false && !!r.triaje, r);
 r = C.decidir({ accion: 'humano', motivo: 'pidio_persona', cita_textual: 'quiero hablar con la secretaria', texto_paciente: 'quiero hablar con la secretaria', modo: 'sombra' });
 t('P11 sombra: no avisa ni silencia, pero devuelve ok simulado', r.avisar === null && r.limpiar === false && r.resultado.simulado === true, r);
 t('P12 acento y mayúsculas no importan', humano('pidio_persona', 'QUIERO HABLAR CON LA SECRETARÍA', 'quiero hablar con la secretaría').avisar.tomar === true);

@@ -1,6 +1,8 @@
 // clinica_core.js — v7 · herramientas de CLÍNICA de Asiri: avisar al grupo, pasar a una persona, comprobantes de pago, lista de espera. Fuente de verdad en el repo.
-// Regla central: Asiri solo pasa a una persona (y silencia al bot) por 4 motivos, y el código lo VERIFICA contra el texto literal del paciente.
+// Regla central: Asiri solo pasa a una persona (y silencia al bot) por 3 motivos (pidio_persona, queja, baja_de_datos), y el código lo VERIFICA contra el texto literal del paciente.
 // Si no se puede verificar, se degrada a un aviso que NO silencia. Avisar nunca silencia. Un error de herramienta no es motivo para derivar.
+// URGENCIAS (derivar_triaje, o pasar_a_humano con motivo urgencia): NO silencian ni las responde Asiri. El mensaje vuelve al triaje del v6 (videos aprobados por la Dra.,
+// pregunta guiada o escalada a la doctora). Acá no se exige verificación: ante la duda, derivar una urgencia de más es lo seguro (el triaje la vuelve a clasificar).
 const ClinicaCore = (() => {
   const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
   const MOTIVOS = ['pidio_persona', 'queja', 'baja_de_datos', 'urgencia'];
@@ -14,11 +16,16 @@ const ClinicaCore = (() => {
   const NIVELES = ['FYI', 'ACCION'];
   const lim = (s, n) => String(s || '').trim().slice(0, n);
 
-  // entrada: { accion:'aviso'|'humano'|'pago'|'espera', nivel, texto, motivo, cita_textual, texto_paciente, modo, pago_reciente:boolean, tel }
-  // devuelve { avisar:null|{resumen,tomar}, marcar_pago:boolean, limpiar:boolean, resultado:{...} }
+  // entrada: { accion:'aviso'|'humano'|'pago'|'espera'|'triaje', nivel, texto, motivo, cita_textual, texto_paciente, modo, pago_reciente:boolean, tel }
+  // devuelve { avisar:null|{resumen,tomar}, marcar_pago:boolean, limpiar:boolean, triaje:null|{motivo,cita}, resultado:{...} }
   function decidir(e) {
     const sombra = e.modo === 'sombra';
-    const res = (resultado, extra) => ({ avisar: null, marcar_pago: false, limpiar: false, resultado, ...(extra || {}) });
+    const res = (resultado, extra) => ({ avisar: null, marcar_pago: false, limpiar: false, triaje: null, resultado, ...(extra || {}) });
+    // La marca de triaje se deja TAMBIÉN en sombra: no tiene efecto afuera (solo la lee el cerebro de esta ejecución) y así la sombra muestra qué se habría derivado.
+    const aTriaje = (origen) => res({ ok: true, derivado_a_triaje: true, simulado: sombra || undefined,
+      para_asiri: 'El mensaje pasó al protocolo de urgencias de la clínica, que le responde al paciente por su cuenta (video de ayuda o la doctora). Respondé exactamente [NO_REPLY]: no agregues nada, no des indicaciones ni opines sobre el síntoma.' },
+    { triaje: { motivo: origen, cita: lim(e.cita_textual || e.texto_paciente, 200) } });
+    if (e.accion === 'triaje') return aTriaje('derivar_triaje');
     if (e.accion === 'aviso') {
       const nivel = NIVELES.includes(String(e.nivel || '').toUpperCase()) ? String(e.nivel).toUpperCase() : null;
       const texto = lim(e.texto, 400);
@@ -37,6 +44,7 @@ const ClinicaCore = (() => {
     }
     if (e.accion === 'humano') {
       const motivo = String(e.motivo || '');
+      if (motivo === 'urgencia') return aTriaje('pasar_a_humano_urgencia');   // una urgencia nunca silencia al bot: va al triaje
       const cita = sinT(e.cita_textual);
       const paciente = sinT(e.texto_paciente);
       const valido = MOTIVOS.includes(motivo) && cita.length >= 3 && paciente.includes(cita) && VERIF[motivo].test(paciente);
@@ -45,10 +53,8 @@ const ClinicaCore = (() => {
         return res({ ok: false, degradado: true, motivo: 'no_verificado', para_asiri: 'No pude verificar ese pedido con lo que escribió el paciente, así que NO lo pasé a una persona. Avisé a la clínica. Seguí atendiéndolo vos y resolvé lo que te pide.' },
           sombra ? {} : { avisar: { resumen: `[ACCIÓN] Asiri quiso pasar a una persona (${motivo || 'sin motivo'}) pero no se pudo verificar con el mensaje. Revisar la conversación.`, tomar: false } });
       }
-      const etiqueta = { pidio_persona: 'pidió hablar con una persona', queja: 'hizo una queja', baja_de_datos: 'pidió la baja de sus datos', urgencia: 'tiene una urgencia (dolor, sangrado o aparato roto)' }[motivo];
-      return res({ ok: true, simulado: sombra || undefined, para_asiri: motivo === 'urgencia'
-        ? 'Ya avisé a la clínica de la urgencia y el chat queda para una persona. Decile con calma que la doctora se va a comunicar y que consulte con ella; NO des indicaciones ni opines sobre el síntoma.'
-        : 'Ya avisé a la clínica y una persona toma el chat. Decíselo con amabilidad y no sigas la conversación sobre turnos.' },
+      const etiqueta = { pidio_persona: 'pidió hablar con una persona', queja: 'hizo una queja', baja_de_datos: 'pidió la baja de sus datos' }[motivo];
+      return res({ ok: true, simulado: sombra || undefined, para_asiri: 'Ya avisé a la clínica y una persona toma el chat. Decíselo con amabilidad y no sigas la conversación sobre turnos.' },
         sombra ? {} : { avisar: { resumen: `El paciente ${etiqueta}: «${lim(e.cita_textual, 160)}»`, tomar: true }, limpiar: true });
     }
     return res({ ok: false, motivo: 'accion_invalida', para_asiri: 'Acción de clínica inválida.' });

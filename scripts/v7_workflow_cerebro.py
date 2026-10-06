@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """v7_workflow_cerebro.py — workflow "v7 Cerebro": recibe {phone, texto, pushName, modo} y devuelve {texto, enviar}.
-Orden: contexto (historial por SQL + datos del consultorio + recordatorios + directrices del panel) → Asiri (AI Agent con 10 herramientas de código) →
+Orden: contexto (historial por SQL + datos del consultorio + recordatorios + directrices del panel) → Asiri (AI Agent con 11 herramientas de código) →
 chequeo de salida bidireccional contra el libro de escrituras → banlist (usted) → marca la propuesta como enviada → guarda en memoria (solo en modo vivo).
 Los ids de los workflows de herramientas se resuelven al crearlos en n8n (marcadores @@ID:<clave>@@)."""
 import json
@@ -36,8 +36,10 @@ HERRAMIENTAS = [
      FIJOS, {"fecha": "Fecha YYYY-MM-DD del turno a confirmar; vacío si hay un solo recordatorio pendiente."}),
     ("avisar_grupo", "clinica", "Avisa a la clínica (grupo de WhatsApp) SIN dejar de atender al paciente. nivel FYI = novedad; ACCION = alguien tiene que hacer algo. Escribí un texto claro: qué pasó y qué hay que hacer.",
      {**CLINICA_FIJOS, "accion": "'aviso'"}, {"nivel": "FYI o ACCION", "texto": "Qué pasó y qué hay que hacer, en una o dos oraciones."}),
-    ("pasar_a_humano", "clinica", "Pasa la conversación a una persona (silencia al bot hasta 1 h después del último mensaje de una persona). SOLO si el paciente pidió hablar con la secretaria, la doctora o una persona (motivo pidio_persona), hizo una queja (queja), pidió la baja de sus datos (baja_de_datos) o hay una urgencia: dolor, sangrado, aparato roto (urgencia). Tenés que pasar la frase LITERAL del paciente que lo justifica; el código la verifica y si no coincide NO lo pasa. Un error de otra herramienta no es motivo.",
-     {**CLINICA_FIJOS, "accion": "'humano'"}, {"motivo": "pidio_persona | queja | baja_de_datos | urgencia", "cita_textual": "Fragmento LITERAL, copiado tal cual, del mensaje actual del paciente que justifica el motivo."}),
+    ("pasar_a_humano", "clinica", "Pasa la conversación a una persona (silencia al bot hasta 1 h después del último mensaje de una persona). SOLO si el paciente pidió hablar con la secretaria, la doctora o una persona (motivo pidio_persona), hizo una queja (queja) o pidió la baja de sus datos (baja_de_datos). Tenés que pasar la frase LITERAL del paciente que lo justifica; el código la verifica y si no coincide NO lo pasa. Un error de otra herramienta no es motivo. Las urgencias NO van acá: van a derivar_triaje.",
+     {**CLINICA_FIJOS, "accion": "'humano'"}, {"motivo": "pidio_persona | queja | baja_de_datos", "cita_textual": "Fragmento LITERAL, copiado tal cual, del mensaje actual del paciente que justifica el motivo."}),
+    ("derivar_triaje", "clinica", "URGENCIAS: dolor o molestia, sangrado, hinchazón, golpe, no puede comer, aparato, alambre, bracket o ligadura roto, suelto, salido o que pincha. Pasa el mensaje al protocolo de urgencias de la clínica, que le responde al paciente por su cuenta (video de ayuda aprobado por la doctora, una pregunta, o la doctora). Después respondé exactamente [NO_REPLY]. Ante la duda entre urgencia y otra cosa, derivá.",
+     {**CLINICA_FIJOS, "accion": "'triaje'"}, {"cita_textual": "Fragmento del mensaje actual del paciente que describe el problema, copiado tal cual."}),
     ("registrar_pago", "clinica", "Avisa a la clínica que el paciente mandó un comprobante de pago o dice que ya transfirió. No valida montos ni dice que el pago ingresó. Después decile que la secretaria lo verifica en su horario de atención.",
      {**CLINICA_FIJOS, "accion": "'pago'"}, {}),
     ("lista_espera", "clinica", "Anota para la clínica que el paciente quiere adelantar su turno si se libera uno. Después decile solo 'se lo dejo anotado a la clínica'; NO prometas que le van a avisar.",
@@ -78,6 +80,7 @@ const vistos = pj('Redis GET turnos_vistos', 'vistos_raw', []);
 const bloque = String($('Redis GET bloque').first().json.bloque_raw || '');
 const bloqueExec = String($('Redis GET bloque_exec').first().json.bloque_exec_raw || '');
 const ag = $('Asiri').first().json || {};
+const triaje = pj('Redis GET triaje', 'triaje_raw', null);   // la dejó derivar_triaje en ESTA ejecución: el triaje del v6 le contesta al paciente
 let texto = typeof ag.output === 'string' ? ag.output.trim() : '';
 const hayOk = libros.some((l) => l && l.ok === true);
 const avisos = []; let fallo_agente = false;
@@ -88,6 +91,11 @@ if (!texto || ag.error) {
 }
 let silencio = false;
 if (texto === '[NO_REPLY]' && !hayOk) silencio = true;
+// Urgencia derivada: Asiri no contesta (el triaje manda el video, la pregunta o el aviso de que la doctora se comunica) y la memoria la guarda el triaje.
+// Si en la MISMA respuesta hubo una escritura en la agenda, gana contarle lo que se hizo y la urgencia va al grupo como [ACCIÓN] (no se pierde ninguna de las dos).
+let derivar_triaje = false;
+if (triaje && !hayOk) { derivar_triaje = true; silencio = true; texto = null; }
+else if (triaje && hayOk) avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] La paciente mencionó una urgencia en el mismo mensaje en que se hizo un cambio en la agenda: revisar y contestarle. «' + String(triaje.cita || '').slice(0, 160) + '»' });
 let motivo_chequeo = null, motivo_banlist = null;
 if (!silencio) {
   const propReadback = (prop && String(prop.exec_id) === execId) ? prop.readback_text : null;
@@ -108,7 +116,7 @@ const humano = { type: 'human', content: String(e.texto || ''), additional_kwarg
 const ai = { type: 'ai', content: texto, additional_kwargs: { source: 'wa_outbound' }, response_metadata: {}, tool_calls: [], invalid_tool_calls: [] };
 if (vivo) for (const a of avisos) { try { await this.helpers.httpRequest({ method: 'POST', url: '""" + GRUPO + """', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }
 const tools = (Array.isArray(ag.intermediateSteps) ? ag.intermediateSteps : []).map((s) => ({ tool: s && s.action && s.action.tool, input: s && s.action && s.action.toolInput, obs: String((s && s.observation) || '').slice(0, 400) }));
-return [{ json: { phone: e.phone, modo: e.modo || 'vivo', texto, enviar: !silencio, silencio, motivo_chequeo, motivo_banlist, fallo_agente, propuesta_json, tools, avisos, guardar: vivo && !silencio,
+return [{ json: { phone: e.phone, modo: e.modo || 'vivo', texto, enviar: !silencio, silencio, derivar_triaje, triaje: derivar_triaje ? triaje : null, motivo_chequeo, motivo_banlist, fallo_agente, propuesta_json, tools, avisos, guardar: vivo && !silencio,
   msg_human: JSON.stringify(humano), msg_ai: JSON.stringify(ai) } }];"""
 
 
@@ -121,7 +129,7 @@ def wf_cerebro():
     g.subworkflow("Identificar paciente", "@@ID:ver_turnos@@", {"tel": "$('Entrada').first().json.phone", "exec_id_actual": "$execution.id"}, 770, 300)
     g._nodo("Armar contexto", "n8n-nodes-base.code", 2, {"jsCode": "const PROMPT_ASIRI = " + json.dumps(PROMPT, ensure_ascii=False) + ";\n" + "".join((V7 / f"{m}.js").read_text(encoding="utf-8").rstrip() + "\n" for m in ("historial_core",)) + JS_CONTEXTO}, 880, 300)
     g.si("¿Es un cierre?", "$json.cierre === true", 990, 300)
-    g.code("Cierre sin respuesta", "return [{ json: { texto: null, enviar: false, silencio: true, modo: $('Entrada').first().json.modo || 'vivo', motivo_chequeo: 'cierre_puro', motivo_banlist: null, fallo_agente: false, tools: [], avisos: [] } }];", 1100, 120)
+    g.code("Cierre sin respuesta", "return [{ json: { texto: null, enviar: false, silencio: true, derivar_triaje: false, triaje: null, modo: $('Entrada').first().json.modo || 'vivo', motivo_chequeo: 'cierre_puro', motivo_banlist: null, fallo_agente: false, tools: [], avisos: [] } }];", 1100, 120)
     g.agente("Asiri", "$('Armar contexto').first().json.mensaje_agente", "$('Armar contexto').first().json.sistema", 1100, 300, max_iter=5)
     g.modelo("Modelo Asiri", "gpt-5-mini", "low", 1100, 560)
     g.conectar_ai("Modelo Asiri", "Asiri", "ai_languageModel")
@@ -138,15 +146,16 @@ def wf_cerebro():
     g.redis_get("Redis GET turnos_vistos", f"'turnos_vistos:' + {tel}", "vistos_raw", 1980, 300)
     g.redis_get("Redis GET bloque", f"'bloque:' + {tel}", "bloque_raw", 2200, 300)
     g.redis_get("Redis GET bloque_exec", f"'bloque_exec:' + {tel} + ':' + $execution.id", "bloque_exec_raw", 2310, 300)
+    g.redis_get("Redis GET triaje", f"'triaje_v7:' + {tel} + ':' + $execution.id", "triaje_raw", 2365, 420)
     g._nodo("Salida", "n8n-nodes-base.code", 2, {"jsCode": "".join((V7 / f"{m}.js").read_text(encoding="utf-8").rstrip() + "\n" for m in ("chequeo_salida", "banlist_usted")) + JS_SALIDA}, 2420, 300)
     g.si("¿Marcar propuesta enviada?", "!!$json.propuesta_json", 2640, 300)
     g.redis_set("Redis SET propuesta enviada", f"'propuesta:' + {tel}", "$('Salida').first().json.propuesta_json", 1800, 2860, 240)
     g.si("¿Guardar en memoria?", "$('Salida').first().json.guardar === true", 3080, 300)
     g.postgres("Guardar en memoria", "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb), ($1, $3::jsonb)", "[$('Salida').first().json.phone, $('Salida').first().json.msg_human, $('Salida').first().json.msg_ai]", 3300, 240)
-    g.code("Devolver", "const s = $('Salida').first().json;\nreturn [{ json: { texto: s.texto, enviar: s.enviar, silencio: s.silencio, modo: s.modo, motivo_chequeo: s.motivo_chequeo, motivo_banlist: s.motivo_banlist, fallo_agente: s.fallo_agente, tools: s.tools, avisos: s.avisos } }];", 3520, 300)
+    g.code("Devolver", "const s = $('Salida').first().json;\nreturn [{ json: { texto: s.texto, enviar: s.enviar, silencio: s.silencio, derivar_triaje: s.derivar_triaje === true, triaje: s.triaje || null, modo: s.modo, motivo_chequeo: s.motivo_chequeo, motivo_banlist: s.motivo_banlist, fallo_agente: s.fallo_agente, tools: s.tools, avisos: s.avisos } }];", 3520, 300)
     for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Datos del consultorio", 0), ("Datos del consultorio", "Identificar paciente", 0), ("Identificar paciente", "Armar contexto", 0), ("Armar contexto", "¿Es un cierre?", 0), ("¿Es un cierre?", "Cierre sin respuesta", 0), ("¿Es un cierre?", "Asiri", 1), ("Asiri", "Redis GET libro", 0),
                      ("Redis GET libro", "Redis GET propuesta", 0), ("Redis GET propuesta", "Redis GET ofertas", 0), ("Redis GET ofertas", "Redis GET turnos_vistos", 0), ("Redis GET turnos_vistos", "Redis GET bloque", 0),
-                     ("Redis GET bloque", "Redis GET bloque_exec", 0), ("Redis GET bloque_exec", "Salida", 0), ("Salida", "¿Marcar propuesta enviada?", 0), ("¿Marcar propuesta enviada?", "Redis SET propuesta enviada", 0), ("¿Marcar propuesta enviada?", "¿Guardar en memoria?", 1),
+                     ("Redis GET bloque", "Redis GET bloque_exec", 0), ("Redis GET bloque_exec", "Redis GET triaje", 0), ("Redis GET triaje", "Salida", 0), ("Salida", "¿Marcar propuesta enviada?", 0), ("¿Marcar propuesta enviada?", "Redis SET propuesta enviada", 0), ("¿Marcar propuesta enviada?", "¿Guardar en memoria?", 1),
                      ("Redis SET propuesta enviada", "¿Guardar en memoria?", 0), ("¿Guardar en memoria?", "Guardar en memoria", 0), ("¿Guardar en memoria?", "Devolver", 1), ("Guardar en memoria", "Devolver", 0)]:
         g.conectar(a, b, s_)
     return g.json()

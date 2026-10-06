@@ -6,7 +6,7 @@
     "inputSource": "jsonExample",
     "jsonExample": "{\"tel\": \"5490000000651\", \"exec_id_actual\": \"1234\"}"
    },
-   "id": "02c556c7-567f-4de2-a19a-e23dc36bea49",
+   "id": "a64405e8-f654-45b6-a58e-f3893db5f93b",
    "name": "Entrada",
    "type": "n8n-nodes-base.executeWorkflowTrigger",
    "typeVersion": 1.1,
@@ -23,7 +23,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "875efad1-69b4-498d-b890-a36018efb00b",
+   "id": "e68bab8b-112f-40e9-86a1-50c02f8e0a4c",
    "name": "Redis GET ficha",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -44,7 +44,7 @@
    "parameters": {
     "jsCode": "const e = $('Entrada').first().json;\nlet est = null; try { est = JSON.parse($input.first().json.ficha_raw || 'null'); } catch (x) { est = null; }\nconst tiene = !!(est && Array.isArray(est.fichas) && est.fichas.length);\nreturn [{ json: { tiene, estado: tiene ? est : null, last10: String(e.tel).slice(-10) } }];"
    },
-   "id": "a1feceb0-4b15-47dc-a599-840ec05512f2",
+   "id": "97d96292-bb8d-4825-868f-090696aff1d8",
    "name": "¿Qué ficha hay?",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -63,7 +63,7 @@
      },
      "conditions": [
       {
-       "id": "b371ccc8-bb1c-4773-bc8d-a199e589e3cd",
+       "id": "175b1aa2-6646-4041-9695-4dfb5d719f62",
        "leftValue": "={{ $json.tiene === true }}",
        "rightValue": "",
        "operator": {
@@ -77,7 +77,7 @@
     },
     "options": {}
    },
-   "id": "dc37c28c-1b74-493e-9d6d-b4200eae054e",
+   "id": "129676f5-401a-49a7-b688-c750ed45cb46",
    "name": "¿Ya hay ficha?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -105,7 +105,7 @@
      ]
     }
    },
-   "id": "ef64b177-abf5-4927-a551-3cd900c2bcbb",
+   "id": "37ea6d5c-709b-4ff1-b508-6c1a66f01444",
    "name": "GET fichas del celular",
    "type": "n8n-nodes-base.httpRequest",
    "typeVersion": 4.2,
@@ -126,7 +126,7 @@
    "parameters": {
     "jsCode": "// ficha_core.js — v7 · quién es el paciente. Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// Un celular puede tener VARIAS fichas (familia). El modelo nunca elige ids: el código resuelve las fichas del celular, el paciente dice para quién es\n// (nombre o DNI), y el código verifica que coincida con una ficha real. Toda escritura exige ficha elegida (agenda_core.proponer).\nconst FichaCore = (() => {\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const tokens = (x) => sinT(x).replace(/[^a-z0-9 ]/g, ' ').split(/\\s+/).filter((t) => t.length >= 3);\n  const soloDigitos = (x) => String(x || '').replace(/\\D/g, '');\n  const vigente = (t) => ![1, 14].includes(Number(t.id_estado)) && Number(t.estado_anulacion || 0) === 0;\n  const titulo = (s) => String(s || '').trim().split(/\\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');\n\n  // Respuesta cruda de Dentalink (GET /pacientes?q=celular) → fichas habilitadas. rut = DNI (solo se usa para comparar, nunca se muestra).\n  function fichasDeRespuesta(resp) {\n    const data = (resp && (resp.data || (Array.isArray(resp) && resp[0] && resp[0].data))) || [];\n    return data.filter((p) => p && p.id && Number(p.habilitado === undefined ? 1 : p.habilitado) === 1)\n      .map((p) => ({ id: Number(p.id), nombre: titulo(p.nombre), apellidos: titulo(p.apellidos || ''), rut: soloDigitos(p.rut) }));\n  }\n  // Estado guardado en Redis: { fichas:[{id,nombre,apellidos,rut}], elegida: id|null }.  Con una sola ficha queda elegida.\n  const estadoInicial = (fichas) => ({ fichas, elegida: fichas.length === 1 ? fichas[0].id : null });\n\n  // El paciente dijo para quién es (nombre/apellido o DNI). Devuelve { ok:true, estado } o { ok:false, motivo, para_asiri }.\n  function elegir(estado, dato) {\n    const fichas = (estado && estado.fichas) || [];\n    if (!fichas.length) return { ok: false, motivo: 'sin_ficha', para_asiri: 'No hay fichas para este celular: pasalo a la clínica con avisar_grupo.' };\n    const dni = soloDigitos(dato.dni);\n    if (dni.length >= 6) {\n      const c = fichas.filter((f) => f.rut && f.rut === dni);\n      if (c.length === 1) return { ok: true, estado: { ...estado, elegida: c[0].id }, nombre: c[0].nombre };\n      return { ok: false, motivo: 'dni_no_coincide', para_asiri: 'Ese DNI no coincide con ninguna ficha de este celular. Pedile nombre y apellido del paciente.' };\n    }\n    const tk = tokens(dato.nombre);\n    if (!tk.length) return { ok: false, motivo: 'sin_dato', para_asiri: 'Pedile el nombre y apellido (o el DNI) del paciente.' };\n    const c = fichas.filter((f) => tokens(f.nombre + ' ' + f.apellidos).some((t) => tk.includes(t)));\n    if (c.length === 1) return { ok: true, estado: { ...estado, elegida: c[0].id }, nombre: c[0].nombre };\n    return { ok: false, motivo: c.length ? 'ambiguo' : 'nombre_no_coincide', para_asiri: c.length ? 'Hay más de una ficha que coincide: pedile el DNI.' : 'Ese nombre no coincide con ninguna ficha de este celular. Pedile el DNI.',\n      fichas: fichas.map((f) => f.nombre) };\n  }\n\n  // Citas de TODAS las fichas del celular (una respuesta cruda por ficha, en el mismo orden) → turnos vigentes futuros ordenados.\n  function turnosVistos(fichas, respuestas, hoyISO) {\n    const out = [];\n    fichas.forEach((f, i) => {\n      const r = respuestas[i]; const data = (r && (r.data || (Array.isArray(r) && r[0] && r[0].data))) || [];\n      for (const t of data) {\n        if (!t || !t.id || !t.fecha || t.fecha < hoyISO || !vigente(t)) continue;\n        out.push({ id: Number(t.id), id_paciente: Number(t.id_paciente || f.id), fecha: t.fecha, hora_inicio: String(t.hora_inicio || '').slice(0, 5), id_estado: Number(t.id_estado), estado_anulacion: Number(t.estado_anulacion || 0) });\n      }\n    });\n    out.sort((a, b) => (a.fecha + a.hora_inicio).localeCompare(b.fecha + b.hora_inicio));\n    const vistos = new Set();\n    return out.filter((t) => (vistos.has(t.id) ? false : (vistos.add(t.id), true)));\n  }\n  // Texto para Asiri (nunca ids): \"viernes 16/10 a las 09:10 (Dana)\"\n  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\n  function resumenTurnos(fichas, turnos) {\n    const nombre = (id) => (fichas.find((f) => f.id === id) || {}).nombre || '';\n    return turnos.map((t) => `${DIAS[new Date(t.fecha + 'T12:00:00Z').getUTCDay()]} ${Number(t.fecha.slice(8))}/${Number(t.fecha.slice(5, 7))} a las ${t.hora_inicio}` + (fichas.length > 1 ? ` (${nombre(t.id_paciente)})` : ''));\n  }\n  return { fichasDeRespuesta, estadoInicial, elegir, turnosVistos, resumenTurnos };\n})();\nif (typeof module !== 'undefined') module.exports = FichaCore;\nconst resp = $input.first().json || {};\nif (resp.error) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude consultar la agenda en este momento. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).' } } }];\nconst fichas = FichaCore.fichasDeRespuesta(resp);\nif (!fichas.length) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'sin_ficha', para_asiri: 'No encuentro una ficha con este celular. Pedile nombre completo y DNI y avisá a la clínica con avisar_grupo (ACCION) para que la den de alta; no inventes turnos.' } } }];\nreturn [{ json: { terminado: false, estado: FichaCore.estadoInicial(fichas) } }];"
    },
-   "id": "1a757df0-e70a-48ef-bfb1-6e142bd7eab2",
+   "id": "8fe43b82-7e92-49be-b84e-ff6cad0c7fc6",
    "name": "Armar ficha",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -145,7 +145,7 @@
      },
      "conditions": [
       {
-       "id": "b8771016-498d-4309-a105-898adccb4bbd",
+       "id": "29bb00e4-7164-41f4-b32b-202d9fc42b36",
        "leftValue": "={{ $json.terminado === true }}",
        "rightValue": "",
        "operator": {
@@ -159,7 +159,7 @@
     },
     "options": {}
    },
-   "id": "5f40be71-22ed-43b2-acde-be1d2a9068dd",
+   "id": "70b4afd7-171e-4aed-b84b-05f8ad46236c",
    "name": "¿Termina? (ficha)",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -177,7 +177,7 @@
     "expire": true,
     "ttl": 7200
    },
-   "id": "277ad527-d4a8-4230-b77a-7ce101220783",
+   "id": "86caa05e-0398-4c5d-bf84-04a9f7883764",
    "name": "Redis SET ficha",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -197,7 +197,7 @@
    "parameters": {
     "jsCode": "const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Jujuy' }).format(new Date());\nlet estado = $input.first().json.estado;\nif (!estado) estado = $('Armar ficha').first().json.estado;\nreturn estado.fichas.map((f, i) => ({ json: { idx: i, ficha_id: f.id, hoy, estado } }));"
    },
-   "id": "423be52b-b5c3-410d-9055-3064d398b54f",
+   "id": "355c1b9a-acad-4b7f-9165-0b0982a54883",
    "name": "Items por ficha",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -225,7 +225,7 @@
      ]
     }
    },
-   "id": "1fc96dc9-d386-47c1-ab02-8961b83a0935",
+   "id": "0a07e3ae-42c8-474a-9e97-7ceebbf70c9b",
    "name": "GET citas por ficha",
    "type": "n8n-nodes-base.httpRequest",
    "typeVersion": 4.2,
@@ -246,7 +246,7 @@
    "parameters": {
     "jsCode": "// ficha_core.js — v7 · quién es el paciente. Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// Un celular puede tener VARIAS fichas (familia). El modelo nunca elige ids: el código resuelve las fichas del celular, el paciente dice para quién es\n// (nombre o DNI), y el código verifica que coincida con una ficha real. Toda escritura exige ficha elegida (agenda_core.proponer).\nconst FichaCore = (() => {\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const tokens = (x) => sinT(x).replace(/[^a-z0-9 ]/g, ' ').split(/\\s+/).filter((t) => t.length >= 3);\n  const soloDigitos = (x) => String(x || '').replace(/\\D/g, '');\n  const vigente = (t) => ![1, 14].includes(Number(t.id_estado)) && Number(t.estado_anulacion || 0) === 0;\n  const titulo = (s) => String(s || '').trim().split(/\\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');\n\n  // Respuesta cruda de Dentalink (GET /pacientes?q=celular) → fichas habilitadas. rut = DNI (solo se usa para comparar, nunca se muestra).\n  function fichasDeRespuesta(resp) {\n    const data = (resp && (resp.data || (Array.isArray(resp) && resp[0] && resp[0].data))) || [];\n    return data.filter((p) => p && p.id && Number(p.habilitado === undefined ? 1 : p.habilitado) === 1)\n      .map((p) => ({ id: Number(p.id), nombre: titulo(p.nombre), apellidos: titulo(p.apellidos || ''), rut: soloDigitos(p.rut) }));\n  }\n  // Estado guardado en Redis: { fichas:[{id,nombre,apellidos,rut}], elegida: id|null }.  Con una sola ficha queda elegida.\n  const estadoInicial = (fichas) => ({ fichas, elegida: fichas.length === 1 ? fichas[0].id : null });\n\n  // El paciente dijo para quién es (nombre/apellido o DNI). Devuelve { ok:true, estado } o { ok:false, motivo, para_asiri }.\n  function elegir(estado, dato) {\n    const fichas = (estado && estado.fichas) || [];\n    if (!fichas.length) return { ok: false, motivo: 'sin_ficha', para_asiri: 'No hay fichas para este celular: pasalo a la clínica con avisar_grupo.' };\n    const dni = soloDigitos(dato.dni);\n    if (dni.length >= 6) {\n      const c = fichas.filter((f) => f.rut && f.rut === dni);\n      if (c.length === 1) return { ok: true, estado: { ...estado, elegida: c[0].id }, nombre: c[0].nombre };\n      return { ok: false, motivo: 'dni_no_coincide', para_asiri: 'Ese DNI no coincide con ninguna ficha de este celular. Pedile nombre y apellido del paciente.' };\n    }\n    const tk = tokens(dato.nombre);\n    if (!tk.length) return { ok: false, motivo: 'sin_dato', para_asiri: 'Pedile el nombre y apellido (o el DNI) del paciente.' };\n    const c = fichas.filter((f) => tokens(f.nombre + ' ' + f.apellidos).some((t) => tk.includes(t)));\n    if (c.length === 1) return { ok: true, estado: { ...estado, elegida: c[0].id }, nombre: c[0].nombre };\n    return { ok: false, motivo: c.length ? 'ambiguo' : 'nombre_no_coincide', para_asiri: c.length ? 'Hay más de una ficha que coincide: pedile el DNI.' : 'Ese nombre no coincide con ninguna ficha de este celular. Pedile el DNI.',\n      fichas: fichas.map((f) => f.nombre) };\n  }\n\n  // Citas de TODAS las fichas del celular (una respuesta cruda por ficha, en el mismo orden) → turnos vigentes futuros ordenados.\n  function turnosVistos(fichas, respuestas, hoyISO) {\n    const out = [];\n    fichas.forEach((f, i) => {\n      const r = respuestas[i]; const data = (r && (r.data || (Array.isArray(r) && r[0] && r[0].data))) || [];\n      for (const t of data) {\n        if (!t || !t.id || !t.fecha || t.fecha < hoyISO || !vigente(t)) continue;\n        out.push({ id: Number(t.id), id_paciente: Number(t.id_paciente || f.id), fecha: t.fecha, hora_inicio: String(t.hora_inicio || '').slice(0, 5), id_estado: Number(t.id_estado), estado_anulacion: Number(t.estado_anulacion || 0) });\n      }\n    });\n    out.sort((a, b) => (a.fecha + a.hora_inicio).localeCompare(b.fecha + b.hora_inicio));\n    const vistos = new Set();\n    return out.filter((t) => (vistos.has(t.id) ? false : (vistos.add(t.id), true)));\n  }\n  // Texto para Asiri (nunca ids): \"viernes 16/10 a las 09:10 (Dana)\"\n  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\n  function resumenTurnos(fichas, turnos) {\n    const nombre = (id) => (fichas.find((f) => f.id === id) || {}).nombre || '';\n    return turnos.map((t) => `${DIAS[new Date(t.fecha + 'T12:00:00Z').getUTCDay()]} ${Number(t.fecha.slice(8))}/${Number(t.fecha.slice(5, 7))} a las ${t.hora_inicio}` + (fichas.length > 1 ? ` (${nombre(t.id_paciente)})` : ''));\n  }\n  return { fichasDeRespuesta, estadoInicial, elegir, turnosVistos, resumenTurnos };\n})();\nif (typeof module !== 'undefined') module.exports = FichaCore;\nconst items = $('Items por ficha').all();\nconst estado = items[0].json.estado; const hoy = items[0].json.hoy;\nconst resps = $input.all().map((i) => i.json);\nif (resps.some((r) => r && r.error)) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude consultar los turnos en la agenda. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION); no inventes turnos.' } } }];\nconst turnos = FichaCore.turnosVistos(estado.fichas, resps, hoy);\nconst varias = estado.fichas.length > 1;\nreturn [{ json: { terminado: false, turnos, resultado: { ok: true, varias_fichas: varias, ficha_elegida: estado.elegida !== null, paciente_elegido: estado.elegida !== null ? ((estado.fichas.find((f) => f.id === estado.elegida) || {}).nombre || null) : null, pacientes: varias ? estado.fichas.map((f) => f.nombre) : undefined, turnos: FichaCore.resumenTurnos(estado.fichas, turnos),\n  para_asiri: varias && estado.elegida === null ? 'Este celular tiene varias fichas: preguntá para quién es (nombre o DNI) y llamá a elegir_ficha antes de proponer cualquier cambio.' : 'Estos son los turnos vigentes. No muestres ids.' } } }];"
    },
-   "id": "9aaac3cf-f2ab-4eda-a2f3-35228da5375e",
+   "id": "545cbac7-78e0-43a0-b18f-a617d6aa03f4",
    "name": "Armar turnos",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -265,7 +265,7 @@
      },
      "conditions": [
       {
-       "id": "3ffb7540-9d03-474a-bf7a-dc6a0893e90c",
+       "id": "dabfb06e-9891-4328-a85c-b01834704fd5",
        "leftValue": "={{ $json.terminado === true }}",
        "rightValue": "",
        "operator": {
@@ -279,7 +279,7 @@
     },
     "options": {}
    },
-   "id": "5b662e9d-82d8-4008-af7f-66337f602969",
+   "id": "2bf520c5-852a-4269-ad83-b571b9c8530f",
    "name": "¿Termina? (turnos)",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -297,7 +297,7 @@
     "expire": true,
     "ttl": 7200
    },
-   "id": "cea9bb9c-4680-4396-b9b4-3751e72799ee",
+   "id": "aaf309f6-c1e3-448d-8c41-112787b02103",
    "name": "Redis SET turnos_vistos",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -317,7 +317,7 @@
    "parameters": {
     "jsCode": "const j = $input.first().json;\nif (j.resultado) return [{ json: j.resultado }];\nreturn [{ json: $('Armar turnos').first().json.resultado }];"
    },
-   "id": "b49cbaba-4b15-4947-8dec-c655bbf60d96",
+   "id": "872df705-b0db-43fd-970f-aeaa45136586",
    "name": "Devolver",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,

@@ -37,13 +37,13 @@ def corrida(phone, push, mensajes, verbose=True):
         if isinstance(r, list):
             r = r[0] if r else {}
         resp = r.get("texto")
-        resultados.append({"turno": i, "paciente": texto, "asiri": resp, "segundos": round(seg, 1), "tools": r.get("tools"), "motivo_chequeo": r.get("motivo_chequeo"), "motivo_banlist": r.get("motivo_banlist"), "fallo_agente": r.get("fallo_agente"), "enviar": r.get("enviar"), "error": r.get("error")})
+        resultados.append({"turno": i, "paciente": texto, "asiri": resp, "segundos": round(seg, 1), "tools": r.get("tools"), "motivo_chequeo": r.get("motivo_chequeo"), "motivo_banlist": r.get("motivo_banlist"), "fallo_agente": r.get("fallo_agente"), "enviar": r.get("enviar"), "derivar_triaje": r.get("derivar_triaje"), "error": r.get("error")})
         if verbose:
             print(f"\n[{i}] PACIENTE: {texto}")
             if r.get("error"):
                 print("    ERROR:", r["error"])
             else:
-                print(f"    ASIRI ({seg:.1f} s): {resp}" if r.get("enviar") else f"    ASIRI ({seg:.1f} s): (silencio)")
+                print(f"    ASIRI ({seg:.1f} s): {resp}" if r.get("enviar") else (f"    ASIRI ({seg:.1f} s): → TRIAJE del v6 («{(r.get('triaje') or {}).get('cita', '')}»)" if r.get("derivar_triaje") else f"    ASIRI ({seg:.1f} s): (silencio)"))
                 for t in (r.get("tools") or []):
                     print(f"      · {t.get('tool')}({json.dumps(t.get('input'), ensure_ascii=False)[:140]}) → {str(t.get('obs'))[:150].replace(chr(10), ' ')}")
                 if r.get("motivo_chequeo") or r.get("motivo_banlist") or r.get("fallo_agente"):

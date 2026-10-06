@@ -465,7 +465,7 @@
 - P1: v7 sombra, escenarios restantes (cambio/cancelación, confirmar tras recordatorio, familias, pagos, pedir persona, urgencia, errores de agenda) + latencia < 10 s.
 - P2: decidir con la Dra. si Asiri ofrece los datos de pago tras reservar o los manda un texto fijo.
 - P2: cerrar el webhook "v7 Test (sombra)" cuando terminen las pruebas (`python scripts/probar_v7.py --desactivar`).
-- P1: portar el triaje con videos del v6 al v7 (herramienta derivar_triaje) o decidir con la Dra. que esos casos pasen a una persona.
+- [x] 2026-10-06 P1: portar el triaje con videos al v7 → `derivar_triaje` construido offline (359/359). Falta: subir a n8n (`crear_v7_en_n8n.py --aplicar`) y, al conectar con el v6, que `Triaje: Evaluar` tome la derivación del v7 como entrada "nueva".
 - P2: que Asiri diga claramente cuando la franja pedida no existe en el rango pedido (hoy pega el bloque con una frase vaga).
 - P2: confirmar_turno tras recordatorio no se pudo probar en sombra: el celular de prueba no tiene turno vigente. Hace falta una cita de prueba en la agenda.
 - P1: Lucas da el OK y se corre `python scripts/apply_fix_cierres_v6.py --apply` (cierres en el v6). Hasta entonces los "gracias" siguen recibiendo "De nada…" o el aviso a la secretaria.
