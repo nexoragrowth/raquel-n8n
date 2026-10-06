@@ -52,15 +52,19 @@ def _ejecuto_ok(turnos):
     return [t for t in _llamadas(turnos, "ejecutar_propuesta") if _obs_json(t).get("ok") is True]
 
 def _horario_ofrecido(turnos, fecha, hora):
-    """El horario propuesto tiene que estar en un bloque que buscar_horarios devolvió EN ESTA conversación (nunca inventado)."""
-    for t in _llamadas(turnos, "buscar_horarios"):
-        o = _obs_json(t)
-        for of in (o.get("ofertas") or []):
-            if str(of.get("fecha")) == str(fecha) and str(of.get("hora", ""))[:5] == str(hora)[:5]:
-                return True
-        bloque = str(o.get("bloque") or "")
-        if fecha and bloque and _fecha_en_bloque(bloque, fecha, hora):
-            return True
+    """El horario propuesto tiene que estar en un bloque que buscar_horarios devolvió EN ESTA conversación (nunca inventado).
+    El cerebro recorta cada observación a 400 chars (el JSON llega cortado), así que se mira: las ofertas parseadas, el texto crudo de la
+    observación y el mensaje de Asiri del turno en que llamó a buscar_horarios (ahí va el bloque completo pegado textual)."""
+    for tu in turnos:
+        for t in (tu.get("tools") or []):
+            if t.get("tool") != "buscar_horarios": continue
+            o = _obs_json(t)
+            for of in (o.get("ofertas") or []):
+                if str(of.get("fecha")) == str(fecha) and str(of.get("hora", ""))[:5] == str(hora)[:5]:
+                    return True
+            for texto in (str(o.get("bloque") or ""), str(t.get("obs") or "").replace("\\n", "\n"), str(tu.get("asiri") or "")):
+                if fecha and texto and _fecha_en_bloque(texto, fecha, hora):
+                    return True
     return False
 
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
@@ -137,6 +141,7 @@ def persona_de(esc, nombre_paciente):
         "DANA-06": " Importante: NO querés cambiar tu turno actual, querés SUMAR otro turno además del que tenés.",
         "DANA-09": " En algún momento, antes de confirmar, preguntá cuánto sale la consulta.",
         "AGE-02": " Solo podés a las 17 hs; si no hay a esa hora, aceptá lo más cercano por la tarde.",
+        "AGE-04": " Antes de elegir un horario, preguntá si podés abonar el día de la consulta; después seguí con el turno.",
         "AGE-05": " Querés la semana que viene, cualquier día después de las 15 hs.",
         "AGE-07": " Ninguno de los horarios del primer bloque te sirve; pedí otros.",
         "CON-02": " Vos sos la mamá y confirmás por tu hijo.",
@@ -189,12 +194,19 @@ class PacienteReal:
     def __init__(self, modelo=MODELO_PACIENTE):
         self.key = require("OPENAI_API_KEY"); self.modelo = modelo
     def siguiente(self, sistema, charla):
+        # gpt-5-mini razona antes de contestar y los tokens de razonamiento cuentan en max_completion_tokens: con un tope chico devuelve
+        # contenido VACÍO (bug del 06/10: el examen lo tomaba como fin y las conversaciones morían en el 2.º mensaje). Tope amplio + razonamiento mínimo + un reintento.
         msgs = [{"role": "system", "content": sistema}] + charla
-        body = {"model": self.modelo, "messages": msgs, "max_completion_tokens": 120}
-        req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
-                                     headers={"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return json.loads(r.read().decode())["choices"][0]["message"]["content"].strip()
+        for intento in range(2):
+            body = {"model": self.modelo, "messages": msgs, "max_completion_tokens": 700, "reasoning_effort": "minimal"}
+            req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
+                                         headers={"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=90) as r:
+                out = json.loads(r.read().decode())
+            texto = (out["choices"][0]["message"].get("content") or "").strip()
+            if texto: return texto
+            msgs = msgs + [{"role": "system", "content": "Respondé ahora con tu próximo mensaje de WhatsApp (o [FIN])."}]
+        raise RuntimeError("el paciente simulado devolvió texto vacío dos veces: " + json.dumps(out.get("usage", {})))
 
 
 class CerebroFalso:
@@ -289,7 +301,9 @@ def correr_escenario(esc, cerebro, paciente, phone, push, nombre_paciente, verbo
         elif tu["silencio"]:
             break  # Asiri calló (cierre): la conversación terminó
         texto = paciente.siguiente(sistema, charla).strip()
-        if not texto or texto.upper().startswith("[FIN]"): break
+        if texto.upper().startswith("[FIN]"):
+            turnos[-1]["fin_paciente"] = True   # el paciente dio por cumplido (o perdido) su objetivo
+            break
     return turnos
 
 
