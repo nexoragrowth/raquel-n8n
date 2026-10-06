@@ -22,6 +22,13 @@ const caso = (nombre, entrada, esperado) => {
 const pasa = { accion: 'pasar' };
 const reemplaza = (motivo, texto) => ({ accion: 'reemplazar', motivo, texto });
 
+console.log('P. Anotar un AVISO no es escribir en la agenda (falsos positivos del examen 06/10)');
+caso('P1 "Dejé anotado su aviso de pago…" sin escritura → pasa', { texto: 'Dejé anotado su aviso de pago. Cuando mande el comprobante por este chat, la secretaria lo verifica en su horario de atención.', libro: null }, pasa);
+caso('P2 "Quedó anotado su aviso de pago para Lucas." → pasa', { texto: 'Quedó anotado su aviso de pago para Lucas. ¿Puede enviar el comprobante?', libro: null }, pasa);
+caso('P3 "Se lo dejo anotado a la clínica." (lista de espera) → pasa', { texto: 'Se lo dejo anotado a la clínica.', libro: null }, pasa);
+caso('P4 "Ya le anoté para el jueves." sin ok → sigue bloqueando', { texto: 'Ya le anoté para el jueves.', libro: null }, reemplaza('afirma_reprogramar_sin_ok', C.honesto));
+caso('P5 "Ya anoté su turno." sin ok → bloquea', { texto: 'Ya anoté su turno.', libro: null }, reemplaza('afirma_reprogramar_sin_ok', C.honesto));
+
 console.log('A. Hay escritura OK: el texto tiene que decir lo que se hizo');
 caso('A1 el texto contiene el read-back exacto', { texto: RB_CAMBIO, libro: OK_CAMBIO }, pasa);
 caso('A2 el read-back con un saludo antes y una pregunta después', { texto: 'Perfecto, Dana. ' + RB_CAMBIO + ' ¿Necesita algo más?', libro: OK_CAMBIO }, pasa);

@@ -113,6 +113,8 @@ def main():
     chequear("G01 deja el libro de escrituras (lista) en Redis: ok, tipo cambio, mensaje", isinstance(libro, list) and len(libro) == 1 and libro[0]["ok"] is True and libro[0]["tipo"] == "cambio" and libro[0]["readback_text"] == s["readback_text"], libro)
     chequear("G01 avisa al grupo como FYI (una vez)", len(r["avisos"]) == 1 and r["avisos"][0]["qs"]["resumen"].startswith("[FYI]") and r["avisos"][0]["qs"]["phone"] == TEL, r["avisos"])
     chequear("G01 consumió la propuesta (INCR = 1)", R["G01 cambio feliz"]["redis_final"][f"ejecutando:{P['id']}"] == 1)
+    prop_final = json.loads(R["G01 cambio feliz"]["redis_final"][f"propuesta:{TEL}"])
+    chequear("G01 la propuesta queda marcada 'ejecutada' en Redis (un segundo 'sí' cuando venza el candado NO vuelve a escribir)", prop_final["estado"] == "ejecutada" and prop_final.get("consumida_exec") == "ex-2", prop_final)
 
     rr = R["G02 doble ejecución (mismo Redis): la segunda no escribe"]["reps"]
     chequear("G02 la primera ok y la segunda 'ya_ejecutada'", rr[0]["salida"]["ok"] is True and rr[1]["salida"]["motivo"] == "ya_ejecutada", [x["salida"] for x in rr])

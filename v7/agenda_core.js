@@ -86,7 +86,7 @@ const AgendaCore = (() => {
       id: `${estado.tel}-${ahora}`, tipo, estado: 'pendiente', creada_ms: ahora, exec_id: estado.exec_id, tel: estado.tel,
       paciente_id: elegida, slot, cita_vieja: viejo ? { id: viejo.id, fecha: viejo.fecha, hora: normHora(viejo.hora_inicio) } : null, readback_text: readback,
     };
-    return { ok: true, propuesta, readback_text: readback, para_asiri: 'Pegá este mensaje TEXTUAL al paciente y esperá su confirmación. No digas que quedó hecho.' };
+    return { ok: true, propuesta, readback_text: readback, para_asiri: '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es readback_text: mandáselo tal cual, sin introducciones, y esperá su confirmación en el próximo mensaje. No digas que quedó hecho.' };
   }
 
   // ----------------------------------------------------------------- ejecutar: pasos puros
@@ -106,7 +106,7 @@ const AgendaCore = (() => {
     if (p.estado !== 'pendiente') return { fin: { ...no('ya_ejecutada', 'Esa propuesta ya se ejecutó.'), ledger } };
     if (ahora - p.creada_ms > TTL_PROPUESTA_MS) return { fin: { ...no('vencida', 'La propuesta venció. Volvé a proponer.'), ledger } };
     if (p.exec_id === entrada.exec_id_actual || entrada.enviada !== true) {
-      return { fin: { ...no('readback_no_visto', 'El paciente todavía no vio el read-back. Pegáselo y esperá su confirmación en el próximo mensaje.'), ledger } };
+      return { fin: { ...no('readback_no_visto', 'El paciente todavía no vio el texto de confirmación: mandáselo tal cual y esperá su respuesta en el próximo mensaje.'), ledger } };
     }
     if (entrada.modo === 'sombra') {
       return { fin: { ok: true, simulado: true, habria_hecho: { tipo: p.tipo, slot: p.slot, cita_vieja: p.cita_vieja }, readback_text: textoExito(p), ledger } };

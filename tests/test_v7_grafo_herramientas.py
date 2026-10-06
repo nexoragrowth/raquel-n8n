@@ -131,7 +131,7 @@ def main():
     print("\nbuscar_horarios")
     x = r["B1 primer bloque"]; a = x["reps"][0]
     ofertas = json.loads(x["redis_final"][f"ofertas:{TEL}"])
-    chequear("B1 devuelve el bloque TEXTUAL de la clínica y le dice que no lo cambie", a["salida"]["bloque"] == BLOQUE and "TEXTUAL" in a["salida"]["para_asiri"], a["salida"])
+    chequear("B1 devuelve el bloque de la clínica tal cual y la nota para Asiri es interna (no parece un mensaje al paciente)", a["salida"]["bloque"] == BLOQUE and a["salida"]["para_asiri"].startswith("[Nota interna") and "tal cual" in a["salida"]["para_asiri"], a["salida"])
     chequear("B1 registra los 6 horarios ofrecidos con fecha ISO (lo único reservable)", len(ofertas) == 6 and ofertas[1] == {"fecha": "2026-10-22", "hora": "09:20"}, ofertas)
     chequear("B1 guarda el bloque, el pedido, cuenta el lote y marca el bloque de ESTA ejecución (el código lo exige pegado)", x["redis_final"][f"bloque:{TEL}"] == BLOQUE and x["redis_final"][f"lotes:{TEL}"] == 1 and x["redis_final"][f"bloque_req:{TEL}"] == "|" and x["redis_final"][f"bloque_exec:{TEL}:ex-2"] == BLOQUE, x["redis_final"])
     x = r["B2 tercer pedido: límite"]; a = x["reps"][0]
@@ -204,6 +204,8 @@ def main():
         esc("K5 sombra: pasar_a_humano", {**base_c, "modo": "sombra", "accion": "humano", "motivo": "pidio_persona", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "quiero hablar con la secretaria"}, dict(ESTADO)),
         esc("K6 el webhook del grupo está caído", {**base_c, "accion": "humano", "motivo": "pidio_persona", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "quiero hablar con la secretaria"}, dict(ESTADO), aviso_falla=True),
         esc("K7 lista de espera", {**base_c, "accion": "espera", "texto": "Quiere antes del 22/10"}, dict(ESTADO)),
+        esc("K8 derivar_triaje", {**base_c, "accion": "triaje", "cita_textual": "se me salió el alambre", "texto_paciente": "se me salió el alambre"}, dict(ESTADO)),
+        esc("K9 pasar_a_humano con urgencia", {**base_c, "accion": "humano", "motivo": "urgencia", "cita_textual": "me duele mucho", "texto_paciente": "me duele mucho"}, dict(ESTADO)),
     ])
     print("\nclinica")
     x = r["K1 avisar_grupo FYI"]; a = x["reps"][0]
@@ -224,6 +226,14 @@ def main():
     chequear("K6 si el aviso no sale, se lo dice a Asiri para que no afirme que ya avisó", a["salida"].get("aviso_no_enviado") is True and "no digas que ya les avisaste" in a["salida"]["para_asiri"], a["salida"])
     a = r["K7 lista de espera"]["reps"][0]
     chequear("K7 lista de espera: aviso FYI y prohíbe prometer", a["avisos"][0]["qs"]["resumen"].startswith("[FYI] Lista de espera") and "NO prometas" in a["salida"]["para_asiri"], (a["avisos"], a["salida"]))
+
+    for k in ("K8 derivar_triaje", "K9 pasar_a_humano con urgencia"):
+        x = r[k]; a = x["reps"][0]; clave = f"triaje_v7:{TEL}:{TRIG['exec_id_actual']}"
+        marca = json.loads(x["redis_final"].get(clave) or "null")
+        chequear(f"{k[:2]} deja la marca triaje_v7 de ESTA ejecución, sin aviso al grupo, sin silenciar y sin borrar estado",
+                 marca and marca["cita"] and not a["avisos"] and all(c in x["redis_final"] for c in ESTADO) and a["salida"]["derivado_a_triaje"] is True, (x["redis_final"], a["avisos"], a["salida"]))
+    x = r["K1 avisar_grupo FYI"]
+    chequear("K10 las demás acciones NO dejan marca de triaje", not any(c.startswith("triaje_v7:") for c in x["redis_final"]), list(x["redis_final"]))
 
     print(f"\n{total - fallas}/{total} {'TODO OK' if not fallas else str(fallas) + ' FALLAS'}")
     sys.exit(1 if fallas else 0)

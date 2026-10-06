@@ -43,6 +43,7 @@ OFERTAS = json.dumps([{"fecha": "2026-10-22", "hora": "08:00"}, {"fecha": "2026-
 VISTOS = json.dumps([{"id": 9104, "id_paciente": 651, "fecha": "2026-10-16", "hora_inicio": "09:10", "id_estado": 15, "estado_anulacion": 0}])
 BLOQUE = "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n\nLe sirve alguno?"
 RB = "Listo, quedó reprogramado su turno: anulé el del viernes 16/10 a las 09:10 y le reservé el jueves 22/10 a las 09:20."
+TRIAJE = json.dumps({"motivo": "derivar_triaje", "cita": "Se me salió el alambre y me pincha"})
 LIBRO_OK = json.dumps([{"ok": True, "parcial": False, "tipo": "cambio", "readback_text": RB}])
 
 
@@ -97,6 +98,14 @@ def main():
         esc("Z14a da la dirección sin que la pidan", {"output": "Estamos en Balcarce 37, 2do piso."}, texto="Hola quiero un turno"),
         esc("Z14b da la dirección cuando la piden", {"output": "Estamos en Balcarce 37, 2do piso."}, texto="Dónde queda el consultorio?"),
         esc("Z15 historial_json (sombra retrospectiva)", {"output": "Ok"}, modo="sombra", trigger={"historial_json": json.dumps(HIST)}),
+        esc("M1 el modelo antepone una frase interna al bloque", {"output": "Le copio el mensaje para que lo confirme:\n\n" + PROP["readback_text"]}, redis={**base_redis, f"propuesta:{TEL}": json.dumps(PROP)}),
+        esc("M2 'Pegá este bloque TEXTUAL al paciente:' antes del bloque real", {"output": "Pegá este bloque TEXTUAL al paciente:\n" + BLOQUE}, redis=base_redis),
+        esc("M3 'Decile que dejé anotado su aviso de pago.' (nota interna copiada)", {"output": "Decile que dejé anotado su aviso de pago. La secretaria lo verifica."}, texto="Ya transferí"),
+        esc("U1 urgencia derivada al triaje", {"output": "[NO_REPLY]"}, texto="Se me salió el alambre y me pincha", redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
+        esc("U2 urgencia derivada pero el modelo igual escribe", {"output": "Tranquila, póngase cera y venga mañana."}, texto="Se me salió el alambre y me pincha", redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
+        esc("U3 urgencia + cambio de agenda ok en el mismo mensaje", {"output": "Perfecto. " + RB}, texto="Sí, cámbielo. Ah, y se me salió el alambre", redis={**base_redis, f"escrituras:{TEL}:{EXEC}": LIBRO_OK, f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
+        esc("U4 sombra: urgencia derivada", {"output": "[NO_REPLY]"}, modo="sombra", texto="me duele", redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
+        esc("U5 marca de triaje de OTRA ejecución no cuenta", {"output": "Hola! ¿En qué puedo ayudarle?"}, redis={f"triaje_v7:{TEL}:ex-viejo": TRIAJE}),
     ])
 
     print("CEREBRO (grafo real, agente simulado)")
@@ -132,7 +141,7 @@ def main():
     chequear("Z11 el agente recibe fecha de Jujuy, el pushName, el recordatorio pendiente, la charla y el mensaje", "FECHA Y HORA ACTUAL (Jujuy): lunes 2026-10-05 09:36" in ag["text"] and "CELE" in ag["text"] and "viernes 16/10 a las 09:10" in ag["text"] and "PACIENTE: Buen dia me pude cambiar ese turno" in ag["text"] and ag["text"].endswith("MENSAJE ACTUAL DEL PACIENTE:\nHola"), ag["text"])
     chequear("Z11b el agente recibe ya resuelto quién es el paciente y sus turnos vigentes (sin tener que llamar ver_turnos)", "DATOS DE ESTE CELULAR EN LA AGENDA" in ag["text"] and "Paciente de este celular: Dana Yael. Turnos vigentes: viernes 16/10 a las 09:10." in ag["text"], ag["text"])
     agv = next(p for p in R["Z17 celular con varias fichas, sin elegir"]["reps"][0]["pedidos"] if p["nodo"] == "Asiri")["entradas"]["text"]
-    chequear("Z17 varias fichas sin elegir: le dice que TODAVÍA no sabe para quién es y que use elegir_ficha", "Pacientes con este celular: Test - Jana, Test - Lucas" in agv and "TODAVÍA no sabés para quién es" in agv and "elegir_ficha" in agv, agv)
+    chequear("Z17 varias fichas sin elegir: le dice que TODAVÍA no sabe para quién es y que use elegir_ficha", "Pacientes con este celular: Test - Jana, Test - Lucas" in agv and "TODAVÍA no sabés para quién es" in agv and "igual buscá y ofrecé horarios" in agv and "elegir_ficha" in agv, agv)
     age = next(p for p in R["Z18 la agenda no responde al identificar"]["reps"][0]["pedidos"] if p["nodo"] == "Asiri")["entradas"]["text"]
     chequear("Z18 si la agenda no responde, no inventa turnos y el agente sigue pudiendo contestar datos", "No pude consultar la ficha o la agenda" in age and "No inventes turnos" in age and R["Z18 la agenda no responde al identificar"]["reps"][0]["salida"]["texto"] == "Ok", age)
     sis = ag["sistema"]
@@ -160,10 +169,39 @@ def main():
         a = R[k]["reps"][0]
         chequear(f"{nombre} NO es un cierre ({motivo}): el modelo SÍ interviene", any(p["nodo"] == "Asiri" for p in a["pedidos"]) and a["salida"]["silencio"] is False and a["salida"]["enviar"] is True, (a["salida"], [p["nodo"] for p in a["pedidos"]]))
 
+    # ---------------------------------------------------------------- frases internas filtradas al paciente (examen 06/10)
+    print("\nFRASES INTERNAS")
+    a = R["M1 el modelo antepone una frase interna al bloque"]["reps"][0]
+    chequear("M1 'Le copio el mensaje para que lo confirme:' se quita por código y queda solo el read-back", a["salida"]["texto"] == PROP["readback_text"] and a["salida"]["motivo_chequeo"] is None, a["salida"])
+    a = R["M2 'Pegá este bloque TEXTUAL al paciente:' antes del bloque real"]["reps"][0]
+    chequear("M2 'Pegá este bloque TEXTUAL al paciente:' se quita y el bloque pasa intacto", a["salida"]["texto"] == BLOQUE and a["salida"]["motivo_chequeo"] is None, a["salida"])
+
+    a = R["M3 'Decile que dejé anotado su aviso de pago.' (nota interna copiada)"]["reps"][0]
+    chequear("M3 'Decile que dejé anotado…' → 'Dejé anotado…'", a["salida"]["texto"].startswith("Dejé anotado su aviso de pago.") and a["salida"]["enviar"] is True, a["salida"])
+
+    # ---------------------------------------------------------------- urgencias → triaje del v6 (videos aprobados por la Dra.)
+    print("\nURGENCIAS (derivar_triaje)")
+    for k in ("U1 urgencia derivada al triaje", "U2 urgencia derivada pero el modelo igual escribe"):
+        a = R[k]["reps"][0]; s_ = a["salida"]
+        chequear(f"{k[:2]} devuelve derivar_triaje con la frase, NO envía texto de Asiri, NO guarda memoria (la guarda el triaje) y sin avisos propios",
+                 a["error"] is None and s_["derivar_triaje"] is True and s_["triaje"]["cita"] == "Se me salió el alambre y me pincha" and s_["enviar"] is False and s_["texto"] is None
+                 and not any(p["nodo"] == "Guardar en memoria" for p in a["pedidos"]) and not a["avisos"], (a["error"], s_, a["avisos"]))
+    a = R["U3 urgencia + cambio de agenda ok en el mismo mensaje"]["reps"][0]
+    chequear("U3 urgencia junto a una escritura ok: se cuenta el cambio (read-back) y la urgencia va al grupo como [ACCIÓN]; no se deriva",
+             a["salida"]["derivar_triaje"] is False and RB in a["salida"]["texto"] and a["salida"]["enviar"] is True and any("urgencia" in v["qs"]["resumen"] and v["qs"]["resumen"].startswith("[ACCIÓN]") for v in a["avisos"]), (a["salida"], a["avisos"]))
+    a = R["U4 sombra: urgencia derivada"]["reps"][0]
+    chequear("U4 sombra: informa derivar_triaje (para medir) sin memoria ni avisos", a["salida"]["derivar_triaje"] is True and not a["avisos"] and not any(p["nodo"] == "Guardar en memoria" for p in a["pedidos"]), a["salida"])
+    a = R["U5 marca de triaje de OTRA ejecución no cuenta"]["reps"][0]
+    chequear("U5 una marca de otra ejecución no deriva este mensaje", a["salida"]["derivar_triaje"] is False and a["salida"]["enviar"] is True, a["salida"])
+    a = R["Y1 'Si , gracias' tras confirmar el turno (caso real de Irina)"]["reps"][0]
+    chequear("U6 el camino de cierre también devuelve derivar_triaje=false (el adaptador del v6 lee siempre el campo)", a["salida"]["derivar_triaje"] is False, a["salida"])
+    sis = next(p for p in R["Z1 charla normal"]["reps"][0]["pedidos"] if p["nodo"] == "Asiri")["entradas"]["sistema"]
+    chequear("U7 el prompt manda urgencias a derivar_triaje con [NO_REPLY] y ya no las pasa a una persona", "derivar_triaje" in sis and "URGENCIAS" in sis and "o hay una urgencia" not in sis, sis[sis.find("URGENCIAS"):sis.find("URGENCIAS") + 300])
+
     # ---------------------------------------------------------------- estructura de las herramientas
     print("\nHERRAMIENTAS DE ASIRI (qué decide el modelo y qué decide el código)")
     tools = [n for n in wf["nodes"] if n["type"].endswith("toolWorkflow")]
-    chequear("S1 son 10 herramientas, todas conectadas al agente como ai_tool", len(tools) == 10 and all(any(x["node"] == "Asiri" for x in wf["connections"][n["name"]]["ai_tool"][0]) for n in tools), [n["name"] for n in tools])
+    chequear("S1 son 11 herramientas, todas conectadas al agente como ai_tool", len(tools) == 11 and all(any(x["node"] == "Asiri" for x in wf["connections"][n["name"]]["ai_tool"][0]) for n in tools), [n["name"] for n in tools])
     def campos(n):
         v = n["parameters"]["workflowInputs"]["value"]
         return {k: ("modelo" if "$fromAI" in x else "codigo") for k, x in v.items()}
@@ -173,7 +211,9 @@ def main():
     por_nombre = {n["name"]: n for n in tools}
     chequear("S4 ejecutar_propuesta no recibe NADA del modelo (la propuesta sale de Redis)", all(v == "codigo" for v in campos(por_nombre["ejecutar_propuesta"]).values()), campos(por_nombre["ejecutar_propuesta"]))
     chequear("S5 pasar_a_humano pide la frase literal y el texto del paciente lo pone el código (para verificarla)", campos(por_nombre["pasar_a_humano"]).get("cita_textual") == "modelo" and campos(por_nombre["pasar_a_humano"]).get("texto_paciente") == "codigo", campos(por_nombre["pasar_a_humano"]))
-    chequear("S6 la acción de las herramientas de clínica es fija por herramienta (el modelo no puede cambiar 'aviso' por 'humano')", all(campos(por_nombre[k]).get("accion") == "codigo" for k in ("avisar_grupo", "pasar_a_humano", "registrar_pago", "lista_espera")))
+    chequear("S6 la acción de las herramientas de clínica es fija por herramienta (el modelo no puede cambiar 'aviso' por 'humano')", all(campos(por_nombre[k]).get("accion") == "codigo" for k in ("avisar_grupo", "pasar_a_humano", "registrar_pago", "lista_espera", "derivar_triaje")))
+    chequear("S9 derivar_triaje: el modelo solo aporta la frase; acción 'triaje' fija; pasar_a_humano ya no ofrece 'urgencia'", set(campos(por_nombre["derivar_triaje"]).items()) >= {("accion", "codigo"), ("cita_textual", "modelo"), ("texto_paciente", "codigo")}
+             and "triaje" in por_nombre["derivar_triaje"]["parameters"]["workflowInputs"]["value"]["accion"] and "urgencia" not in por_nombre["pasar_a_humano"]["parameters"]["workflowInputs"]["value"]["motivo"], campos(por_nombre["derivar_triaje"]))
     chequear("S7 el agente tiene tope de iteraciones y modelo mini con razonamiento bajo", next(n for n in wf["nodes"] if n["name"] == "Asiri")["parameters"]["options"]["maxIterations"] == 5 and next(n for n in wf["nodes"] if n["name"] == "Modelo Asiri")["parameters"]["options"]["reasoningEffort"] == "low")
     chequear("S8 ningún workflow generado lleva claves ni tokens escritos", not any(s in json.dumps([B.wf_cerebro(), B.wf_ejecutar(), B.wf_clinica(), B.wf_confirmar_turno()]) for s in ("sb_secret", "Bearer ", "apikey", "Token ")))
 

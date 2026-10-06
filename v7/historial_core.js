@@ -35,7 +35,7 @@ const HistorialCore = (() => {
     if (i.ok === true) {
       const t = (i.turnos && i.turnos.length) ? 'Turnos vigentes: ' + i.turnos.join('; ') + '.' : 'No tiene turnos vigentes.';
       if (i.varias_fichas) {
-        return 'Pacientes con este celular: ' + (i.pacientes || []).join(', ') + '. ' + (i.ficha_elegida ? 'Ya está elegido: ' + (i.paciente_elegido || '') + '. ' : 'TODAVÍA no sabés para quién es: preguntalo (nombre o DNI) y usá elegir_ficha antes de proponer. ') + t;
+        return 'Pacientes con este celular: ' + (i.pacientes || []).join(', ') + '. ' + (i.ficha_elegida ? 'Ya está elegido: ' + (i.paciente_elegido || '') + '. ' : 'TODAVÍA no sabés para quién es: igual buscá y ofrecé horarios, y en el MISMO mensaje preguntá para quién es (nombre o DNI); elegir_ficha hace falta recién para proponer. ') + t;
       }
       return 'Paciente de este celular: ' + (i.paciente_elegido || '(una ficha)') + '. ' + t;
     }

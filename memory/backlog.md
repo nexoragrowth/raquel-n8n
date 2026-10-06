@@ -465,7 +465,7 @@
 - P1: v7 sombra, escenarios restantes (cambio/cancelación, confirmar tras recordatorio, familias, pagos, pedir persona, urgencia, errores de agenda) + latencia < 10 s.
 - P2: decidir con la Dra. si Asiri ofrece los datos de pago tras reservar o los manda un texto fijo.
 - P2: cerrar el webhook "v7 Test (sombra)" cuando terminen las pruebas (`python scripts/probar_v7.py --desactivar`).
-- P1: portar el triaje con videos del v6 al v7 (herramienta derivar_triaje) o decidir con la Dra. que esos casos pasen a una persona.
+- [x] 2026-10-06 P1: portar el triaje con videos al v7 → `derivar_triaje` construido offline (359/359). Falta: subir a n8n (`crear_v7_en_n8n.py --aplicar`) y, al conectar con el v6, que `Triaje: Evaluar` tome la derivación del v7 como entrada "nueva".
 - P2: que Asiri diga claramente cuando la franja pedida no existe en el rango pedido (hoy pega el bloque con una frase vaga).
 - P2: confirmar_turno tras recordatorio no se pudo probar en sombra: el celular de prueba no tiene turno vigente. Hace falta una cita de prueba en la agenda.
 - P1: Lucas da el OK y se corre `python scripts/apply_fix_cierres_v6.py --apply` (cierres en el v6). Hasta entonces los "gracias" siguen recibiendo "De nada…" o el aviso a la secretaria.
@@ -475,3 +475,11 @@
 - P1: decidir si los recordatorios manuales de Dentalink ("Le recordamos que el día…") activan o no el modo humano (hoy lo harían y taparían el "Confirmo").
 - P1: alerta del Vigía cuando `Activar Takeover (fromMe)` falle: 182 fallos seguidos pasaron como "success" por continueOnFail.
 - [x] 2026-10-06 P0 modo humano arreglado en v6 y Helper, verificado en vivo (ver current-state). Resta: desplegar el panel con HUMANO_MS de 1 h.
+
+## 2026-10-06 noche — v7 (sesión nube)
+- [ ] P0 Lucas: `python scripts/crear_v7_en_n8n.py --aplicar` desde la rama `claude/inspiring-mayer-ki0b7p` (sube triaje, regla del staff, arreglo de propuesta consumida, hint de fichas, webhook de prueba en sombra forzada). El permiso de la sesión nube lo bloquea.
+- [ ] P0 Lucas: `OPENAI_API_KEY` en el entorno de la nube (paciente simulado) + una cita de prueba para "Test - Lucas" en Dentalink → `python tests/examen_v7.py --todos --reps 3`.
+- [ ] P1 Antes de conectar al v6: mover `esUrgenciaFuerte`+red flags antes del fork `v7:tel`; Banlist Validator para `_flow='v7'` (5 reglas "esperamos"); `Triaje: Evaluar` + `isExecuted`; `executionTimeout` en los 9 workflows v7.
+- [ ] P1 Verificar con la Dra.: ¿se puede "abonar el día de la consulta"? Asiri lo afirmó sin herramienta (AGE-04 en sombra). Si no, agregar la política de seña a DATOS DEL CONSULTORIO.
+- [ ] P2 Recorte v7: fusionar ver_turnos+elegir_ficha+proponer+confirmar_turno en "v7 Tool - agenda" con `accion`; un solo JSON de estado por teléfono en vez de 7 GETs post-modelo; "¿Es un cierre?" antes de Datos+Identificar (hoy un "gracias" paga 3 Postgres + 1 GET Dentalink).
+- [ ] P2 Cerrar el webhook "v7 Test (sombra)" al terminar las pruebas (`probar_v7.py --desactivar`); hoy está ACTIVO.
