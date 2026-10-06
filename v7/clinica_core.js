@@ -38,7 +38,7 @@ const ClinicaCore = (() => {
         sombra ? {} : { avisar: { resumen: `[FYI] Lista de espera: la paciente quiere adelantar su turno si se libera uno.${texto ? ' ' + texto : ''}`, tomar: false } });
     }
     if (e.accion === 'pago') {
-      const base = { ok: true, simulado: sombra || undefined, para_asiri: 'Decile que dejaste anotado su aviso de pago y que, cuando mande el comprobante por este chat, la secretaria lo verifica en su horario de atención. NO digas que ya lo recibimos, NO valides el monto ni digas que el pago ingresó.' };
+      const base = { ok: true, simulado: sombra || undefined, para_asiri: 'Decile que dejaste anotado su aviso de pago y que, cuando mande el comprobante por este chat, la secretaria lo verifica en su horario de atención. NO digas que ya lo recibimos, NO valides el monto ni digas que el pago ingresó. NO le preguntes para quién es, a qué corresponde ni su DNI: la secretaria lo imputa. Una sola respuesta corta y no repitas la pregunta.' };
       if (sombra || e.pago_reciente) return res(base);
       return res(base, { avisar: { resumen: '[ACCIÓN] La paciente avisa que ya transfirió o que manda el comprobante: verificar que llegue por el chat e imputarlo al turno.', tomar: false }, marcar_pago: true });
     }

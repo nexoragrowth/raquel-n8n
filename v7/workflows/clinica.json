@@ -6,7 +6,7 @@
     "inputSource": "jsonExample",
     "jsonExample": "{\"tel\": \"5490000000651\", \"exec_id_actual\": \"1234\", \"modo\": \"vivo\", \"accion\": \"aviso\", \"nivel\": \"FYI\", \"texto\": \"\", \"motivo\": \"\", \"cita_textual\": \"\", \"texto_paciente\": \"\"}"
    },
-   "id": "10fa1614-a9b8-4343-9319-299c7f351a1a",
+   "id": "de59d9ab-bb55-445b-98e8-ae1230b0591b",
    "name": "Entrada",
    "type": "n8n-nodes-base.executeWorkflowTrigger",
    "typeVersion": 1.1,
@@ -23,7 +23,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "b8a6f741-7d15-4dc0-8f82-373c38ae79e5",
+   "id": "50d78c7c-0513-455d-832e-cf2e6a22fc60",
    "name": "Redis GET pago",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -42,9 +42,9 @@
   },
   {
    "parameters": {
-    "jsCode": "// clinica_core.js — v7 · herramientas de CLÍNICA de Asiri: avisar al grupo, pasar a una persona, comprobantes de pago, lista de espera. Fuente de verdad en el repo.\n// Regla central: Asiri solo pasa a una persona (y silencia al bot) por 3 motivos (pidio_persona, queja, baja_de_datos), y el código lo VERIFICA contra el texto literal del paciente.\n// Si no se puede verificar, se degrada a un aviso que NO silencia. Avisar nunca silencia. Un error de herramienta no es motivo para derivar.\n// URGENCIAS (derivar_triaje, o pasar_a_humano con motivo urgencia): NO silencian ni las responde Asiri. El mensaje vuelve al triaje del v6 (videos aprobados por la Dra.,\n// pregunta guiada o escalada a la doctora). Acá no se exige verificación: ante la duda, derivar una urgencia de más es lo seguro (el triaje la vuelve a clasificar).\nconst ClinicaCore = (() => {\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\n  const MOTIVOS = ['pidio_persona', 'queja', 'baja_de_datos', 'urgencia'];\n  // Palabras que tienen que aparecer en lo que el paciente escribió, según el motivo que invoca Asiri.\n  const VERIF = {\n    pidio_persona: /\\b(persona|humano|humana|secretaria|doctora|dra|raquel|hablar con|que me llamen|llamenme|llamar|alguien)\\b/,\n    queja: /\\b(queja|reclamo|mal servicio|mala atencion|pesimo|horrible|indignad|molest|enojad|inaceptable|verguenza|nunca me|no puede ser|cansad)\\w*/,\n    baja_de_datos: /\\b(baja|mis datos|borren|eliminen|no me escriban|dejen de escribir|no quiero recibir|no me contacten|desuscrib)\\w*/,\n    urgencia: /\\b(dolor|duele|sangr|hinchaz|hinchad|fiebre|golpe|se (me )?(salio|solto|rompio|despego)|bracket|alambre|aparato|urgenc|infecci|pus|no puedo (comer|abrir))\\w*/,\n  };\n  const NIVELES = ['FYI', 'ACCION'];\n  const lim = (s, n) => String(s || '').trim().slice(0, n);\n\n  // entrada: { accion:'aviso'|'humano'|'pago'|'espera'|'triaje', nivel, texto, motivo, cita_textual, texto_paciente, modo, pago_reciente:boolean, tel }\n  // devuelve { avisar:null|{resumen,tomar}, marcar_pago:boolean, limpiar:boolean, triaje:null|{motivo,cita}, resultado:{...} }\n  function decidir(e) {\n    const sombra = e.modo === 'sombra';\n    const res = (resultado, extra) => ({ avisar: null, marcar_pago: false, limpiar: false, triaje: null, resultado, ...(extra || {}) });\n    // La marca de triaje se deja TAMBIÉN en sombra: no tiene efecto afuera (solo la lee el cerebro de esta ejecución) y así la sombra muestra qué se habría derivado.\n    const aTriaje = (origen) => res({ ok: true, derivado_a_triaje: true, simulado: sombra || undefined,\n      para_asiri: 'El mensaje pasó al protocolo de urgencias de la clínica, que le responde al paciente por su cuenta (video de ayuda o la doctora). Respondé exactamente [NO_REPLY]: no agregues nada, no des indicaciones ni opines sobre el síntoma.' },\n    { triaje: { motivo: origen, cita: lim(e.cita_textual || e.texto_paciente, 200) } });\n    if (e.accion === 'triaje') return aTriaje('derivar_triaje');\n    if (e.accion === 'aviso') {\n      const nivel = NIVELES.includes(String(e.nivel || '').toUpperCase()) ? String(e.nivel).toUpperCase() : null;\n      const texto = lim(e.texto, 400);\n      if (!nivel || texto.length < 5) return res({ ok: false, motivo: 'aviso_invalido', para_asiri: 'Necesito nivel (FYI o ACCION) y un texto claro de qué pasó y qué hay que hacer.' });\n      return res({ ok: true, simulado: sombra || undefined, para_asiri: 'Listo, la clínica fue avisada. Seguí atendiendo al paciente.' }, sombra ? {} : { avisar: { resumen: `[${nivel === 'ACCION' ? 'ACCIÓN' : 'FYI'}] ${texto}`, tomar: false } });\n    }\n    if (e.accion === 'espera') {\n      const texto = lim(e.texto, 300);\n      return res({ ok: true, simulado: sombra || undefined, para_asiri: 'Quedó anotado para la clínica. Decile solo \"se lo dejo anotado a la clínica\": NO prometas que le van a avisar si se libera un turno.' },\n        sombra ? {} : { avisar: { resumen: `[FYI] Lista de espera: la paciente quiere adelantar su turno si se libera uno.${texto ? ' ' + texto : ''}`, tomar: false } });\n    }\n    if (e.accion === 'pago') {\n      const base = { ok: true, simulado: sombra || undefined, para_asiri: 'Decile que dejaste anotado su aviso de pago y que, cuando mande el comprobante por este chat, la secretaria lo verifica en su horario de atención. NO digas que ya lo recibimos, NO valides el monto ni digas que el pago ingresó.' };\n      if (sombra || e.pago_reciente) return res(base);\n      return res(base, { avisar: { resumen: '[ACCIÓN] La paciente avisa que ya transfirió o que manda el comprobante: verificar que llegue por el chat e imputarlo al turno.', tomar: false }, marcar_pago: true });\n    }\n    if (e.accion === 'humano') {\n      const motivo = String(e.motivo || '');\n      if (motivo === 'urgencia') return aTriaje('pasar_a_humano_urgencia');   // una urgencia nunca silencia al bot: va al triaje\n      const cita = sinT(e.cita_textual);\n      const paciente = sinT(e.texto_paciente);\n      const valido = MOTIVOS.includes(motivo) && cita.length >= 3 && paciente.includes(cita) && VERIF[motivo].test(paciente);\n      if (!valido) {\n        // No se puede verificar: NO se silencia. Se avisa a la clínica y se sigue atendiendo.\n        return res({ ok: false, degradado: true, motivo: 'no_verificado', para_asiri: 'No pude verificar ese pedido con lo que escribió el paciente, así que NO lo pasé a una persona. Avisé a la clínica. Seguí atendiéndolo vos y resolvé lo que te pide.' },\n          sombra ? {} : { avisar: { resumen: `[ACCIÓN] Asiri quiso pasar a una persona (${motivo || 'sin motivo'}) pero no se pudo verificar con el mensaje. Revisar la conversación.`, tomar: false } });\n      }\n      const etiqueta = { pidio_persona: 'pidió hablar con una persona', queja: 'hizo una queja', baja_de_datos: 'pidió la baja de sus datos' }[motivo];\n      return res({ ok: true, simulado: sombra || undefined, para_asiri: 'Ya avisé a la clínica y una persona toma el chat. Decíselo con amabilidad y no sigas la conversación sobre turnos.' },\n        sombra ? {} : { avisar: { resumen: `El paciente ${etiqueta}: «${lim(e.cita_textual, 160)}»`, tomar: true }, limpiar: true });\n    }\n    return res({ ok: false, motivo: 'accion_invalida', para_asiri: 'Acción de clínica inválida.' });\n  }\n  return { decidir, MOTIVOS };\n})();\nif (typeof module !== 'undefined') module.exports = ClinicaCore;\nconst e = $('Entrada').first().json;\nconst r = ClinicaCore.decidir({ accion: e.accion, nivel: e.nivel, texto: e.texto, motivo: e.motivo, cita_textual: e.cita_textual, texto_paciente: e.texto_paciente, modo: e.modo, tel: e.tel,\n  pago_reciente: !!$input.first().json.pago_raw });\nreturn [{ json: { avisar: r.avisar, marcar_pago: r.marcar_pago, limpiar: r.limpiar, triaje: r.triaje, resultado: r.resultado } }];"
+    "jsCode": "// clinica_core.js — v7 · herramientas de CLÍNICA de Asiri: avisar al grupo, pasar a una persona, comprobantes de pago, lista de espera. Fuente de verdad en el repo.\n// Regla central: Asiri solo pasa a una persona (y silencia al bot) por 3 motivos (pidio_persona, queja, baja_de_datos), y el código lo VERIFICA contra el texto literal del paciente.\n// Si no se puede verificar, se degrada a un aviso que NO silencia. Avisar nunca silencia. Un error de herramienta no es motivo para derivar.\n// URGENCIAS (derivar_triaje, o pasar_a_humano con motivo urgencia): NO silencian ni las responde Asiri. El mensaje vuelve al triaje del v6 (videos aprobados por la Dra.,\n// pregunta guiada o escalada a la doctora). Acá no se exige verificación: ante la duda, derivar una urgencia de más es lo seguro (el triaje la vuelve a clasificar).\nconst ClinicaCore = (() => {\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\n  const MOTIVOS = ['pidio_persona', 'queja', 'baja_de_datos', 'urgencia'];\n  // Palabras que tienen que aparecer en lo que el paciente escribió, según el motivo que invoca Asiri.\n  const VERIF = {\n    pidio_persona: /\\b(persona|humano|humana|secretaria|doctora|dra|raquel|hablar con|que me llamen|llamenme|llamar|alguien)\\b/,\n    queja: /\\b(queja|reclamo|mal servicio|mala atencion|pesimo|horrible|indignad|molest|enojad|inaceptable|verguenza|nunca me|no puede ser|cansad)\\w*/,\n    baja_de_datos: /\\b(baja|mis datos|borren|eliminen|no me escriban|dejen de escribir|no quiero recibir|no me contacten|desuscrib)\\w*/,\n    urgencia: /\\b(dolor|duele|sangr|hinchaz|hinchad|fiebre|golpe|se (me )?(salio|solto|rompio|despego)|bracket|alambre|aparato|urgenc|infecci|pus|no puedo (comer|abrir))\\w*/,\n  };\n  const NIVELES = ['FYI', 'ACCION'];\n  const lim = (s, n) => String(s || '').trim().slice(0, n);\n\n  // entrada: { accion:'aviso'|'humano'|'pago'|'espera'|'triaje', nivel, texto, motivo, cita_textual, texto_paciente, modo, pago_reciente:boolean, tel }\n  // devuelve { avisar:null|{resumen,tomar}, marcar_pago:boolean, limpiar:boolean, triaje:null|{motivo,cita}, resultado:{...} }\n  function decidir(e) {\n    const sombra = e.modo === 'sombra';\n    const res = (resultado, extra) => ({ avisar: null, marcar_pago: false, limpiar: false, triaje: null, resultado, ...(extra || {}) });\n    // La marca de triaje se deja TAMBIÉN en sombra: no tiene efecto afuera (solo la lee el cerebro de esta ejecución) y así la sombra muestra qué se habría derivado.\n    const aTriaje = (origen) => res({ ok: true, derivado_a_triaje: true, simulado: sombra || undefined,\n      para_asiri: 'El mensaje pasó al protocolo de urgencias de la clínica, que le responde al paciente por su cuenta (video de ayuda o la doctora). Respondé exactamente [NO_REPLY]: no agregues nada, no des indicaciones ni opines sobre el síntoma.' },\n    { triaje: { motivo: origen, cita: lim(e.cita_textual || e.texto_paciente, 200) } });\n    if (e.accion === 'triaje') return aTriaje('derivar_triaje');\n    if (e.accion === 'aviso') {\n      const nivel = NIVELES.includes(String(e.nivel || '').toUpperCase()) ? String(e.nivel).toUpperCase() : null;\n      const texto = lim(e.texto, 400);\n      if (!nivel || texto.length < 5) return res({ ok: false, motivo: 'aviso_invalido', para_asiri: 'Necesito nivel (FYI o ACCION) y un texto claro de qué pasó y qué hay que hacer.' });\n      return res({ ok: true, simulado: sombra || undefined, para_asiri: 'Listo, la clínica fue avisada. Seguí atendiendo al paciente.' }, sombra ? {} : { avisar: { resumen: `[${nivel === 'ACCION' ? 'ACCIÓN' : 'FYI'}] ${texto}`, tomar: false } });\n    }\n    if (e.accion === 'espera') {\n      const texto = lim(e.texto, 300);\n      return res({ ok: true, simulado: sombra || undefined, para_asiri: 'Quedó anotado para la clínica. Decile solo \"se lo dejo anotado a la clínica\": NO prometas que le van a avisar si se libera un turno.' },\n        sombra ? {} : { avisar: { resumen: `[FYI] Lista de espera: la paciente quiere adelantar su turno si se libera uno.${texto ? ' ' + texto : ''}`, tomar: false } });\n    }\n    if (e.accion === 'pago') {\n      const base = { ok: true, simulado: sombra || undefined, para_asiri: 'Decile que dejaste anotado su aviso de pago y que, cuando mande el comprobante por este chat, la secretaria lo verifica en su horario de atención. NO digas que ya lo recibimos, NO valides el monto ni digas que el pago ingresó. NO le preguntes para quién es, a qué corresponde ni su DNI: la secretaria lo imputa. Una sola respuesta corta y no repitas la pregunta.' };\n      if (sombra || e.pago_reciente) return res(base);\n      return res(base, { avisar: { resumen: '[ACCIÓN] La paciente avisa que ya transfirió o que manda el comprobante: verificar que llegue por el chat e imputarlo al turno.', tomar: false }, marcar_pago: true });\n    }\n    if (e.accion === 'humano') {\n      const motivo = String(e.motivo || '');\n      if (motivo === 'urgencia') return aTriaje('pasar_a_humano_urgencia');   // una urgencia nunca silencia al bot: va al triaje\n      const cita = sinT(e.cita_textual);\n      const paciente = sinT(e.texto_paciente);\n      const valido = MOTIVOS.includes(motivo) && cita.length >= 3 && paciente.includes(cita) && VERIF[motivo].test(paciente);\n      if (!valido) {\n        // No se puede verificar: NO se silencia. Se avisa a la clínica y se sigue atendiendo.\n        return res({ ok: false, degradado: true, motivo: 'no_verificado', para_asiri: 'No pude verificar ese pedido con lo que escribió el paciente, así que NO lo pasé a una persona. Avisé a la clínica. Seguí atendiéndolo vos y resolvé lo que te pide.' },\n          sombra ? {} : { avisar: { resumen: `[ACCIÓN] Asiri quiso pasar a una persona (${motivo || 'sin motivo'}) pero no se pudo verificar con el mensaje. Revisar la conversación.`, tomar: false } });\n      }\n      const etiqueta = { pidio_persona: 'pidió hablar con una persona', queja: 'hizo una queja', baja_de_datos: 'pidió la baja de sus datos' }[motivo];\n      return res({ ok: true, simulado: sombra || undefined, para_asiri: 'Ya avisé a la clínica y una persona toma el chat. Decíselo con amabilidad y no sigas la conversación sobre turnos.' },\n        sombra ? {} : { avisar: { resumen: `El paciente ${etiqueta}: «${lim(e.cita_textual, 160)}»`, tomar: true }, limpiar: true });\n    }\n    return res({ ok: false, motivo: 'accion_invalida', para_asiri: 'Acción de clínica inválida.' });\n  }\n  return { decidir, MOTIVOS };\n})();\nif (typeof module !== 'undefined') module.exports = ClinicaCore;\nconst e = $('Entrada').first().json;\nconst r = ClinicaCore.decidir({ accion: e.accion, nivel: e.nivel, texto: e.texto, motivo: e.motivo, cita_textual: e.cita_textual, texto_paciente: e.texto_paciente, modo: e.modo, tel: e.tel,\n  pago_reciente: !!$input.first().json.pago_raw });\nreturn [{ json: { avisar: r.avisar, marcar_pago: r.marcar_pago, limpiar: r.limpiar, triaje: r.triaje, resultado: r.resultado } }];"
    },
-   "id": "e1e20981-6ca2-48bd-aa9a-e1e3a8157124",
+   "id": "3dec09e4-c621-437e-8602-41062265efe7",
    "name": "Decidir",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -63,7 +63,7 @@
      },
      "conditions": [
       {
-       "id": "be1bd7c2-b615-4eee-b83b-4457bd7a8377",
+       "id": "416bd656-6482-44cc-b0a6-0ef7928e7ca9",
        "leftValue": "={{ !!$json.triaje }}",
        "rightValue": "",
        "operator": {
@@ -77,7 +77,7 @@
     },
     "options": {}
    },
-   "id": "012ed095-437f-4e17-8e10-c28e6e921d12",
+   "id": "988990d0-dd83-4593-a6a9-f1945215aeec",
    "name": "¿Derivar a triaje?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -95,7 +95,7 @@
     "expire": true,
     "ttl": 300
    },
-   "id": "35e0141c-66d2-48db-9e42-49ae411eff89",
+   "id": "c1dd3865-d801-44a5-886d-c58d688027db",
    "name": "Redis SET triaje",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -121,7 +121,7 @@
      },
      "conditions": [
       {
-       "id": "3d978236-6d1e-45ea-bf6b-4ffcabf7a213",
+       "id": "4de63389-3acd-461c-8da6-d8b5b6ed6896",
        "leftValue": "={{ !!$('Decidir').first().json.avisar }}",
        "rightValue": "",
        "operator": {
@@ -135,7 +135,7 @@
     },
     "options": {}
    },
-   "id": "ff3f9f29-ca9d-474a-816c-cb0a7db08b79",
+   "id": "f111b5fc-4ef5-4880-b0b9-9f856d51094f",
    "name": "¿Avisar?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -148,7 +148,7 @@
    "parameters": {
     "jsCode": "const e = $('Entrada').first().json; const a = $('Decidir').first().json.avisar;\nlet enviado = false;\ntry { await this.helpers.httpRequest({ method: 'POST', url: 'https://n8n.raquelrodriguez.com.ar/webhook/notify-grupo', qs: Object.assign({ phone: e.tel, resumen: a.resumen }, a.tomar ? { tomar: 'true' } : {}), json: true }); enviado = true; } catch (x) { enviado = false; }\nreturn [{ json: { enviado } }];"
    },
-   "id": "c4caef54-97d4-4fa8-85c2-677cd589391e",
+   "id": "b84df92b-4f54-4860-b0b0-e70f5c1c1707",
    "name": "Avisar al grupo",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -167,7 +167,7 @@
      },
      "conditions": [
       {
-       "id": "9a2e8004-5bba-4a6f-b5ae-4c23ac41a1da",
+       "id": "bf722e73-6285-42ee-b794-1e9c5e36a5bc",
        "leftValue": "={{ $('Decidir').first().json.marcar_pago === true }}",
        "rightValue": "",
        "operator": {
@@ -181,7 +181,7 @@
     },
     "options": {}
    },
-   "id": "0ad68ba5-59cb-4d0f-8c30-b8832b958701",
+   "id": "1d0adbc0-ef96-4474-97a2-85c780bf293b",
    "name": "¿Marcar pago?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -199,7 +199,7 @@
     "expire": true,
     "ttl": 900
    },
-   "id": "04fc59b3-a240-4094-af8c-e11e7bd8a251",
+   "id": "945ce808-43f3-4af5-8329-5f5e637946ca",
    "name": "Redis SET pago",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -225,7 +225,7 @@
      },
      "conditions": [
       {
-       "id": "ba7119ae-3eb4-43c1-8d62-a874b4e1846d",
+       "id": "6cb55c9e-39ca-4afe-a661-4610ea9c2fdb",
        "leftValue": "={{ $('Decidir').first().json.limpiar === true }}",
        "rightValue": "",
        "operator": {
@@ -239,7 +239,7 @@
     },
     "options": {}
    },
-   "id": "35df616d-53dc-4d48-a171-e687d90188c1",
+   "id": "80f73860-b095-4cfd-911d-7a7c62dccf1f",
    "name": "¿Limpiar estado?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -253,7 +253,7 @@
     "operation": "delete",
     "key": "={{ 'propuesta:' + $('Entrada').first().json.tel }}"
    },
-   "id": "0ff4eff4-0d73-44cf-831b-e937c7c2078b",
+   "id": "e6a8ea29-d490-4aad-bd9c-4166770271e8",
    "name": "Redis DEL propuesta",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -274,7 +274,7 @@
     "operation": "delete",
     "key": "={{ 'ofertas:' + $('Entrada').first().json.tel }}"
    },
-   "id": "8b54a0d1-7ab9-4842-b838-d4dbc6abdcaf",
+   "id": "60984af8-a00f-4faf-81f9-fba77aed6437",
    "name": "Redis DEL ofertas",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -295,7 +295,7 @@
     "operation": "delete",
     "key": "={{ 'lotes:' + $('Entrada').first().json.tel }}"
    },
-   "id": "f42731b6-5c84-495f-ab96-04074d7b7a12",
+   "id": "4b223f3b-526c-4961-b839-89b252eb4628",
    "name": "Redis DEL lotes",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -316,7 +316,7 @@
     "operation": "delete",
     "key": "={{ 'turnos_vistos:' + $('Entrada').first().json.tel }}"
    },
-   "id": "970ad65a-6b34-4e14-8554-cf58acad3dae",
+   "id": "09cf7524-3a00-4538-aa07-95839465a348",
    "name": "Redis DEL turnos_vistos",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -337,7 +337,7 @@
     "operation": "delete",
     "key": "={{ 'bloque:' + $('Entrada').first().json.tel }}"
    },
-   "id": "c2995150-6b51-45fd-a99f-9fa8472de6ff",
+   "id": "30a79cc3-5591-4d92-9de3-5aba4b7cbf17",
    "name": "Redis DEL bloque",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -357,7 +357,7 @@
    "parameters": {
     "jsCode": "const r = $('Decidir').first().json.resultado;\nconst f = $('Avisar al grupo');\nconst fallo = (f.isExecuted === true) && $('Avisar al grupo').first().json.enviado === false;\nreturn [{ json: fallo ? { ...r, aviso_no_enviado: true, para_asiri: (r.para_asiri || '') + ' (OJO: el aviso a la clínica no pudo enviarse; no digas que ya les avisaste.)' } : r }];"
    },
-   "id": "0041ffee-9c79-46dd-81c0-83fe82c78957",
+   "id": "c7f62702-59cd-482a-bcbb-1bb2dd8a8335",
    "name": "Devolver",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,

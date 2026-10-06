@@ -318,6 +318,16 @@ def correr_escenario(esc, cerebro, paciente, phone, push, nombre_paciente, verbo
         if texto.upper().startswith("[FIN]"):
             turnos[-1]["fin_paciente"] = True   # el paciente dio por cumplido (o perdido) su objetivo
             break
+        if "[FIN]" in texto.upper():            # "Lucas. [FIN]": manda el mensaje y termina después de la respuesta de Asiri
+            texto = re.sub(r"\s*\[FIN\]\s*", " ", texto, flags=re.I).strip(); fin_tras_este = True
+        else:
+            fin_tras_este = False
+        if fin_tras_este:
+            r, seg = cerebro.responder(phone, push, texto, historial)
+            turnos.append({"turno": n + 1, "paciente": texto, "asiri": r.get("texto"), "enviar": r.get("enviar"), "silencio": r.get("silencio"), "derivar_triaje": r.get("derivar_triaje"),
+                           "tools": r.get("tools") or [], "motivo_chequeo": r.get("motivo_chequeo"), "motivo_banlist": r.get("motivo_banlist"), "fallo_agente": r.get("fallo_agente"), "segundos": round(seg, 1), "error": r.get("error"), "fin_paciente": True})
+            if verbose: print(f"    [{n + 1}] PACIENTE: {texto}\n        ASIRI ({seg:.1f} s): " + (str(r.get("texto")) if r.get("enviar") else "(silencio)").replace("\n", "\n            "))
+            break
     return turnos
 
 
