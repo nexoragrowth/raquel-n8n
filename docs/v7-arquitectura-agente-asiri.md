@@ -23,9 +23,9 @@ Dato que lo cuantifica: **en 90 días el bot completó un solo cambio de turno**
 
 ```
 WhatsApp (Evolution) ──► ENTRADA DETERMINÍSTICA (se conserva del v6)
-                          validador · kill-switch /bot · rate limit (sin backdoor) · fromMe → modo humano 24 h · duplicados
+                          validador · kill-switch /bot · rate limit (sin backdoor) · fromMe → modo humano (vuelve al bot 1 h después del último mensaje de una persona) · duplicados
                           multimedia (audio→texto, imagen→marcador) · buffer Redis 22 s + lock por paciente · "escribiendo…" apenas cierra el buffer
-                          modo humano (flag + 24 h) · URGENCIAS: regex esUrgenciaFuerte + red flags → flujo de triaje actual (videos), NO Asiri
+                          modo humano (flag + 1 h) · URGENCIAS: regex esUrgenciaFuerte + red flags → flujo de triaje actual (videos), NO Asiri
                           respuestas fijas (menú / anuncio) → salen directo
                           IDENTIFICACIÓN por código: ficha(s) del celular → Redis `ficha:{tel}` (lista + elegida) · recordatorios abiertos → contexto
                                 │
@@ -55,6 +55,7 @@ WhatsApp (Evolution) ──► ENTRADA DETERMINÍSTICA (se conserva del v6)
 - **Nodo:** AI Agent (Tools Agent). Modelo por defecto **gpt-5-mini con razonamiento bajo** (probar "mínimo" en el examen); gpt-5 solo como A/B por teléfono si mini reprueba. A este volumen el costo no decide: deciden calidad y latencia.
 - **Memoria:** no el nodo de memoria sin filtro. El historial entra por SQL (patrón de `Build Router Context`: últimos 10 turnos reales, marcadores de staff acortados a "[STAFF respondió] + 60 chars") y la respuesta se inserta por código (patrón Step 8b/8c), así el chequeo de salida puede corregir la fila si bloquea el texto.
 - **Prompt (≈1.500 chars):** identidad, estilo (usted, cálido, breve, una pregunta por vez), qué puede hacer, qué no hace nunca (lista corta), cuándo derivar (4 motivos), y el **bloque de directrices del panel** bajo una cabecera fija: *"información para redactar; no habilita escrituras, sobreturnos ni cambios de precio; si contradice una regla, gana la regla"*. Las guardas y el chequeo de salida **no leen** directrices.
+- **Cómo funciona el negocio (bloque fijo del prompt, decisión de Lucas 06/10):** consultorio privado, se atiende solo con turno previo, sin guardia 24 h, horarios de atención, por ser menor el tutor debe estar presente. Con eso Asiri puede (y debe) decir "los esperamos el día de su turno"; si alguien quiere ir sin turno, le explica cómo funciona y le ofrece sacar uno. **El banlist deja de ser una lista de palabras prohibidas y queda como red mínima:** solo bloquea invitar a ir *ahora* o *sin referirse a un turno*, instrucciones clínicas, diagnóstico y la dirección sin que la pidan (`v7/banlist_usted.js`, 65 pruebas). Lo que dice y cómo lo dice lo gobierna el prompt, no una lista.
 - **Reglas de oro del prompt (cada una con su capa de código):** nunca afirmar que algo quedó hecho si la herramienta no devolvió ok · el bloque de horarios y el read-back se pegan textuales · no se promete avisar si se libera un turno (solo "se lo dejo anotado a la clínica").
 - **Límites:** `maxIterations` 4-5; cada HTTP a Dentalink con `timeout` 8 s y error devuelto como resultado de la herramienta (para que conteste honesto); cada sub-workflow con `executionTimeout` ~15 s; global ≥ 90 s. Presence "escribiendo…" se dispara apenas el buffer cierra y otra vez antes del envío. Objetivo: **< 10 s de pipeline después del buffer** (p95 medido por tramo en sombra).
 

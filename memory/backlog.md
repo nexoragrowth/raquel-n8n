@@ -459,3 +459,19 @@
 - P2 Inserción en v6: nodo Redis `v7:tel:{tel}` antes del Router; sombra en vivo con métricas; examen vivo (ficha de prueba, teardown); piloto por cohortes de recordatorio supervisado; cutover con rollback drenado y `/v7 off`.
 - P2 Panel: config por fila (id del workflow principal, nodos editables), mostrar teléfonos en v7; directrices bajo cabecera fija.
 - P3 Verificar/corregir "Reprogramar" del panel (formato de hora).
+
+## 2026-10-06 tarde
+- P1: Lucas pega a mano en el v6 el parche de cierres (`python scripts/parche_manual_cierres_v6.py` imprime Fallback Output + regla del Sub-Agent General). Hasta que el v7 reemplace al v6.
+- P1: v7 sombra, escenarios restantes (cambio/cancelación, confirmar tras recordatorio, familias, pagos, pedir persona, urgencia, errores de agenda) + latencia < 10 s.
+- P2: decidir con la Dra. si Asiri ofrece los datos de pago tras reservar o los manda un texto fijo.
+- P2: cerrar el webhook "v7 Test (sombra)" cuando terminen las pruebas (`python scripts/probar_v7.py --desactivar`).
+- P1: portar el triaje con videos del v6 al v7 (herramienta derivar_triaje) o decidir con la Dra. que esos casos pasen a una persona.
+- P2: que Asiri diga claramente cuando la franja pedida no existe en el rango pedido (hoy pega el bloque con una frase vaga).
+- P2: confirmar_turno tras recordatorio no se pudo probar en sombra: el celular de prueba no tiene turno vigente. Hace falta una cita de prueba en la agenda.
+- P1: Lucas da el OK y se corre `python scripts/apply_fix_cierres_v6.py --apply` (cierres en el v6). Hasta entonces los "gracias" siguen recibiendo "De nada…" o el aviso a la secretaria.
+- P1: v7: desplegar la regla de respuestas a preguntas del staff y repetir los casos del 03/10 y 16/09 con el modelo real.
+- P2: modo humano que se traga confirmaciones: un "confirmo" en conversación con la secretaria no confirma el turno en Dentalink. Decidir quién lo confirma.
+- P0: aplicar `python scripts/apply_fix_modo_humano_1h.py --apply` (con OK de Lucas) y después desplegar el panel con `HUMANO_MS` de 1 h. Hasta entonces el bot le contesta al paciente mientras habla la Dra.
+- P1: decidir si los recordatorios manuales de Dentalink ("Le recordamos que el día…") activan o no el modo humano (hoy lo harían y taparían el "Confirmo").
+- P1: alerta del Vigía cuando `Activar Takeover (fromMe)` falle: 182 fallos seguidos pasaron como "success" por continueOnFail.
+- [x] 2026-10-06 P0 modo humano arreglado en v6 y Helper, verificado en vivo (ver current-state). Resta: desplegar el panel con HUMANO_MS de 1 h.

@@ -768,3 +768,19 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 **Razón**: el problema es de arquitectura (el estado se adivina por regex sobre el último mensaje; cada arreglo rompe otra cosa); en 90 días el bot completó 1 cambio de turno; línea base p50 12 s / p95 48 s + 22 s de buffer.
 **Alternativas descartadas**: (a) seguir parchando el v6; (b) sub-agentes LLM anidados estilo "parent agent": la revisión los descartó (ids elegidos por un modelo, ok escrito por un modelo, 20-30 s por respuesta). Quedan como opción si el examen de entrada muestra que plano no alcanza.
 **Revisable**: sí, tras la sombra retrospectiva (modelo, latencia) y el examen vivo. Diseño: `docs/v7-arquitectura-agente-asiri.md`.
+
+
+## 2026-10-06 — Cierres ("gracias", "ok", "si, gracias") se resuelven en código, antes del modelo
+
+**Decisión**: en el v7 un agradecimiento o despedida puro no llega al modelo: el pre-filtro `esCierre` (`v7/historial_core.js`) devuelve silencio. Se anula si lo último que se le dijo al paciente pedía una respuesta (pregunta, recordatorio sin confirmar).
+**Razón**: dos bugs reales de Irina (05-06/10): el Fallback Output del v6 reemplazaba el `[NO_REPLY]` del agente por "Ya le transmito su consulta a la secretaria…" y el Sub-Agent General contestaba "De nada! Quedo a disposición…". Pedir silencio por prompt no alcanza.
+**Alternativas descartadas**: confiar solo en una regla de prompt (ya falló); volver al filtro conversacional del 27/05 (mataba "Confirmamos turno gracias"): por eso el filtro exige que el mensaje sean SOLO palabras de cierre.
+**Revisable**: sí; si un paciente responde "si gracias" a un recordatorio pendiente y nadie confirma, se mide en la sombra.
+
+
+## 2026-10-06 — Modo humano: ventana de 1 hora desde el último mensaje de una persona
+
+**Decisión**: el bot vuelve solo 1 h después del último mensaje del personal. La ventana se mide con `pacientes.human_takeover_at`, que cada mensaje del personal renueva; el panel usa la misma (`HUMANO_MS`). El kill-switch admin (/bot off) sigue por encima.
+**Razón**: pedido de Lucas ("post 1 hora sin que hable un humano que vuelva a modo bot, siempre sirvió"). La Dra. ya se quejó de 4 h ("queda mudo demasiado"). Al desacoplar Chatwoot se perdió el workflow que lo hacía y la ventana quedó en 24 h, y además el nodo que prende el flag está roto desde el 05/10.
+**Alternativas descartadas**: reactivar `Auto Reactivar` con cron (depende de Chatwoot, y la ventana por timestamp no necesita cron).
+**Revisable**: sí. Pendiente de aplicar con OK de Lucas.

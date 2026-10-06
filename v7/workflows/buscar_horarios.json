@@ -1,0 +1,606 @@
+{
+ "name": "v7 Tool - buscar_horarios",
+ "nodes": [
+  {
+   "parameters": {
+    "inputSource": "jsonExample",
+    "jsonExample": "{\"tel\": \"5490000000651\", \"exec_id_actual\": \"1234\", \"desde\": \"\", \"hasta\": \"\"}"
+   },
+   "id": "ef7ac802-4481-4121-a6a5-9e3bd568ebe7",
+   "name": "Entrada",
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    0,
+    240
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "get",
+    "propertyName": "ofertas_raw",
+    "key": "={{ 'ofertas:' + $json.tel }}",
+    "keyType": "string",
+    "options": {}
+   },
+   "id": "240c791d-9fc0-4a7e-855a-302a60fa62df",
+   "name": "Redis GET ofertas",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    220,
+    240
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "alwaysOutputData": true,
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "operation": "get",
+    "propertyName": "bloque_raw",
+    "key": "={{ 'bloque:' + $('Entrada').first().json.tel }}",
+    "keyType": "string",
+    "options": {}
+   },
+   "id": "55d68385-d636-43b0-a384-d64147ed2079",
+   "name": "Redis GET bloque",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    440,
+    240
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "alwaysOutputData": true,
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "operation": "get",
+    "propertyName": "req_raw",
+    "key": "={{ 'bloque_req:' + $('Entrada').first().json.tel }}",
+    "keyType": "string",
+    "options": {}
+   },
+   "id": "53b030a8-ac22-40e7-82a3-51ddbca1ec63",
+   "name": "Redis GET bloque_req",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    660,
+    240
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "alwaysOutputData": true,
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "jsCode": "const e = $('Entrada').first().json;\nconst req = String(e.desde || '') + '|' + String(e.hasta || '');\nconst cache = String($('Redis GET bloque').first().json.bloque_raw || '');\nconst ultimo = String($('Redis GET bloque_req').first().json.req_raw || '');\nconst hit = !!cache && ultimo === req;\nlet prev = []; try { prev = JSON.parse($('Redis GET ofertas').first().json.ofertas_raw || '[]') || []; } catch (x) { prev = []; }\nreturn [{ json: { hit, req, prev, resultado: hit ? { ok: true, repetido: true, bloque: cache, para_asiri: 'Este es el MISMO bloque que ya le ofreciste (no cuenta como uno nuevo). Si el paciente ya eligió un horario, NO lo pegues de nuevo: llamá proponer.' } : null } }];"
+   },
+   "id": "572f27dc-a309-4281-9298-7590d5cff6a1",
+   "name": "¿Es el mismo pedido?",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    240
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict"
+     },
+     "conditions": [
+      {
+       "id": "063ae998-6573-4c3f-aca3-66f62e7c5903",
+       "leftValue": "={{ $json.hit === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "65863b74-85e0-4f61-b38a-c472d2a68846",
+   "name": "¿Repetido?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    1100,
+    240
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "incr",
+    "key": "={{ 'lotes:' + $('Entrada').first().json.tel }}",
+    "expire": true,
+    "ttl": 7200
+   },
+   "id": "0295493a-5302-4458-a18f-3ecda57dd39c",
+   "name": "Redis INCR lotes",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    1320,
+    300
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "alwaysOutputData": true,
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "jsCode": "// horarios_core.js — v7 · qué horarios se le OFRECIERON al paciente. Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// buscar_horarios devuelve el bloque de texto que armó \"Sub-WF - Buscar Horarios Validado\" (formato pedido por la Dra. el 07/09). De ese mismo texto sale la lista\n// de horarios ofrecidos que después valida agenda_core.proponer (\"solo se puede reservar lo que se ofreció\") y chequeo_salida (nada inventado).\nconst HorariosCore = (() => {\n  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const hh = (h, m) => String(Number(h)).padStart(2, '0') + ':' + m;\n\n  // \"* Jueves 22 de octubre 8:00 , 9:20\" → [{fecha:'2026-10-22', hora:'08:00'}, {fecha:'2026-10-22', hora:'09:20'}]. El bloque no lleva año: el actual, o el que viene si ya pasó.\n  function parseBloque(bloque, hoyISO) {\n    const out = [];\n    for (const linea of String(bloque || '').split('\\n')) {\n      const l = sinT(linea.trim());\n      const m = /^\\*\\s*[^\\d]*?(\\d{1,2})\\s+de\\s+([a-z]+)\\s+(.*)$/.exec(l);\n      if (!m) continue;\n      const mes = MESES.indexOf(m[2] === 'setiembre' ? 'septiembre' : m[2]) + 1;\n      if (!mes) continue;\n      const mm = String(mes).padStart(2, '0'), dd = String(Number(m[1])).padStart(2, '0');\n      const anio = Number(hoyISO.slice(0, 4));\n      const cand = `${anio}-${mm}-${dd}`;\n      const fecha = cand >= hoyISO ? cand : `${anio + 1}-${mm}-${dd}`;\n      for (const t of m[3].matchAll(/(\\d{1,2}):(\\d{2})/g)) out.push({ fecha, hora: hh(t[1], t[2]) });\n    }\n    return out;\n  }\n  // Une lo ya ofrecido con lo nuevo (el paciente puede elegir de un bloque anterior), sin duplicados y solo futuro.\n  function unir(previas, nuevas, hoyISO) {\n    const vistos = new Set(); const out = [];\n    for (const o of [...(previas || []), ...(nuevas || [])]) {\n      const k = `${o.fecha} ${o.hora}`;\n      if (o.fecha < hoyISO || vistos.has(k)) continue;\n      vistos.add(k); out.push({ fecha: o.fecha, hora: o.hora });\n    }\n    return out;\n  }\n  // Regla de la Dra. (07/09): como máximo 2 bloques por conversación. A la tercera consulta no se busca otro: se anota para la clínica.\n  const MAX_LOTES = 2;\n  const limiteLotes = (n) => Number(n) > MAX_LOTES;\n  return { parseBloque, unir, limiteLotes, MAX_LOTES };\n})();\nif (typeof module !== 'undefined') module.exports = HorariosCore;\nconst prev = $('¿Es el mismo pedido?').first().json.prev || [];\nconst n = Object.values($input.first().json || {})[0];\nif (HorariosCore.limiteLotes(n)) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'limite_de_bloques', para_asiri: 'Ya se le ofrecieron dos bloques de horarios y no hay un tercero. No ofrezcas otro: decile con amabilidad que se lo dejás anotado a la clínica para que lo ayuden con otra fecha, y llamá avisar_grupo con nivel FYI.' } } }];\nreturn [{ json: { terminado: false, prev } }];"
+   },
+   "id": "22cdc84b-10b2-4f6f-87d5-83d3c4e1e65f",
+   "name": "Límite",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1540,
+    300
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict"
+     },
+     "conditions": [
+      {
+       "id": "81619c04-9a96-424c-bcb9-8ffb0d0c685b",
+       "leftValue": "={{ $json.terminado === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "d18a28b7-3385-4260-b5ba-7f71f5ea5ed4",
+   "name": "¿Termina? (límite)",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    1760,
+    300
+   ]
+  },
+  {
+   "parameters": {
+    "workflowId": {
+     "__rl": true,
+     "value": "GuDQ9VmKWZvQnerV",
+     "mode": "id"
+    },
+    "workflowInputs": {
+     "mappingMode": "defineBelow",
+     "value": {
+      "fecha": "={{ '' }}",
+      "desde": "={{ $('Entrada').first().json.desde || '' }}",
+      "hasta": "={{ $('Entrada').first().json.hasta || '' }}"
+     },
+     "matchingColumns": [],
+     "schema": []
+    },
+    "options": {}
+   },
+   "id": "8dfbd507-cd8e-4813-aa49-c41802808046",
+   "name": "Buscar horarios (sub-WF)",
+   "type": "n8n-nodes-base.executeWorkflow",
+   "typeVersion": 1.2,
+   "position": [
+    1980,
+    360
+   ],
+   "alwaysOutputData": true,
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "// horarios_core.js — v7 · qué horarios se le OFRECIERON al paciente. Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// buscar_horarios devuelve el bloque de texto que armó \"Sub-WF - Buscar Horarios Validado\" (formato pedido por la Dra. el 07/09). De ese mismo texto sale la lista\n// de horarios ofrecidos que después valida agenda_core.proponer (\"solo se puede reservar lo que se ofreció\") y chequeo_salida (nada inventado).\nconst HorariosCore = (() => {\n  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const hh = (h, m) => String(Number(h)).padStart(2, '0') + ':' + m;\n\n  // \"* Jueves 22 de octubre 8:00 , 9:20\" → [{fecha:'2026-10-22', hora:'08:00'}, {fecha:'2026-10-22', hora:'09:20'}]. El bloque no lleva año: el actual, o el que viene si ya pasó.\n  function parseBloque(bloque, hoyISO) {\n    const out = [];\n    for (const linea of String(bloque || '').split('\\n')) {\n      const l = sinT(linea.trim());\n      const m = /^\\*\\s*[^\\d]*?(\\d{1,2})\\s+de\\s+([a-z]+)\\s+(.*)$/.exec(l);\n      if (!m) continue;\n      const mes = MESES.indexOf(m[2] === 'setiembre' ? 'septiembre' : m[2]) + 1;\n      if (!mes) continue;\n      const mm = String(mes).padStart(2, '0'), dd = String(Number(m[1])).padStart(2, '0');\n      const anio = Number(hoyISO.slice(0, 4));\n      const cand = `${anio}-${mm}-${dd}`;\n      const fecha = cand >= hoyISO ? cand : `${anio + 1}-${mm}-${dd}`;\n      for (const t of m[3].matchAll(/(\\d{1,2}):(\\d{2})/g)) out.push({ fecha, hora: hh(t[1], t[2]) });\n    }\n    return out;\n  }\n  // Une lo ya ofrecido con lo nuevo (el paciente puede elegir de un bloque anterior), sin duplicados y solo futuro.\n  function unir(previas, nuevas, hoyISO) {\n    const vistos = new Set(); const out = [];\n    for (const o of [...(previas || []), ...(nuevas || [])]) {\n      const k = `${o.fecha} ${o.hora}`;\n      if (o.fecha < hoyISO || vistos.has(k)) continue;\n      vistos.add(k); out.push({ fecha: o.fecha, hora: o.hora });\n    }\n    return out;\n  }\n  // Regla de la Dra. (07/09): como máximo 2 bloques por conversación. A la tercera consulta no se busca otro: se anota para la clínica.\n  const MAX_LOTES = 2;\n  const limiteLotes = (n) => Number(n) > MAX_LOTES;\n  return { parseBloque, unir, limiteLotes, MAX_LOTES };\n})();\nif (typeof module !== 'undefined') module.exports = HorariosCore;\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Jujuy' }).format(new Date());\nconst prev = $('Límite').first().json.prev || [];\nconst resp = $input.first().json || {};\nconst bloque = typeof resp.bloque === 'string' ? resp.bloque.trim() : '';\nif (!bloque) return [{ json: { terminado: true, resultado: { ok: false, motivo: (resp.error || resp.error_tecnico) ? 'error_tecnico' : 'sin_turnos', para_asiri: (resp.error || resp.error_tecnico) ? 'No pude consultar la agenda en este momento. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).' : 'No hay turnos para ofrecer en ese rango. No inventes horarios ni pidas fecha: avisá a la clínica con avisar_grupo (ACCION).' } } }];\nconst ofertas = HorariosCore.unir(prev, HorariosCore.parseBloque(bloque, hoy), hoy);\nreturn [{ json: { terminado: false, ofertas_json: JSON.stringify(ofertas), bloque, req: $('¿Es el mismo pedido?').first().json.req, resultado: { ok: true, bloque, para_asiri: 'Pegá este bloque TEXTUAL al paciente, sin cambiar ni agregar nada. No le preguntes la franja ni la fecha: que elija de lo que ofrecés.' } } }];"
+   },
+   "id": "9e20ba26-ff25-4859-99db-32400bf1d901",
+   "name": "Ofertas",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2200,
+    360
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict"
+     },
+     "conditions": [
+      {
+       "id": "b0fe9db9-af29-45ef-bbfa-b6d32f76d7e1",
+       "leftValue": "={{ $json.terminado === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "222bb46d-2ceb-4924-ad07-da468445aa47",
+   "name": "¿Termina? (ofertas)",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    2420,
+    360
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "set",
+    "key": "={{ 'ofertas:' + $('Entrada').first().json.tel }}",
+    "value": "={{ $('Ofertas').first().json.ofertas_json }}",
+    "keyType": "string",
+    "expire": true,
+    "ttl": 7200
+   },
+   "id": "7f15e262-c883-4b80-be53-06b649bcb058",
+   "name": "Redis SET ofertas",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    2640,
+    420
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "operation": "set",
+    "key": "={{ 'bloque:' + $('Entrada').first().json.tel }}",
+    "value": "={{ $('Ofertas').first().json.bloque }}",
+    "keyType": "string",
+    "expire": true,
+    "ttl": 7200
+   },
+   "id": "0e3b39fe-e587-4bc8-b96a-8a9849dd54af",
+   "name": "Redis SET bloque",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    2860,
+    420
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "operation": "set",
+    "key": "={{ 'bloque_req:' + $('Entrada').first().json.tel }}",
+    "value": "={{ $('Ofertas').first().json.req }}",
+    "keyType": "string",
+    "expire": true,
+    "ttl": 7200
+   },
+   "id": "08392675-823b-4f83-8734-9723abeb0d1c",
+   "name": "Redis SET bloque_req",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    3080,
+    420
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "operation": "set",
+    "key": "={{ 'bloque_exec:' + $('Entrada').first().json.tel + ':' + $('Entrada').first().json.exec_id_actual }}",
+    "value": "={{ $('Ofertas').first().json.bloque }}",
+    "keyType": "string",
+    "expire": true,
+    "ttl": 600
+   },
+   "id": "6b006e15-b82a-460d-a702-bd21cc3245bf",
+   "name": "Redis SET bloque_exec",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    3300,
+    420
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "jsCode": "// El resultado sale del último nodo de decisión que corrió: Ofertas (bloque nuevo / sin turnos / error), si no Límite (tercer bloque), si no el pedido repetido (caché).\nconst corrio = (n) => { try { return $(n).isExecuted === true; } catch (x) { return false; } };\nconst r = corrio('Ofertas') ? $('Ofertas').first().json.resultado : (corrio('Límite') ? $('Límite').first().json.resultado : $('¿Es el mismo pedido?').first().json.resultado);\nreturn [{ json: r || { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude buscar horarios; avisá a la clínica con avisar_grupo (ACCION).' } }];"
+   },
+   "id": "e4e2acff-efeb-4b49-a11a-369d0a6ebdbc",
+   "name": "Devolver",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3520,
+    300
+   ]
+  }
+ ],
+ "connections": {
+  "Entrada": {
+   "main": [
+    [
+     {
+      "node": "Redis GET ofertas",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis GET ofertas": {
+   "main": [
+    [
+     {
+      "node": "Redis GET bloque",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis GET bloque": {
+   "main": [
+    [
+     {
+      "node": "Redis GET bloque_req",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis GET bloque_req": {
+   "main": [
+    [
+     {
+      "node": "¿Es el mismo pedido?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "¿Es el mismo pedido?": {
+   "main": [
+    [
+     {
+      "node": "¿Repetido?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "¿Repetido?": {
+   "main": [
+    [
+     {
+      "node": "Devolver",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Redis INCR lotes",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis INCR lotes": {
+   "main": [
+    [
+     {
+      "node": "Límite",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Límite": {
+   "main": [
+    [
+     {
+      "node": "¿Termina? (límite)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "¿Termina? (límite)": {
+   "main": [
+    [
+     {
+      "node": "Devolver",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Buscar horarios (sub-WF)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Buscar horarios (sub-WF)": {
+   "main": [
+    [
+     {
+      "node": "Ofertas",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Ofertas": {
+   "main": [
+    [
+     {
+      "node": "¿Termina? (ofertas)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "¿Termina? (ofertas)": {
+   "main": [
+    [
+     {
+      "node": "Devolver",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Redis SET ofertas",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis SET ofertas": {
+   "main": [
+    [
+     {
+      "node": "Redis SET bloque",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis SET bloque": {
+   "main": [
+    [
+     {
+      "node": "Redis SET bloque_req",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis SET bloque_req": {
+   "main": [
+    [
+     {
+      "node": "Redis SET bloque_exec",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis SET bloque_exec": {
+   "main": [
+    [
+     {
+      "node": "Devolver",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "callerPolicy": "workflowsFromSameOwner",
+  "availableInMCP": false,
+  "binaryMode": "separate",
+  "errorWorkflow": "yop6TIVoKiWUxfEn"
+ },
+ "staticData": null
+}
