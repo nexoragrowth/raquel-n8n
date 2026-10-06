@@ -86,6 +86,9 @@ let texto = typeof ag.output === 'string' ? ag.output.trim() : '';
 // se quitan por código, línea por línea, solo cuando terminan en ':' y preceden al texto real (examen 06/10: 3 de 8 conversaciones las mostraron).
 const RE_META = /^\\s*(?:(?:le|te) (?:copio|paso|comparto|transmito|dejo|env[ií]o) (?:el |la |este |esta )?(?:mensaje|bloque|texto|confirmaci[oó]n)[^\\n:]{0,60}:|peg[aá](?:lo|le|selo)? [^\\n:]{0,80}:|ac[aá] (?:va|tiene|le va)[^\\n:]{0,60}:|mensaje (?:para|de) confirmaci[oó]n:)\\s*/i;
 let metaQuitada = false; while (RE_META.test(texto)) { texto = texto.replace(RE_META, '').trim(); metaQuitada = true; }
+// "Decile que dejé anotado…" (copiado de una nota interna) → "Dejé anotado…": se saca el imperativo y se capitaliza.
+const RE_DECILE = /^\\s*(?:dec[ií]le|decile|dec[ií]selo|avis[aá]le|contale|explic[aá]le|respondele|pedile)\\s+(?:que\\s+)?/i;
+if (RE_DECILE.test(texto)) { texto = texto.replace(RE_DECILE, ''); texto = texto.charAt(0).toUpperCase() + texto.slice(1); metaQuitada = true; }
 const hayOk = libros.some((l) => l && l.ok === true);
 const avisos = []; let fallo_agente = false;
 if (!texto || ag.error) {
@@ -100,7 +103,7 @@ if (texto === '[NO_REPLY]' && !hayOk) silencio = true;
 let derivar_triaje = false;
 if (triaje && !hayOk) { derivar_triaje = true; silencio = true; texto = null; }
 else if (triaje && hayOk) avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] La paciente mencionó una urgencia en el mismo mensaje en que se hizo un cambio en la agenda: revisar y contestarle. «' + String(triaje.cita || '').slice(0, 160) + '»' });
-let motivo_chequeo = null, motivo_banlist = null;
+let motivo_chequeo = null, motivo_banlist = null; const texto_modelo = texto;
 if (!silencio) {
   const propReadback = (prop && String(prop.exec_id) === execId) ? prop.readback_text : null;
   const c = ChequeoSalida.revisar({ texto, libros, ofertas, turnos_vistos: vistos, propuesta_readback: propReadback, bloque_ofertas: bloque || null, bloque_exec: bloqueExec || null });
@@ -120,7 +123,7 @@ const humano = { type: 'human', content: String(e.texto || ''), additional_kwarg
 const ai = { type: 'ai', content: texto, additional_kwargs: { source: 'wa_outbound' }, response_metadata: {}, tool_calls: [], invalid_tool_calls: [] };
 if (vivo) for (const a of avisos) { try { await this.helpers.httpRequest({ method: 'POST', url: '""" + GRUPO + """', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }
 const tools = (Array.isArray(ag.intermediateSteps) ? ag.intermediateSteps : []).map((s) => ({ tool: s && s.action && s.action.tool, input: s && s.action && s.action.toolInput, obs: String((s && s.observation) || '').slice(0, 400) }));
-return [{ json: { phone: e.phone, modo: e.modo || 'vivo', texto, enviar: !silencio, silencio, derivar_triaje, meta_quitada: metaQuitada, triaje: derivar_triaje ? triaje : null, motivo_chequeo, motivo_banlist, fallo_agente, propuesta_json, tools, avisos, guardar: vivo && !silencio,
+return [{ json: { phone: e.phone, modo: e.modo || 'vivo', texto, enviar: !silencio, silencio, derivar_triaje, meta_quitada: metaQuitada, texto_original: (motivo_chequeo || motivo_banlist) && e.modo === 'sombra' ? texto_modelo : null, triaje: derivar_triaje ? triaje : null, motivo_chequeo, motivo_banlist, fallo_agente, propuesta_json, tools, avisos, guardar: vivo && !silencio,
   msg_human: JSON.stringify(humano), msg_ai: JSON.stringify(ai) } }];"""
 
 
@@ -156,7 +159,7 @@ def wf_cerebro():
     g.redis_set("Redis SET propuesta enviada", f"'propuesta:' + {tel}", "$('Salida').first().json.propuesta_json", 1800, 2860, 240)
     g.si("¿Guardar en memoria?", "$('Salida').first().json.guardar === true", 3080, 300)
     g.postgres("Guardar en memoria", "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb), ($1, $3::jsonb)", "[$('Salida').first().json.phone, $('Salida').first().json.msg_human, $('Salida').first().json.msg_ai]", 3300, 240)
-    g.code("Devolver", "const s = $('Salida').first().json;\nreturn [{ json: { texto: s.texto, enviar: s.enviar, silencio: s.silencio, derivar_triaje: s.derivar_triaje === true, triaje: s.triaje || null, modo: s.modo, motivo_chequeo: s.motivo_chequeo, motivo_banlist: s.motivo_banlist, fallo_agente: s.fallo_agente, tools: s.tools, avisos: s.avisos } }];", 3520, 300)
+    g.code("Devolver", "const s = $('Salida').first().json;\nreturn [{ json: { texto: s.texto, enviar: s.enviar, silencio: s.silencio, derivar_triaje: s.derivar_triaje === true, triaje: s.triaje || null, texto_original: s.texto_original || null, modo: s.modo, motivo_chequeo: s.motivo_chequeo, motivo_banlist: s.motivo_banlist, fallo_agente: s.fallo_agente, tools: s.tools, avisos: s.avisos } }];", 3520, 300)
     for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Datos del consultorio", 0), ("Datos del consultorio", "Identificar paciente", 0), ("Identificar paciente", "Armar contexto", 0), ("Armar contexto", "¿Es un cierre?", 0), ("¿Es un cierre?", "Cierre sin respuesta", 0), ("¿Es un cierre?", "Asiri", 1), ("Asiri", "Redis GET libro", 0),
                      ("Redis GET libro", "Redis GET propuesta", 0), ("Redis GET propuesta", "Redis GET ofertas", 0), ("Redis GET ofertas", "Redis GET turnos_vistos", 0), ("Redis GET turnos_vistos", "Redis GET bloque", 0),
                      ("Redis GET bloque", "Redis GET bloque_exec", 0), ("Redis GET bloque_exec", "Redis GET triaje", 0), ("Redis GET triaje", "Salida", 0), ("Salida", "¿Marcar propuesta enviada?", 0), ("¿Marcar propuesta enviada?", "Redis SET propuesta enviada", 0), ("¿Marcar propuesta enviada?", "¿Guardar en memoria?", 1),

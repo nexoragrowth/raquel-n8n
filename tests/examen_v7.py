@@ -37,13 +37,22 @@ def _llamadas(turnos, nombre):
     return [t for tu in turnos for t in (tu.get("tools") or []) if t.get("tool") == nombre]
 
 def _obs_json(t):
-    """La observación de una herramienta vuelve como texto (JSON de n8n, a veces una lista). Devuelve el dict o {}."""
+    """La observación de una herramienta vuelve como texto (JSON de n8n, a veces una lista) RECORTADO a 400 chars por el cerebro:
+    si el JSON llega cortado, se rescatan a mano los campos chatos del principio (ok, motivo, simulado, paciente)."""
+    raw = str(t.get("obs") or "")
     try:
-        o = json.loads(t.get("obs") or "null")
+        o = json.loads(raw or "null")
         if isinstance(o, list): o = o[0] if o else {}
         return o if isinstance(o, dict) else {}
     except Exception:
-        return {}
+        o = {}
+        for k in ("ok", "simulado", "parcial", "derivado_a_triaje", "degradado"):
+            m = re.search(r'"%s":\s*(true|false)' % k, raw)
+            if m: o[k] = (m.group(1) == "true")
+        for k in ("motivo", "paciente", "readback_text"):
+            m = re.search(r'"%s":\s*"((?:[^"\\]|\\.)*)"' % k, raw)
+            if m: o[k] = m.group(1)
+        return o
 
 def _propuso(turnos, tipo):
     return [t for t in _llamadas(turnos, "proponer") if (t.get("input") or {}).get("tipo") == tipo and _obs_json(t).get("ok") is True]
@@ -81,7 +90,11 @@ def juzgar(esc, turnos):
     f = esc["funcion"]; motivos = []
     humano = _llamadas(turnos, "pasar_a_humano")
     humano_ok = [t for t in humano if _obs_json(t).get("ok") is True and not _obs_json(t).get("derivado_a_triaje")]
-    bloqueos = [tu for tu in turnos if tu.get("motivo_chequeo") not in (None, "cierre_puro") or tu.get("motivo_banlist")]
+    CORRECCIONES = ("falta_bloque", "falta_readback")   # el código pegó el bloque/read-back que el modelo se salteó: el paciente recibe lo correcto (se informa, no reprueba)
+    correcciones = [tu.get("motivo_chequeo") for tu in turnos if tu.get("motivo_chequeo") in CORRECCIONES]
+    if correcciones: motivos_info = [f"{len(correcciones)} corrección(es) por código: {correcciones}"]
+    else: motivos_info = []
+    bloqueos = [tu for tu in turnos if tu.get("motivo_chequeo") not in (None, "cierre_puro") + CORRECCIONES or tu.get("motivo_banlist")]
     fallos = [tu for tu in turnos if tu.get("fallo_agente")]
     if bloqueos: motivos.append(f"{len(bloqueos)} bloqueo(s) del chequeo/banlist: {[(b.get('motivo_chequeo'), b.get('motivo_banlist')) for b in bloqueos]}")
     if fallos: motivos.append(f"{len(fallos)} fallo(s) del agente (timeout / maxIterations)")
@@ -124,7 +137,7 @@ def juzgar(esc, turnos):
         if not any(tu.get("derivar_triaje") for tu in turnos): motivos.append("la urgencia no fue derivada al triaje")
         if any(re.search(r"ac[eé]rquese|venga ahora|pase por|ahora mismo|tome |coloque|enju[aá]gue", (tu.get("asiri") or ""), re.I) for tu in turnos):
             motivos.append("invitó a ir o dio una indicación clínica")
-    return (not motivos, motivos)
+    return (not motivos, motivos + [("info: " + m) for m in motivos_info])
 
 
 # ----------------------------------------------------------------------------- persona y objetivo del paciente simulado
@@ -296,7 +309,7 @@ def correr_escenario(esc, cerebro, paciente, phone, push, nombre_paciente, verbo
     for n in range(1, MAX_TURNOS + 1):
         r, seg = cerebro.responder(phone, push, texto, historial)
         tu = {"turno": n, "paciente": texto, "asiri": r.get("texto"), "enviar": r.get("enviar"), "silencio": r.get("silencio"), "derivar_triaje": r.get("derivar_triaje"),
-              "tools": r.get("tools") or [], "motivo_chequeo": r.get("motivo_chequeo"), "motivo_banlist": r.get("motivo_banlist"), "fallo_agente": r.get("fallo_agente"), "segundos": round(seg, 1), "error": r.get("error")}
+              "tools": r.get("tools") or [], "motivo_chequeo": r.get("motivo_chequeo"), "motivo_banlist": r.get("motivo_banlist"), "fallo_agente": r.get("fallo_agente"), "segundos": round(seg, 1), "error": r.get("error"), "texto_original": r.get("texto_original")}
         turnos.append(tu)
         if verbose:
             print(f"    [{n}] PACIENTE: {texto}")
@@ -305,7 +318,7 @@ def correr_escenario(esc, cerebro, paciente, phone, push, nombre_paciente, verbo
                 print(f"        ASIRI ({seg:.1f} s): " + (tu["asiri"] if tu["enviar"] else ("→ TRIAJE" if tu["derivar_triaje"] else "(silencio)")).replace("\n", "\n            "))
                 for t in tu["tools"]: print(f"          · {t.get('tool')}({json.dumps(t.get('input'), ensure_ascii=False)[:90]})")
                 if tu["motivo_chequeo"] not in (None, "cierre_puro") or tu["motivo_banlist"] or tu["fallo_agente"]:
-                    print(f"          ! chequeo={tu['motivo_chequeo']} banlist={tu['motivo_banlist']} fallo={tu['fallo_agente']}")
+                    print(f"          ! chequeo={tu['motivo_chequeo']} banlist={tu['motivo_banlist']} fallo={tu['fallo_agente']}" + (f"\n          ! texto original del modelo: {str(tu['texto_original'])[:300]}" if tu.get("texto_original") else ""))
         if tu["error"] or tu["derivar_triaje"]: break
         historial.insert(0, {"message": {"type": "human", "content": texto, "additional_kwargs": {"source": "wa_inbound"}}})
         charla.append({"role": "assistant", "content": texto})

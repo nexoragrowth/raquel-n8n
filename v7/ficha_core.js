@@ -20,16 +20,20 @@ const FichaCore = (() => {
   // El paciente dijo para quién es (nombre/apellido o DNI). Devuelve { ok:true, estado } o { ok:false, motivo, para_asiri }.
   function elegir(estado, dato) {
     const fichas = (estado && estado.fichas) || [];
-    if (!fichas.length) return { ok: false, motivo: 'sin_ficha', para_asiri: 'No hay fichas para este celular: pasalo a la clínica con avisar_grupo.' };
+    if (!fichas.length) return { ok: false, motivo: 'sin_ficha', para_asiri: '[Nota interna para vos, NO la repitas al paciente] No hay fichas para este celular: pasalo a la clínica con avisar_grupo.' };
     const dni = soloDigitos(dato.dni);
     if (dni.length >= 6) {
       const c = fichas.filter((f) => f.rut && f.rut === dni);
       if (c.length === 1) return { ok: true, estado: { ...estado, elegida: c[0].id }, nombre: c[0].nombre };
-      return { ok: false, motivo: 'dni_no_coincide', para_asiri: 'Ese DNI no coincide con ninguna ficha de este celular. Pedile nombre y apellido del paciente.' };
+      return { ok: false, motivo: 'dni_no_coincide', para_asiri: '[Nota interna para vos, NO la repitas al paciente] Ese DNI no coincide con ninguna ficha de este celular. Pedile nombre y apellido del paciente.' };
     }
     const tk = tokens(dato.nombre);
-    if (!tk.length) return { ok: false, motivo: 'sin_dato', para_asiri: 'Pedile el nombre y apellido (o el DNI) del paciente.' };
-    const c = fichas.filter((f) => tokens(f.nombre + ' ' + f.apellidos).some((t) => tk.includes(t)));
+    if (!tk.length) return { ok: false, motivo: 'sin_dato', para_asiri: '[Nota interna para vos, NO la repitas al paciente] Pedile el nombre y apellido (o el DNI) del paciente.' };
+    // Puntaje = cuántos tokens del dato aparecen en la ficha: "Lucas Test" coincide 2 con "Test - Lucas" y 1 con "Test - Jana" → gana la primera.
+    // Solo si el mejor puntaje es único; con empate ("Test") sigue siendo ambiguo y se pide el DNI.
+    const puntos = fichas.map((f) => { const ft = tokens(f.nombre + ' ' + f.apellidos); return tk.filter((t) => ft.includes(t)).length; });
+    const max = Math.max(...puntos);
+    const c = max > 0 ? fichas.filter((_, i) => puntos[i] === max) : [];
     if (c.length === 1) return { ok: true, estado: { ...estado, elegida: c[0].id }, nombre: c[0].nombre };
     return { ok: false, motivo: c.length ? 'ambiguo' : 'nombre_no_coincide', para_asiri: c.length ? 'Hay más de una ficha que coincide: pedile el DNI.' : 'Ese nombre no coincide con ninguna ficha de este celular. Pedile el DNI.',
       fichas: fichas.map((f) => f.nombre) };

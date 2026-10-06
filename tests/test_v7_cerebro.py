@@ -100,6 +100,7 @@ def main():
         esc("Z15 historial_json (sombra retrospectiva)", {"output": "Ok"}, modo="sombra", trigger={"historial_json": json.dumps(HIST)}),
         esc("M1 el modelo antepone una frase interna al bloque", {"output": "Le copio el mensaje para que lo confirme:\n\n" + PROP["readback_text"]}, redis={**base_redis, f"propuesta:{TEL}": json.dumps(PROP)}),
         esc("M2 'Pegá este bloque TEXTUAL al paciente:' antes del bloque real", {"output": "Pegá este bloque TEXTUAL al paciente:\n" + BLOQUE}, redis=base_redis),
+        esc("M3 'Decile que dejé anotado su aviso de pago.' (nota interna copiada)", {"output": "Decile que dejé anotado su aviso de pago. La secretaria lo verifica."}, texto="Ya transferí"),
         esc("U1 urgencia derivada al triaje", {"output": "[NO_REPLY]"}, texto="Se me salió el alambre y me pincha", redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
         esc("U2 urgencia derivada pero el modelo igual escribe", {"output": "Tranquila, póngase cera y venga mañana."}, texto="Se me salió el alambre y me pincha", redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
         esc("U3 urgencia + cambio de agenda ok en el mismo mensaje", {"output": "Perfecto. " + RB}, texto="Sí, cámbielo. Ah, y se me salió el alambre", redis={**base_redis, f"escrituras:{TEL}:{EXEC}": LIBRO_OK, f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
@@ -174,6 +175,9 @@ def main():
     chequear("M1 'Le copio el mensaje para que lo confirme:' se quita por código y queda solo el read-back", a["salida"]["texto"] == PROP["readback_text"] and a["salida"]["motivo_chequeo"] is None, a["salida"])
     a = R["M2 'Pegá este bloque TEXTUAL al paciente:' antes del bloque real"]["reps"][0]
     chequear("M2 'Pegá este bloque TEXTUAL al paciente:' se quita y el bloque pasa intacto", a["salida"]["texto"] == BLOQUE and a["salida"]["motivo_chequeo"] is None, a["salida"])
+
+    a = R["M3 'Decile que dejé anotado su aviso de pago.' (nota interna copiada)"]["reps"][0]
+    chequear("M3 'Decile que dejé anotado…' → 'Dejé anotado…'", a["salida"]["texto"].startswith("Dejé anotado su aviso de pago.") and a["salida"]["enviar"] is True, a["salida"])
 
     # ---------------------------------------------------------------- urgencias → triaje del v6 (videos aprobados por la Dra.)
     print("\nURGENCIAS (derivar_triaje)")

@@ -29,10 +29,11 @@ const ChequeoSalida = (() => {
   const clave = (o) => `${o.fecha.slice(5)} ${String(o.hora).replace(/^(\d):/, '0$1:')}`;
 
   // "Afirmaciones de haber hecho algo". Solo formas conjugadas que dicen "ya esta hecho"; "le confirmo:" (read-back) y "confirme su asistencia" NO cuentan.
+  // "anotar" cuenta SOLO si anota un TURNO: "dejé anotado su aviso de pago" / "se lo dejo anotado a la clínica" (lista de espera) no son escrituras (falso positivo del examen 06/10).
   // Limites de palabra UNICODE: el \b de JavaScript no sirve pegado a una letra con tilde ("agendé", "moví").
   const W = (src) => new RegExp(String.raw`(?<![\p{L}])(?:` + src + String.raw`)(?![\p{L}])`, 'iu');
   const CLAIMS = [
-    { tipo: 'reprogramar', rx: W(String.raw`qued(?:ó|o|a|an)\s+(?:reprogramad|cambiad|movid|reservad|agendad)\p{L}*|qued(?:ó|a)\s+anotad\p{L}*\s+(?:el|su|un)\s+turno|reprogramé|cambié|moví|reservé|agendé|anot[eé]\s+(?:su|el|un)\s+turno|(?:le|lo|la)\s+(?:reserve|agende|cambie|movi|reprograme)|ya\s+(?:le\s+)?(?:reserv|agend|cambi|mov|anot)\p{L}*|le\s+dej[oé]\s+(?:reservad|agendad|anotad)\p{L}*|list[oa],?\s+(?:reprogramad|reservad|agendad|cambiad)\p{L}*`) },
+    { tipo: 'reprogramar', rx: W(String.raw`qued(?:ó|o|a|an)\s+(?:reprogramad|cambiad|movid|reservad|agendad)\p{L}*|qued(?:ó|a)\s+anotad\p{L}*\s+(?:el|su|un)\s+turno|reprogramé|cambié|moví|reservé|agendé|anot[eé]\s+(?:su|el|un)\s+turno|(?:le|lo|la)\s+(?:reserve|agende|cambie|movi|reprograme)|ya\s+(?:le\s+)?(?:reserv|agend|cambi|mov)\p{L}*|ya\s+(?:le\s+)?anot\p{L}*\s+(?:(?:su|el|un|ese)\s+turno|para\s+el\s+\p{L}+|el\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado))|le\s+dej[oé]\s+(?:reservad|agendad)\p{L}*|le\s+dej[oé]\s+anotad\p{L}*\s+(?:su|el|un|ese)\s+turno|list[oa],?\s+(?:reprogramad|reservad|agendad|cambiad)\p{L}*`) },
     { tipo: 'cancelar', rx: W(String.raw`qued(?:ó|o|a|an)\s+cancelad\p{L}*|cancelé|anulé|(?:le|lo|la)\s+(?:cancele|anule)|list[oa],?\s+(?:cancelad|anulad)\p{L}*`) },
     { tipo: 'confirmar', rx: W(String.raw`qued(?:ó|o|a|an)\s+confirmad\p{L}*|confirmé|list[oa],?\s+confirmad\p{L}*`) },
   ];
