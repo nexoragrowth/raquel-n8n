@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tablero de Testing y Control — Bot Dra. Raquel Rodríguez (Áurea)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 sm:p-8">
+
+  <!-- Header -->
+  <div class="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
+    <div>
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center justify-center p-2 bg-emerald-500/10 text-emerald-400 rounded-lg text-xl border border-emerald-500/20">✨</span>
+        <h1 class="text-2xl font-bold tracking-tight text-white">Matriz de Testing & Salud de Intenciones</h1>
+      </div>
+      <p class="text-sm text-slate-400 mt-1">Bot WhatsApp Dra. Raquel Rodríguez (Áurea Odontología Estética) — Control de Calidad Operativo</p>
+    </div>
+    
+    <div class="flex items-center gap-3">
+      <div class="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-center">
+        <span class="text-xs text-slate-400 block font-medium">Casos Validados</span>
+        <span id="counter-approved" class="text-lg font-bold text-emerald-400">0 / 12</span>
+      </div>
+      <button onclick="resetAll()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg transition font-medium">Resetear Estados</button>
+    </div>
+  </div>
+
+  <!-- KPI Badges -->
+  <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl flex items-center justify-between">
+      <div>
+        <span class="text-xs font-medium text-slate-400">Orquestador v6</span>
+        <p class="text-sm font-semibold text-emerald-400 mt-0.5">153 Nodos Activos</p>
+      </div>
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+    </div>
+
+    <div class="bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl flex items-center justify-between">
+      <div>
+        <span class="text-xs font-medium text-slate-400">Regla Takeover</span>
+        <p class="text-sm font-semibold text-emerald-400 mt-0.5">24h Pasivas (Supabase)</p>
+      </div>
+      <span class="text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded">AUTO</span>
+    </div>
+
+    <div class="bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl flex items-center justify-between">
+      <div>
+        <span class="text-xs font-medium text-slate-400">Gateway WhatsApp</span>
+        <p class="text-sm font-semibold text-sky-400 mt-0.5">Evolution GO (Instancia)</p>
+      </div>
+      <span class="text-xs font-mono bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded">LIVE</span>
+    </div>
+
+    <div class="bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl flex items-center justify-between">
+      <div>
+        <span class="text-xs font-medium text-slate-400">Base Vectorial</span>
+        <p class="text-sm font-semibold text-purple-400 mt-0.5">43 Filas (Auditadas)</p>
+      </div>
+      <span class="text-xs font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded">EMBEDDED</span>
+    </div>
+  </div>
+
+  <!-- Filter & Tabs -->
+  <div class="max-w-7xl mx-auto mb-6 flex flex-wrap gap-2 items-center justify-between">
+    <div class="flex gap-2">
+      <button onclick="filterCategory('all')" class="cat-btn active bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-medium">Todos (12)</button>
+      <button onclick="filterCategory('comercial')" class="cat-btn bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium">Comercial & Pagos</button>
+      <button onclick="filterCategory('agenda')" class="cat-btn bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium">Agenda Dentalink</button>
+      <button onclick="filterCategory('seguridad')" class="cat-btn bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium">Seguridad & Triaje</button>
+    </div>
+    <span class="text-xs text-slate-500">Toca el botón de estado en cada caso para registrar tus pruebas en vivo</span>
+  </div>
+
+  <!-- Cards Grid -->
+  <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="cases-grid">
+    <!-- JS renderiza las cards aquí -->
+  </div>
+
+  <script>
+    const CASOS = [
+      {
+        id: "TC-01",
+        cat: "comercial",
+        tag: "Onboarding y Bienvenida",
+        sub: "Sub-Agent General",
+        msg: "Buenas tardes",
+        esperado: "Despliega menú estructurado de 5 opciones numeradas (Tratamientos, Agendar, Reprogramar, Precios, Ubicación).",
+        prohibido: "Saludar seco sin opciones. Escalar a secretaria por un simple saludo inicial.",
+        status: "pass"
+      },
+      {
+        id: "TC-02",
+        cat: "comercial",
+        tag: "Ubicación y Horarios (Ex-Bug)",
+        sub: "Sub-Agent General",
+        msg: "Quisiera saber dónde queda el consultorio y los horarios de atención",
+        esperado: "Dirección oficial: Balcarce Nº 37, 2º piso + Horarios hábiles (Lu/Mi tarde, Ma/Ju/Vi mañana).",
+        prohibido: "Bloquear la dirección en Banlist. Escalar al grupo si solo pidieron ubicación.",
+        status: "pass"
+      },
+      {
+        id: "TC-03",
+        cat: "agenda",
+        tag: "Agendamiento (Regla Raquel)",
+        sub: "Sub-Agent Agendar",
+        msg: "Quiero sacar un turno para ortodoncia",
+        esperado: "Llama a buscar_horarios y muestra bloque directo agrupado por Mañana y Tarde.",
+        prohibido: "Preguntar '¿prefiere mañana o tarde?' antes de mostrar turnos (regla de la Dra.).",
+        status: "pass"
+      },
+      {
+        id: "TC-04",
+        cat: "agenda",
+        tag: "Confirmación de Turno",
+        sub: "Sub-Agent Confirmar",
+        msg: "Sí, confirmo el turno del jueves",
+        esperado: "Lee recordatorios_enviados, confirma en Dentalink y envía indicaciones de llegada.",
+        prohibido: "Pedir datos que ya están en la base. Duplicar confirmación en Dentalink.",
+        status: "pending"
+      },
+      {
+        id: "TC-05",
+        cat: "agenda",
+        tag: "Cancelación y Re-lectura",
+        sub: "Sub-WF Cancelar (Determinístico)",
+        msg: "No voy a poder ir a mi turno, lo cancelo",
+        esperado: "Pide confirmación explícita con fecha y hora antes de borrar la cita.",
+        prohibido: "Cancelar al primer mensaje sin confirmar. Clavar el visto con [NO_REPLY].",
+        status: "pending"
+      },
+      {
+        id: "TC-06",
+        cat: "comercial",
+        tag: "Precios y Alias Bancario",
+        sub: "Sub-Agent General",
+        msg: "Cuánto cuesta la primera consulta y a qué alias pago?",
+        esperado: "Primera consulta: $50.000 + Alias dra.raquel.aurea (Brubank, Laura Raquel Rodríguez).",
+        prohibido: "Dar precios viejos ($40k). Omitir el alias si pidieron precio y alias juntos.",
+        status: "pass"
+      },
+      {
+        id: "TC-07",
+        cat: "comercial",
+        tag: "Tratamientos y Alcance Dental",
+        sub: "Sub-Agent General",
+        msg: "Hacen blanqueamiento dental o limpiezas?",
+        esperado: "Aclara foco exclusivo en Ortodoncia/Estética y canaliza hacia valoración ($50.000).",
+        prohibido: "Inventar tratamientos generales. Rechazar sin ofrecer turno ortodóncico.",
+        status: "pass"
+      },
+      {
+        id: "TC-08",
+        cat: "comercial",
+        tag: "Cuota Mensual de Tratamiento",
+        sub: "Sub-Agent General",
+        msg: "Ya tengo los brackets puestos, cuánto se paga la cuota por mes?",
+        esperado: "Informa valor de control mensual: $70.000 (diferenciando de la consulta de $50k).",
+        prohibido: "Confundir cuota con primera consulta o cotizar tratamiento total.",
+        status: "pass"
+      },
+      {
+        id: "TC-09",
+        cat: "seguridad",
+        tag: "Comprobante de Transferencia",
+        sub: "Router + Media Sombra",
+        msg: "[Envía foto de comprobante] 'Acá te paso el pago'",
+        esperado: "Confirma recepción formal y avisa que secretaría verifica acreditación en horario hábil.",
+        prohibido: "Validar montos por cuenta propia o asegurar que la plata ya entró al banco.",
+        status: "pending"
+      },
+      {
+        id: "TC-10",
+        cat: "seguridad",
+        tag: "Urgencia y Sin Guardia (Mariela Safe)",
+        sub: "Triaje Determinístico",
+        msg: "Se me salió el alambre un domingo y me pincha, puedo ir ya?",
+        esperado: "Avisa que es consultorio privado sin guardia 24hs. Envía video de cera y deriva para día hábil.",
+        prohibido: "Decir 'venite ya', 'los esperamos ahora' o mandar Balcarce 37 sin turno.",
+        status: "pass"
+      },
+      {
+        id: "TC-11",
+        cat: "seguridad",
+        tag: "Cierre y Silencio Conversacional",
+        sub: "Router + Gate Formatting",
+        msg: "Muchas gracias por todo, que tengas buen día!",
+        esperado: "[NO_REPLY] exacto. Silencio absoluto, cero mensajes automáticos enviados.",
+        prohibido: "Responder 'de nada', 'a vos' o generar loops de despedida repetitiva.",
+        status: "pending"
+      },
+      {
+        id: "TC-12",
+        cat: "seguridad",
+        tag: "Intervención Humana (Panel 24h)",
+        sub: "Supabase Takeover Core",
+        msg: "Staff activa 'Modo Humano' en Panel Web",
+        esperado: "Bot se silencia al instante. A las 24hs exactas sin actividad humana se reactiva solo.",
+        prohibido: "Quedar en ghosting permanente para siempre. Responder encima de la doctora.",
+        status: "pass"
+      }
+    ];
+
+    let currentFilter = 'all';
+
+    function renderCases() {
+      const container = document.getElementById('cases-grid');
+      container.innerHTML = '';
+
+      const filtered = currentFilter === 'all' 
+        ? CASOS 
+        : CASOS.filter(c => c.cat === currentFilter);
+
+      filtered.forEach(c => {
+        const isPass = c.status === 'pass';
+        const isFail = c.status === 'fail';
+        
+        let statusBadge = `
+          <button onclick="toggleStatus('${c.id}')" class="px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition ${
+            isPass ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25' :
+            isFail ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30 hover:bg-rose-500/25' :
+            'bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25'
+          }">
+            <span class="w-1.5 h-1.5 rounded-full ${isPass ? 'bg-emerald-400' : isFail ? 'bg-rose-400' : 'bg-amber-400'}"></span>
+            ${isPass ? 'PASS ✅' : isFail ? 'FAIL ❌' : 'PENDIENTE ⏳'}
+          </button>
+        `;
+
+        const card = document.createElement('div');
+        card.className = "bg-slate-900 border border-slate-800/90 rounded-2xl p-5 hover:border-slate-700 transition flex flex-col justify-between";
+        card.innerHTML = `
+          <div>
+            <div class="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <span class="text-xs font-mono font-bold text-slate-500 block">${c.id}</span>
+                <h3 class="text-base font-bold text-white mt-0.5">${c.tag}</h3>
+              </div>
+              ${statusBadge}
+            </div>
+
+            <div class="mb-3 bg-slate-950/70 border border-slate-800/60 rounded-xl p-3">
+              <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Entrada del Paciente</span>
+              <p class="text-xs text-slate-200 italic font-medium">"${c.msg}"</p>
+            </div>
+
+            <div class="space-y-2.5 text-xs text-slate-300 mb-4">
+              <div>
+                <strong class="text-emerald-400 font-semibold block mb-0.5">Esperado:</strong>
+                <p class="text-slate-400 leading-relaxed">${c.esperado}</p>
+              </div>
+              <div>
+                <strong class="text-rose-400 font-semibold block mb-0.5">Prohibido (Banlist/Fallo):</strong>
+                <p class="text-slate-400 leading-relaxed">${c.prohibido}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Módulo: <span class="text-slate-400 font-mono">${c.sub}</span></span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      updateStats();
+    }
+
+    function toggleStatus(id) {
+      const c = CASOS.find(item => item.id === id);
+      if (c) {
+        if (c.status === 'pending') c.status = 'pass';
+        else if (c.status === 'pass') c.status = 'fail';
+        else c.status = 'pending';
+        renderCases();
+      }
+    }
+
+    function updateStats() {
+      const passed = CASOS.filter(c => c.status === 'pass').length;
+      document.getElementById('counter-approved').innerText = `${passed} / ${CASOS.length}`;
+    }
+
+    function filterCategory(cat) {
+      currentFilter = cat;
+      document.querySelectorAll('.cat-btn').forEach(btn => {
+        btn.classList.remove('bg-emerald-500/20', 'text-emerald-400', 'border-emerald-500/30');
+        btn.classList.add('bg-slate-900', 'text-slate-400', 'border-slate-800');
+      });
+      event.target.classList.remove('bg-slate-900', 'text-slate-400', 'border-slate-800');
+      event.target.classList.add('bg-emerald-500/20', 'text-emerald-400', 'border-emerald-500/30');
+      renderCases();
+    }
+
+    function resetAll() {
+      CASOS.forEach(c => c.status = 'pending');
+      renderCases();
+    }
+
+    // Init
+    renderCases();
+  </script>
+</body>
+</html>

@@ -1,0 +1,679 @@
+{
+ "_nota": "Caso real del 2026-10-05 (ejecuciones v6 294718-294752 y sub-WF 294719/294722/294742) SIN datos personales: telefono falso, sin apellido/DNI/mail/direccion, mensajes del staff omitidos. Los textos de la paciente y del bot, los ids de cita/ficha, las salidas reales del Router y de los LLM del sub-WF son los reales.",
+ "ahora_fijo": "2026-10-05T12:36:00Z",
+ "phone": "5490000000651",
+ "dentalink": {
+  "paciente": {
+   "data": [
+    {
+     "id": 651,
+     "nombre": "Dana",
+     "apellidos": "B.",
+     "rut": "",
+     "celular": "",
+     "email": "",
+     "habilitado": 1
+    }
+   ]
+  },
+  "citas": {
+   "data": [
+    {
+     "id": 9104,
+     "id_paciente": 651,
+     "fecha": "2026-10-16",
+     "hora_inicio": "09:10:00",
+     "hora_fin": "09:50:00",
+     "id_estado": 15,
+     "estado_cita": "Notificado por WhatsApp",
+     "estado_anulacion": 0,
+     "id_dentista": 1,
+     "duracion": 40,
+     "comentarios": ""
+    },
+    {
+     "id": 8983,
+     "id_paciente": 651,
+     "fecha": "2026-09-24",
+     "hora_inicio": "09:20:00",
+     "hora_fin": "10:00:00",
+     "id_estado": 2,
+     "estado_cita": "Atendido",
+     "estado_anulacion": 0,
+     "id_dentista": 1,
+     "duracion": 40,
+     "comentarios": ""
+    },
+    {
+     "id": 8649,
+     "id_paciente": 651,
+     "fecha": "2026-08-14",
+     "hora_inicio": "09:10:00",
+     "hora_fin": "09:50:00",
+     "id_estado": 2,
+     "estado_cita": "Atendido",
+     "estado_anulacion": 0,
+     "id_dentista": 1,
+     "duracion": 40,
+     "comentarios": ""
+    }
+   ]
+  }
+ },
+ "bloques": {
+  "desde_hoy": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+  "desde_2026-10-24": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n* Martes 3 de noviembre 8:40 , 9:20\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+  "desde_2026-10-22": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?"
+ },
+ "memoria": [
+  {
+   "id": "10497",
+   "message": {
+    "type": "ai",
+    "content": "Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, reemplazando el turno del viernes 16/10 a las 09:10. ¿Procedo con la reserva?",
+    "additional_kwargs": {}
+   }
+  },
+  {
+   "id": "10496",
+   "message": {
+    "type": "human",
+    "content": "El turno 22 de octubre  alas  9y20",
+    "additional_kwargs": {}
+   }
+  },
+  {
+   "id": "10495",
+   "message": {
+    "type": "ai",
+    "content": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "10494",
+   "message": {
+    "type": "human",
+    "content": "Si cambio el turno del 16 de octubre por el turno del 22 de octubre",
+    "additional_kwargs": {
+     "source": "wa_inbound"
+    }
+   }
+  },
+  {
+   "id": "10493",
+   "message": {
+    "type": "ai",
+    "content": "Perfecto, anoto Jueves 22 de octubre a las 09:20.\n\nVeo que ya tiene un turno reservado el viernes 16/10 a las 09:10. ¿Desea cambiar ese por el del 22/10 o sumar otro?\n\nTambién tomo nota para avisarle si se libera un turno antes del 22/10.",
+    "additional_kwargs": {}
+   }
+  },
+  {
+   "id": "10492",
+   "message": {
+    "type": "human",
+    "content": "Jueves 22 de octubre 9y20 \nSi se llegara suspender algu turno antes de esta fecha me anotaria por favor",
+    "additional_kwargs": {}
+   }
+  },
+  {
+   "id": "10491",
+   "message": {
+    "type": "ai",
+    "content": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+    "additional_kwargs": {}
+   }
+  },
+  {
+   "id": "10490",
+   "message": {
+    "type": "human",
+    "content": "Si",
+    "additional_kwargs": {}
+   }
+  },
+  {
+   "id": "10487",
+   "message": {
+    "type": "ai",
+    "content": "Esta semana no tenemos turnos disponibles, disculpe. ¿Quiere que le busque las fechas más próximas?\nPor ser menor, el tutor debe estar presente.",
+    "additional_kwargs": {}
+   }
+  },
+  {
+   "id": "10486",
+   "message": {
+    "type": "human",
+    "content": "En esta semana écepto el 8 de octubre que fecha tendrá disponible por la tarde o por la mañana?",
+    "additional_kwargs": {}
+   }
+  },
+  {
+   "id": "10483",
+   "message": {
+    "type": "ai",
+    "content": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n* Martes 3 de noviembre 8:40 , 9:20\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "10482",
+   "message": {
+    "type": "human",
+    "content": "No podré tenia otro turno se me olvido",
+    "additional_kwargs": {
+     "source": "wa_inbound"
+    }
+   }
+  },
+  {
+   "id": "10481",
+   "message": {
+    "type": "ai",
+    "content": "Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗\n\nTenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "10480",
+   "message": {
+    "type": "human",
+    "content": "Buen dia me pude cambiar ese turno",
+    "additional_kwargs": {
+     "source": "wa_inbound"
+    }
+   }
+  },
+  {
+   "id": "8932",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "8931",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "8930",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "8883",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "8621",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "8587",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "8566",
+   "message": {
+    "type": "ai",
+    "content": "[NOTA INTERNA - contexto del último recordatorio enviado, NO mencionar al paciente]\nAcabo de enviar un recordatorio 72h del siguiente turno:\n- Cita Dentalink ID: 8983\n- ID Paciente: 651\n- Paciente: Dana\n- Fecha: jueves 24 de septiembre de 2026\n- Hora: 09:20\n- Profesional: Dra. Rodríguez Raquel\nSi el paciente responde sobre este turno, ya conocés todos los datos. NO le pidas que repita fecha/hora/profesional.",
+    "additional_kwargs": {
+     "source": "reminder_note"
+    }
+   }
+  },
+  {
+   "id": "8565",
+   "message": {
+    "type": "ai",
+    "content": "✨ ÁUREA ODONTOLOGÍA ESTÉTICA ✨\n\nEstimada Dana,\nLe recordamos su turno con la Dra. Rodríguez Raquel:\n\n📅 Jueves 24 de septiembre de 2026\n🕔 09:20 hs\n📍 Balcarce Nº37, 2º piso\n\nLe pedimos confirmar su asistencia respondiendo a este mensaje para conservar su turno.\n\n⚠️ Importante:\n* Si su turno está confirmado y no asiste al mismo, de igual manera deberá abonar el control.\n* Para cancelar o reprogramar, solicitamos avisar con un mínimo de 48 hs de anticipación.\n\nEsperamos su confirmación, gracias por elegirnos 💙",
+    "additional_kwargs": {
+     "source": "reminder_note"
+    }
+   }
+  },
+  {
+   "id": "7701",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "7700",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "7699",
+   "message": {
+    "type": "ai",
+    "content": "Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗\n\nVi su turno del jueves 24 de septiembre a las 9:20 de la mañana. Lo querias cancelar o reprogramar?",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "7647",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "7646",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "6744",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "6743",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "6723",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "6708",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "6707",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "6706",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  },
+  {
+   "id": "6705",
+   "message": {
+    "type": "ai",
+    "content": "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+    "additional_kwargs": {
+     "source": "wa_outbound"
+    }
+   }
+  }
+ ],
+ "turnos": [
+  {
+   "n": 1,
+   "exec_v6": 294718,
+   "texto": "Buen dia me pude cambiar ese turno",
+   "router_real": "cancelar_o_reprogramar",
+   "intent_real": "cancelar_o_reprogramar",
+   "atendio_real": "Execute Sub-WF Cancelar",
+   "respuesta_real": "Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗\n\nTenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+   "ctx_real": "BOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)",
+   "subwf_real": {
+    "exec": 294719,
+    "estado": "conversacion_nueva",
+    "llm_intent": {
+     "accion": "reprogramar",
+     "fecha_objetivo": null,
+     "hora_objetivo": null,
+     "franja": null,
+     "hora_minima": null,
+     "insiste_horario": false,
+     "fecha_actual_mencionada": null,
+     "info_solicitada": null,
+     "razon": "pide cambiar el turno (reprogramar) sin especificar fecha u horario"
+    },
+    "llm_aceptacion": null,
+    "accion": "buscar_horarios",
+    "desde": "",
+    "bloque": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?"
+   },
+   "memoria_corte_id": 8932
+  },
+  {
+   "n": 2,
+   "exec_v6": 294721,
+   "texto": "No podré tenia otro turno se me olvido",
+   "router_real": "cancelar_o_reprogramar",
+   "intent_real": "cancelar_o_reprogramar",
+   "atendio_real": "Execute Sub-WF Cancelar",
+   "respuesta_real": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n* Martes 3 de noviembre 8:40 , 9:20\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+   "ctx_real": "BOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nPACIENTE: Buen dia me pude cambiar ese turno\n---\nBOT: Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗\n\nTenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+   "subwf_real": {
+    "exec": 294722,
+    "estado": "oferta_horarios",
+    "llm_intent": {
+     "accion": "reprogramar",
+     "fecha_objetivo": null,
+     "hora_objetivo": null,
+     "franja": null,
+     "hora_minima": null,
+     "insiste_horario": false,
+     "fecha_actual_mencionada": null,
+     "info_solicitada": null,
+     "razon": "no podrá asistir por superposición con otro turno y olvido"
+    },
+    "llm_aceptacion": {
+     "accepts": false,
+     "slot_chosen": null,
+     "razon": "rechaza los turnos ofrecidos por conflicto"
+    },
+    "accion": "buscar_horarios",
+    "desde": "2026-10-24",
+    "bloque": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n* Martes 3 de noviembre 8:40 , 9:20\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?"
+   },
+   "memoria_corte_id": 10481
+  },
+  {
+   "n": 3,
+   "exec_v6": 294727,
+   "texto": "En esta semana écepto el 8 de octubre que fecha tendrá disponible por la tarde o por la mañana?",
+   "router_real": "agendar_nuevo",
+   "intent_real": "agendar_nuevo",
+   "atendio_real": "Sub-Agent Agendar",
+   "respuesta_real": "Esta semana no tenemos turnos disponibles, disculpe. Quiere que le busque las fechas más próximas? Por ser menor, el tutor debe estar presente.",
+   "ctx_real": "BOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nBOT: [ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. NO es output tuyo, es un humano atendiendo este chat. Mantente en silencio y NO respondas en este chat hasta que un admin diga /bot on.]: (contenido del staff omitido en el fixture)\n---\nPACIENTE: Buen dia me pude cambiar ese turno\n---\nBOT: Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗\n\nTenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?\n---\nPACIENTE: No podré tenia otro turno se me olvido\n---\nBOT: Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n* Martes 3 de noviembre 8:40 , 9:20\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+   "memoria_corte_id": 10483,
+   "llm_modelo_real": {
+    "_nota": "muestras del modelo real (mismo prompt que arma el codigo de produccion; 5 por prompt, 2026-10-05). El turno no paso por el sub-WF en la realidad.",
+    "modelo": "gpt-5-2025-08-07",
+    "intent": [
+     {
+      "accion": "consultar_info",
+      "fecha_objetivo": null,
+      "hora_objetivo": null,
+      "franja": null,
+      "hora_minima": null,
+      "insiste_horario": false,
+      "fecha_actual_mencionada": "2026-10-08",
+      "info_solicitada": "cuando",
+      "razon": "Pregunta por disponibilidad de esta semana excepto el 8 de octubre, tanto por la mañana como por la tarde",
+      "_veces": 5
+     }
+    ],
+    "aceptacion": [
+     {
+      "accepts": false,
+      "slot_chosen": null,
+      "razon": "El paciente no acepta; pregunta por disponibilidad de esta semana excepto el 8 de octubre, sin elegir ninguno de los slots ofrecidos.",
+      "_veces": 5
+     }
+    ]
+   }
+  },
+  {
+   "n": 4,
+   "exec_v6": 294731,
+   "texto": "Si",
+   "router_real": "agendar_nuevo",
+   "intent_real": "agendar_nuevo",
+   "atendio_real": "Sub-Agent Agendar",
+   "respuesta_real": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+   "ctx_real": "PACIENTE: Buen dia me pude cambiar ese turno\n---\nBOT: Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗\n\nTenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?\n---\nPACIENTE: No podré tenia otro turno se me olvido\n---\nBOT: Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n* Martes 3 de noviembre 8:40 , 9:20\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?\n---\nPACIENTE: En esta semana écepto el 8 de octubre que fecha tendrá disponible por la tarde o por la mañana?\n---\nBOT: Esta semana no tenemos turnos disponibles, disculpe. ¿Quiere que le busque las fechas más próximas?\nPor ser menor, el tutor debe estar presente.",
+   "memoria_corte_id": 10487,
+   "llm_modelo_real": {
+    "_nota": "muestras del modelo real (mismo prompt que arma el codigo de produccion; 5 por prompt, 2026-10-05). El turno no paso por el sub-WF en la realidad.",
+    "modelo": "gpt-5-2025-08-07",
+    "intent": [
+     {
+      "accion": "consultar_info",
+      "fecha_objetivo": null,
+      "hora_objetivo": null,
+      "franja": null,
+      "hora_minima": null,
+      "insiste_horario": false,
+      "fecha_actual_mencionada": null,
+      "info_solicitada": "cuando",
+      "razon": "Confirma que quiere que le busquen las fechas más próximas",
+      "_veces": 5
+     }
+    ],
+    "aceptacion": null
+   }
+  },
+  {
+   "n": 5,
+   "exec_v6": 294738,
+   "texto": "Jueves 22 de octubre 9y20 \nSi se llegara suspender algu turno antes de esta fecha me anotaria por favor",
+   "router_real": "agendar_nuevo",
+   "intent_real": "agendar_nuevo",
+   "atendio_real": "Sub-Agent Agendar",
+   "respuesta_real": "Perfecto, anoto Jueves 22 de Octubre a las 9:20 hs.\n\nVeo que ya tiene un turno reservado el Viernes 16 de Octubre a las 9:10 hs. Desea cambiar ese por el del 22 de Octubre o sumar otro?\n\nTambién tomo nota para avisarle si se libera un turno antes del 22 de Octubre.",
+   "ctx_real": "PACIENTE: No podré tenia otro turno se me olvido\n---\nBOT: Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n* Martes 3 de noviembre 8:40 , 9:20\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?\n---\nPACIENTE: En esta semana écepto el 8 de octubre que fecha tendrá disponible por la tarde o por la mañana?\n---\nBOT: Esta semana no tenemos turnos disponibles, disculpe. ¿Quiere que le busque las fechas más próximas?\nPor ser menor, el tutor debe estar presente.\n---\nPACIENTE: Si\n---\nBOT: Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+   "memoria_corte_id": 10491,
+   "llm_modelo_real": {
+    "_nota": "muestras del modelo real (mismo prompt que arma el codigo de produccion; 5 por prompt, 2026-10-05). El turno no paso por el sub-WF en la realidad.",
+    "modelo": "gpt-5-2025-08-07",
+    "intent": [
+     {
+      "accion": "reprogramar",
+      "fecha_objetivo": "2026-10-22",
+      "hora_objetivo": "09:20",
+      "franja": "manana",
+      "hora_minima": null,
+      "insiste_horario": false,
+      "fecha_actual_mencionada": null,
+      "info_solicitada": null,
+      "razon": "Confirma el turno del jueves 22 de octubre 9:20 y pide lista de espera por un turno anterior si se libera",
+      "_veces": 5
+     }
+    ],
+    "aceptacion": [
+     {
+      "accepts": true,
+      "slot_chosen": {
+       "fecha": "2026-10-22",
+       "hora_inicio": "09:20"
+      },
+      "razon": "El paciente confirmó específicamente el jueves 22 de octubre a las 9:20, que coincide con un slot ofrecido.",
+      "_veces": 5
+     }
+    ]
+   }
+  },
+  {
+   "n": 6,
+   "exec_v6": 294741,
+   "texto": "Si cambio el turno del 16 de octubre por el turno del 22 de octubre",
+   "router_real": "cancelar_o_reprogramar",
+   "intent_real": "cancelar_o_reprogramar",
+   "atendio_real": "Execute Sub-WF Cancelar",
+   "respuesta_real": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+   "ctx_real": "PACIENTE: En esta semana écepto el 8 de octubre que fecha tendrá disponible por la tarde o por la mañana?\n---\nBOT: Esta semana no tenemos turnos disponibles, disculpe. ¿Quiere que le busque las fechas más próximas?\nPor ser menor, el tutor debe estar presente.\n---\nPACIENTE: Si\n---\nBOT: Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?\n---\nPACIENTE: Jueves 22 de octubre 9y20 \nSi se llegara suspender algu turno antes de esta fecha me anotaria por favor\n---\nBOT: Perfecto, anoto Jueves 22 de octubre a las 09:20.\n\nVeo que ya tiene un turno reservado el viernes 16/10 a las 09:10. ¿Desea cambiar ese por el del 22/10 o sumar otro?\n\nTambién tomo nota para avisarle si se libera un turno antes del 22/10.",
+   "subwf_real": {
+    "exec": 294742,
+    "estado": "conversacion_nueva",
+    "llm_intent": {
+     "accion": "reprogramar",
+     "fecha_objetivo": "2026-10-22",
+     "hora_objetivo": "09:20",
+     "franja": null,
+     "hora_minima": null,
+     "insiste_horario": false,
+     "fecha_actual_mencionada": "2026-10-16",
+     "info_solicitada": null,
+     "razon": "Confirma cambiar el turno del 16/10 al 22/10 según oferta previa"
+    },
+    "llm_aceptacion": null,
+    "accion": "buscar_horarios",
+    "desde": "2026-10-22",
+    "bloque": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?"
+   },
+   "memoria_corte_id": 10493
+  },
+  {
+   "n": 7,
+   "exec_v6": 294748,
+   "texto": "El turno 22 de octubre  alas  9y20",
+   "router_real": "agendar_nuevo",
+   "intent_real": "agendar_nuevo",
+   "atendio_real": "Sub-Agent Agendar",
+   "respuesta_real": "Le confirmo: Jueves 22 de Octubre a las 9:20 hs con la Dra. Raquel, reemplazando el turno del Viernes 16 de Octubre a las 9:10 hs. Procedo con la reserva?",
+   "ctx_real": "PACIENTE: Si\n---\nBOT: Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?\n---\nPACIENTE: Jueves 22 de octubre 9y20 \nSi se llegara suspender algu turno antes de esta fecha me anotaria por favor\n---\nBOT: Perfecto, anoto Jueves 22 de octubre a las 09:20.\n\nVeo que ya tiene un turno reservado el viernes 16/10 a las 09:10. ¿Desea cambiar ese por el del 22/10 o sumar otro?\n\nTambién tomo nota para avisarle si se libera un turno antes del 22/10.\n---\nPACIENTE: Si cambio el turno del 16 de octubre por el turno del 22 de octubre\n---\nBOT: Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+   "memoria_corte_id": 10495,
+   "llm_modelo_real": {
+    "_nota": "muestras del modelo real (mismo prompt que arma el codigo de produccion; 5 por prompt, 2026-10-05). El turno no paso por el sub-WF en la realidad.",
+    "modelo": "gpt-5-2025-08-07",
+    "intent": [
+     {
+      "accion": "reprogramar",
+      "fecha_objetivo": "2026-10-22",
+      "hora_objetivo": "09:20",
+      "franja": "manana",
+      "hora_minima": null,
+      "insiste_horario": false,
+      "fecha_actual_mencionada": null,
+      "info_solicitada": null,
+      "razon": "Confirma elegir el turno del 22 de octubre a las 09:20 como nuevo horario",
+      "_veces": 4
+     },
+     {
+      "accion": "reprogramar",
+      "fecha_objetivo": "2026-10-22",
+      "hora_objetivo": "09:20",
+      "franja": "manana",
+      "hora_minima": null,
+      "insiste_horario": false,
+      "fecha_actual_mencionada": "2026-10-22",
+      "info_solicitada": null,
+      "razon": "Confirma el turno específico ofrecido para cambiar al 22 de octubre 09:20",
+      "_veces": 1
+     }
+    ],
+    "aceptacion": [
+     {
+      "accepts": true,
+      "slot_chosen": {
+       "fecha": "2026-10-22",
+       "hora_inicio": "09:20"
+      },
+      "razon": "El paciente mencionó explícitamente el 22 de octubre a las 9:20, que coincide con un slot ofrecido.",
+      "_veces": 5
+     }
+    ]
+   }
+  },
+  {
+   "n": 8,
+   "exec_v6": 294752,
+   "texto": "Si\nGracias",
+   "router_real": "confirmar_post_recordatorio",
+   "intent_real": "confirmar_post_recordatorio",
+   "atendio_real": "Sub-Agent Confirmar",
+   "respuesta_real": "Le paso su consulta a la secretaria para que realice el cambio en agenda en su horario de atención. Muchas gracias!",
+   "ctx_real": "PACIENTE: Jueves 22 de octubre 9y20 \nSi se llegara suspender algu turno antes de esta fecha me anotaria por favor\n---\nBOT: Perfecto, anoto Jueves 22 de octubre a las 09:20.\n\nVeo que ya tiene un turno reservado el viernes 16/10 a las 09:10. ¿Desea cambiar ese por el del 22/10 o sumar otro?\n\nTambién tomo nota para avisarle si se libera un turno antes del 22/10.\n---\nPACIENTE: Si cambio el turno del 16 de octubre por el turno del 22 de octubre\n---\nBOT: Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?\n---\nPACIENTE: El turno 22 de octubre  alas  9y20\n---\nBOT: Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, reemplazando el turno del viernes 16/10 a las 09:10. ¿Procedo con la reserva?",
+   "memoria_corte_id": 10497,
+   "llm_modelo_real": {
+    "_nota": "muestras del modelo real (mismo prompt que arma el codigo de produccion; 5 por prompt, 2026-10-05). El turno no paso por el sub-WF en la realidad.",
+    "modelo": "gpt-5-2025-08-07",
+    "intent": [
+     {
+      "accion": "reprogramar",
+      "fecha_objetivo": "2026-10-22",
+      "hora_objetivo": "09:20",
+      "franja": null,
+      "hora_minima": null,
+      "insiste_horario": false,
+      "fecha_actual_mencionada": "2026-10-16",
+      "info_solicitada": null,
+      "razon": "Confirma proceder con la reserva para el 22/10 09:20 en reemplazo del 16/10",
+      "_veces": 5
+     }
+    ],
+    "aceptacion": null
+   }
+  }
+ ]
+}

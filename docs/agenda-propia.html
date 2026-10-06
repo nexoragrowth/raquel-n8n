@@ -1,0 +1,508 @@
+<title>Agenda Propia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: documento de ingenieria escaneable — indice fijo + tarjetas de epica con prioridad visible,
+     casos borde en detalles plegables para no volverlo una pared de texto */
+  :root{
+    --bg:#f6f5f2; --surface:#ffffff; --surface-2:#edeae3; --ink:#1c1a17; --ink-dim:#5c574e;
+    --rule:#ddd8cd; --accent:#1f6f6a; --accent-ink:#0d3634; --accent-soft:#e3efed;
+    --p0:#9a3324; --p0-soft:#f6e2dd; --p1:#8a5a1f; --p1-soft:#f4e9d8; --p2:#3a5f8a; --p2-soft:#e1eaf4;
+    --warn:#9a3324; --warn-soft:#f6e2dd;
+    --font-display:'Fraunces',Georgia,'Times New Roman',serif;
+    --font-body:'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#15140f; --surface:#1d1b16; --surface-2:#28251e; --ink:#efece3; --ink-dim:#a8a194;
+      --rule:#39352b; --accent:#5fc2ba; --accent-ink:#dff6f2; --accent-soft:#20302e;
+      --p0:#e8897a; --p0-soft:#3a241f; --p1:#e0ac5c; --p1-soft:#352a18; --p2:#8ab2db; --p2-soft:#1d2a38;
+      --warn:#e8897a; --warn-soft:#3a241f;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#15140f; --surface:#1d1b16; --surface-2:#28251e; --ink:#efece3; --ink-dim:#a8a194;
+    --rule:#39352b; --accent:#5fc2ba; --accent-ink:#dff6f2; --accent-soft:#20302e;
+    --p0:#e8897a; --p0-soft:#3a241f; --p1:#e0ac5c; --p1-soft:#352a18; --p2:#8ab2db; --p2-soft:#1d2a38;
+    --warn:#e8897a; --warn-soft:#3a241f;
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.55;
+    padding-inline:20px;padding-block:40px 96px;}
+  .wrap{max-width:1000px;margin-inline:auto}
+  h1,h2,h3{font-family:var(--font-display);font-weight:600;text-wrap:balance;color:var(--ink);margin:0}
+  p{margin:0 0 1em;max-width:68ch}
+  code,.mono{font-family:var(--font-mono);font-size:0.88em;background:var(--surface-2);padding:1px 5px;border-radius:4px;word-break:break-word}
+  .eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);
+    background:var(--accent-soft);display:inline-flex;padding:3px 9px;border-radius:4px;margin-bottom:10px}
+
+  header{margin-bottom:30px}
+  header h1{font-size:clamp(30px,5vw,44px);line-height:1.08;margin-bottom:14px}
+  header .lede{font-size:17px;color:var(--ink-dim);max-width:64ch}
+
+  .principio{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--accent);
+    border-radius:8px;padding:16px 20px;margin-bottom:20px}
+  .principio p{margin:0;color:var(--ink);max-width:none}
+  .principio strong{color:var(--accent-ink)}
+
+  .alerta{background:var(--warn-soft);border:1px solid color-mix(in srgb, var(--warn) 35%, var(--rule));
+    border-left:4px solid var(--warn);border-radius:8px;padding:14px 20px;margin-bottom:40px}
+  .alerta p{margin:0 0 6px;color:var(--ink);max-width:none}
+  .alerta p:last-child{margin-bottom:0}
+  .alerta strong{color:var(--warn)}
+
+  nav.index{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:48px;position:sticky;top:12px;z-index:5;
+    background:var(--bg);padding-block:6px}
+  nav.index a{font-family:var(--font-mono);font-size:12.5px;color:var(--ink-dim);text-decoration:none;
+    border:1px solid var(--rule);border-radius:999px;padding:5px 12px;background:var(--surface)}
+  nav.index a:hover{color:var(--accent-ink);border-color:var(--accent)}
+
+  section{margin-bottom:52px;scroll-margin-top:52px}
+  section > h2{font-size:24px;margin-bottom:6px}
+  section > .sub{color:var(--ink-dim);margin-bottom:20px;max-width:68ch}
+
+  /* ---- contrato exacto ---- */
+  .contrato-wrap{overflow-x:auto;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
+  table.contrato{width:100%;border-collapse:collapse;font-size:13.5px;min-width:720px}
+  table.contrato th{text-align:left;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--ink-dim);padding:10px 14px;border-bottom:1px solid var(--rule);background:var(--surface-2)}
+  table.contrato td{padding:11px 14px;border-bottom:1px solid var(--rule);vertical-align:top;color:var(--ink-dim)}
+  table.contrato tr:last-child td{border-bottom:none}
+  table.contrato td.tool{color:var(--ink);font-weight:600;font-family:var(--font-mono);font-size:12.5px}
+  table.contrato td code{display:block;margin-bottom:3px;white-space:nowrap}
+  table.contrato .metodo{font-family:var(--font-mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}
+  .metodo.get{background:var(--p2-soft);color:var(--p2)}
+  .metodo.post{background:var(--accent-soft);color:var(--accent-ink)}
+  .metodo.put{background:var(--p1-soft);color:var(--p1)}
+
+  .reglas-reales{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:16px}
+  .regla{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:12px 16px}
+  .regla .k{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-dim);margin-bottom:4px}
+  .regla .v{font-weight:600;font-size:14.5px}
+
+  /* ---- modelo de datos ---- */
+  .entities{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .entity{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px 18px;min-width:0}
+  .entity h3{font-size:16px;font-family:var(--font-mono);color:var(--accent-ink);margin-bottom:4px}
+  .entity .note{font-size:13px;color:var(--ink-dim);margin-bottom:10px}
+  .entity ul{margin:0;padding-left:16px;font-size:13.5px}
+  .entity li{margin-bottom:3px;color:var(--ink-dim)}
+  .entity li code{background:none;padding:0;color:var(--ink)}
+
+  /* ---- epicas ---- */
+  .epic{background:var(--surface);border:1px solid var(--rule);border-radius:10px;margin-bottom:16px;overflow:hidden}
+  .epic-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px;flex-wrap:wrap}
+  .epic-head h3{font-size:18px}
+  .epic-head .what{color:var(--ink-dim);font-size:14.5px;margin-top:4px;max-width:60ch}
+  .prio{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+    padding:4px 9px;border-radius:5px;white-space:nowrap;flex-shrink:0}
+  .prio.p0{background:var(--p0-soft);color:var(--p0)}
+  .prio.p1{background:var(--p1-soft);color:var(--p1)}
+  .prio.p2{background:var(--p2-soft);color:var(--p2)}
+  .epic-body{padding:0 20px 18px}
+  .epic-body .reemplaza{font-family:var(--font-mono);font-size:12.5px;color:var(--ink-dim);margin-bottom:12px;line-height:1.6}
+  .epic-body .reemplaza strong{color:var(--ink)}
+
+  details.cb{background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;margin-top:4px}
+  details.cb summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:14px;list-style:none;
+    display:flex;align-items:center;gap:8px;color:var(--ink)}
+  details.cb summary::-webkit-details-marker{display:none}
+  details.cb summary::before{content:"▸";color:var(--accent-ink);transition:transform .15s;flex-shrink:0}
+  details.cb[open] summary::before{transform:rotate(90deg)}
+  details.cb .inner{padding:0 14px 14px}
+  .cb-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .cb-list li{display:flex;gap:9px;align-items:flex-start;font-size:14px;color:var(--ink-dim);min-width:0}
+  .cb-list li::before{content:"⚠";color:var(--p1);flex-shrink:0;margin-top:1px;font-size:12px}
+  .cb-list li strong{color:var(--ink);font-weight:600}
+  .cb-list li.real::before{content:"●";color:var(--warn)}
+
+  /* ---- hallazgos heredados ---- */
+  .hallazgos{display:flex;flex-direction:column;gap:12px}
+  .hallazgo{display:grid;grid-template-columns:28px 1fr;gap:12px;background:var(--surface);border:1px solid var(--rule);
+    border-radius:10px;padding:14px 18px}
+  .hallazgo .ico{font-size:16px;color:var(--warn)}
+  .hallazgo h3{font-size:15px;margin-bottom:4px}
+  .hallazgo p{font-size:14px;margin:0;color:var(--ink-dim)}
+  .hallazgo .fuente{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-dim);margin-top:6px}
+
+  /* ---- mejoras IA ---- */
+  .ia-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .ia-card{background:var(--p2-soft);border:1px solid color-mix(in srgb, var(--p2) 30%, var(--rule));
+    border-radius:10px;padding:16px 18px}
+  .ia-card h3{font-size:15.5px;color:var(--ink);margin-bottom:6px}
+  .ia-card p{font-size:13.5px;color:var(--ink-dim);margin:0}
+
+  /* ---- migracion ---- */
+  .pasos{display:flex;flex-direction:column;gap:12px}
+  .paso{display:grid;grid-template-columns:34px 1fr;gap:14px}
+  .paso .n{width:30px;height:30px;border-radius:50%;background:var(--accent-ink);color:var(--surface);
+    font-family:var(--font-mono);font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:center}
+  .paso .t{min-width:0;padding-top:3px}
+  .paso .t strong{display:block;color:var(--ink);margin-bottom:2px}
+  .paso .t span{color:var(--ink-dim);font-size:14.5px}
+
+  .checklist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:flex;gap:9px;align-items:flex-start;background:var(--surface);border:1px solid var(--rule);
+    border-radius:8px;padding:9px 13px}
+  .checklist li::before{content:"";width:15px;height:15px;border-radius:4px;border:1.5px solid var(--accent);flex-shrink:0;margin-top:2px}
+  .checklist li span{color:var(--ink-dim);font-size:14.5px}
+  .checklist li strong{color:var(--ink)}
+
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--rule);color:var(--ink-dim);font-size:13.5px}
+
+  @media (max-width:560px){
+    nav.index{position:static}
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">PRD + backlog · motor de agenda</span>
+    <h1>Agenda Propia</h1>
+    <p class="lede">El reemplazo interno de Dentalink, construido para quedar mejor que el original: mismo contrato REST hacia afuera (el bot y el panel no se enteran del cambio), pero por dentro sin las fallas que Dentalink nunca resolvió porque es un desarrollo manual de terceros. Nosotros lo construimos con desarrollo asistido por IA — eso es la diferencia desde el día uno, no una promesa de "fase 2".</p>
+  </header>
+
+  <div class="principio">
+    <p><strong>Principio rector:</strong> un sistema de turnos para un consultorio chico es un problema resuelto hace veinte años, acá no se inventa la categoría. Pero clonar el contrato de Dentalink no significa clonar sus límites: la carrera de reserva sin resolver, el DNI que se pide y nunca se guarda, la lista de espera que hoy es solo una frase en un mensaje — son fallas de un SaaS genérico armado a mano, no restricciones del problema. Las corregimos en el lanzamiento, no las heredamos.</p>
+  </div>
+
+  <div class="alerta">
+    <p><strong>Hallazgo de arquitectura, leyendo el código real:</strong> el bot (nodos <code>toolHttpRequest</code> del v6 y del sub-workflow de cancelar/reprogramar) y el panel (<code>lib/integrations/dentalink/client.ts</code>) no hablan con una librería intermedia — arman URLs y JSON a mano, hardcodeados, apuntando directo a <code>api.dentalink.healthatom.com</code>. Para que "no haga falta tocar los prompts del bot ni la lógica del panel" en los términos exactos que puso Lucas, "Agenda Propia" tiene que exponer <strong>los mismos 8 endpoints, con la misma forma</strong>, para que el único cambio real sea la URL base y las credenciales.</p>
+  </div>
+
+  <nav class="index">
+    <a href="#mejor">Mejor desde el día 1</a>
+    <a href="#contrato">El contrato exacto</a>
+    <a href="#reglas">Reglas reales de hoy</a>
+    <a href="#modelo">Modelo de datos</a>
+    <a href="#disponibilidad">Disponibilidad</a>
+    <a href="#reserva">Reservar</a>
+    <a href="#pacientes">Pacientes</a>
+    <a href="#cancelar">Cancelar / confirmar</a>
+    <a href="#heredados">Heredado a decidir</a>
+    <a href="#ia">Mejoras con IA</a>
+    <a href="#migracion">Migración</a>
+    <a href="#qa">Antes del corte</a>
+  </nav>
+
+  <section id="mejor">
+    <h2>Mejor desde el día 1</h2>
+    <p class="sub">No son ideas para "más adelante": son consecuencia directa de que la base sea nuestra. Cada una ya está identificada como falla real de Dentalink en las secciones de abajo — acá van agrupadas como lo que son, parte del lanzamiento.</p>
+    <div class="ia-grid">
+      <div class="ia-card" style="background:var(--accent-soft);border-color:color-mix(in srgb, var(--accent) 35%, var(--rule))">
+        <h3>Cero choques de horario</h3>
+        <p>Dentalink no cierra la carrera de reserva simultánea — nada en su código la cubre. Una restricción de unicidad real por profesional/fecha/hora en nuestra base la cierra de raíz, sin depender de que el LLM "no reserve dos veces".</p>
+      </div>
+      <div class="ia-card" style="background:var(--accent-soft);border-color:color-mix(in srgb, var(--accent) 35%, var(--rule))">
+        <h3>El DNI se guarda de verdad</h3>
+        <p>El bot ya se lo pide al paciente; Dentalink nunca lo recibía porque el body de alta no lo manda. Con <code>pacientes.documento</code> en nuestra base, el dato que ya se recolecta deja de perderse.</p>
+      </div>
+      <div class="ia-card" style="background:var(--accent-soft);border-color:color-mix(in srgb, var(--accent) 35%, var(--rule))">
+        <h3>Lista de espera que funciona</h3>
+        <p>Hoy el bot le promete al paciente "le dejo nota a la secretaria" y es solo texto — nadie la procesa. Con tabla propia, cuando se libera un turno se ofrece automático a quien ya lo había pedido.</p>
+      </div>
+      <div class="ia-card" style="background:var(--accent-soft);border-color:color-mix(in srgb, var(--accent) 35%, var(--rule))">
+        <h3>Sin fichas duplicadas</h3>
+        <p>Dentalink ya tuvo un caso real de la misma persona con dos ids distintos. Teléfono normalizado a una sola forma al guardar + chequeo de nombre/documento antes de crear, cierran ese agujero desde la primera ficha.</p>
+      </div>
+      <div class="ia-card" style="background:var(--accent-soft);border-color:color-mix(in srgb, var(--accent) 35%, var(--rule))">
+        <h3>Una sola fuente de reglas de negocio</h3>
+        <p>Hoy el horario de atención y la regla de "tarde solo lunes/miércoles" viven copiadas en JS en al menos 3 lugares, con redacciones ligeramente distintas. Centralizadas en <code>agenda_reglas</code>, cambiarlas una vez las cambia para todos los consumidores — nunca más un parche que corrige un lugar y deja los otros dos desactualizados.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="contrato">
+    <h2>El contrato exacto</h2>
+    <p class="sub">Los 8 llamados reales a Dentalink, leídos directo de <code>v6_LIVE.json</code>, <code>subwf_cancelar_reprogramar_LIVE.json</code> y <code>dentalink/client.ts</code> del panel — no una lista aproximada.</p>
+    <div class="contrato-wrap">
+      <table class="contrato">
+        <tr><th>Endpoint a clonar</th><th>Quién lo llama</th><th>Forma real</th></tr>
+        <tr>
+          <td><span class="metodo get">GET</span><br><code style="margin-top:6px">/dentistas</code></td>
+          <td class="tool">ver_profesionales<br><span style="font-weight:400;color:var(--ink-dim)">listDentistas (panel)</span></td>
+          <td>Sin parámetros. Devuelve <code>{data:[{id,nombre}]}</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="metodo get">GET</span><br><code style="margin-top:6px">/agendas/?q=...</code></td>
+          <td class="tool">buscar_horarios<br><span style="font-weight:400;color:var(--ink-dim)">buscarHorarios (panel)</span></td>
+          <td><code>q={"id_sucursal":{"eq":1},"fecha":{"eq":"YYYY-MM-DD"},"duracion":{"eq":40},"id_dentista":{"eq":1}}</code><br>Devuelve huecos libres con <code>fecha</code> en <strong>DD/MM/YYYY</strong> (inconsistente a propósito con <code>/citas</code>, que usa YYYY-MM-DD — hay que decidir si se clona la inconsistencia o se corrige, ver más abajo).</td>
+        </tr>
+        <tr>
+          <td><span class="metodo post">POST</span><br><code style="margin-top:6px">/citas/</code></td>
+          <td class="tool">reservar_turno<br><span style="font-weight:400;color:var(--ink-dim)">crearTurno (panel)</span></td>
+          <td>Body: <code>{id_dentista,id_sucursal,id_sillon,id_paciente,fecha,hora_inicio,duracion,comentario}</code>. Responde <code>{data:{id}}</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="metodo put">PUT</span><br><code style="margin-top:6px">/citas/{id}</code></td>
+          <td class="tool">cancelar_turno · confirmar_turno<br><span style="font-weight:400;color:var(--ink-dim)">updateCitaEstado (panel)</span></td>
+          <td>Body: <strong>únicamente</strong> <code>{"id_estado": N}</code> — Dentalink real tira 400 si va cualquier otro campo, y el bot depende de ese error para no romper nada. 1=Anulado · 18=Confirmado por WhatsApp · 22=Confirmado (staff).</td>
+        </tr>
+        <tr>
+          <td><span class="metodo get">GET</span><br><code style="margin-top:6px">/pacientes?q=...</code></td>
+          <td class="tool">buscar_paciente_dentalink<br><span style="font-weight:400;color:var(--ink-dim)">pacientesByCelular (panel)</span></td>
+          <td>Bot: <code>{"celular":{"lk":"&lt;últimos 10 dígitos&gt;"}}</code>, fallback por <code>{"nombre":{"lk":...}}</code>. Panel: <code>{"celular":{"eq":"&lt;variante exacta&gt;"}}</code> probando 4 formatos (con/sin "+", con/sin "9") y devolviendo <strong>todas</strong> las fichas que matchean, no solo la primera.</td>
+        </tr>
+        <tr>
+          <td><span class="metodo post">POST</span><br><code style="margin-top:6px">/pacientes/</code></td>
+          <td class="tool">crear_paciente_dentalink<br><span style="font-weight:400;color:var(--ink-dim)">crearPaciente (panel)</span></td>
+          <td>Body real: <code>{nombre,apellidos,celular}</code> — sin <code>documento</code> pese a que el prompt del bot exige DNI confirmado antes de llamarla (ver "heredado a decidir").</td>
+        </tr>
+        <tr>
+          <td><span class="metodo get">GET</span><br><code style="margin-top:6px">/pacientes/{id}/citas</code></td>
+          <td class="tool">ver_turnos_paciente<br><span style="font-weight:400;color:var(--ink-dim)">citasByPaciente (panel)</span></td>
+          <td>Bot filtra <code>q={"fecha":{"gte":"hoy"}}</code> (solo futuro). Panel no filtra y ordena desc en el cliente. Dentalink no permite filtrar <code>/citas</code> por <code>id_paciente</code> directo — por eso el recurso anidado.</td>
+        </tr>
+        <tr>
+          <td><span class="metodo get">GET</span><br><code style="margin-top:6px">/citas</code></td>
+          <td class="tool">listCitas / listAllCitas (panel)</td>
+          <td>Sin filtro, paginado por cursor <code>links.next</code> (50 por página, panel corta a 8 páginas = 400 citas). El bot no usa este endpoint.</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="reglas">
+    <h2>Reglas reales de hoy</h2>
+    <p class="sub">No son supuestos: están escritas en JS, duplicadas en al menos tres lugares distintos (el sub-workflow de cancelar/reprogramar, el script de búsqueda profunda, y presumiblemente el prompt del Sub-Agent Agendar). Centralizarlas en una tabla editable en vez de en código es, en sí mismo, parte del valor de este proyecto.</p>
+    <div class="reglas-reales">
+      <div class="regla"><div class="k">Horario</div><div class="v">Lun y Mié 15–20 hs · Mar/Jue/Vie 8–13 hs</div></div>
+      <div class="regla"><div class="k">Tarde</div><div class="v">Solo existe Lunes y Miércoles</div></div>
+      <div class="regla"><div class="k">Duración de turno</div><div class="v">40 minutos, fija</div></div>
+      <div class="regla"><div class="k">Recursos</div><div class="v">1 profesional (id 1) · 1 sucursal (id 1) · 1 sillón (id 1)</div></div>
+    </div>
+  </section>
+
+  <section id="modelo">
+    <h2>Modelo de datos</h2>
+    <p class="sub">Pensado para servir el contrato de arriba, no para parecer un ERP. <code>profesionales</code> y <code>tratamientos</code> con más de una fila son una decisión a futuro, no algo que haga falta hoy: la clínica opera con un solo profesional, duración fija y un solo sillón.</p>
+    <div class="entities">
+      <div class="entity">
+        <h3>profesionales</h3>
+        <div class="note">Una sola fila hoy (Dra. Raquel, id interno = 1). La tabla existe para no tener que migrar el día que haya un segundo profesional, no porque haga falta ahora.</div>
+        <ul>
+          <li><code>id</code>, <code>nombre</code></li>
+          <li><code>activo</code></li>
+        </ul>
+      </div>
+      <div class="entity">
+        <h3>pacientes <span style="font-family:var(--font-body);font-weight:400;color:var(--ink-dim);font-size:12px">(extender)</span></h3>
+        <div class="note">Ya existe en la base del bot. Se le agrega lo que Dentalink no tenía bien resuelto.</div>
+        <ul>
+          <li><code>telefono</code>, <code>nombre</code>, <code>alias_panel</code> (ya existen)</li>
+          <li>agregar: <code>documento</code> — campo que el prompt del bot pide pero Dentalink nunca llegó a guardar</li>
+          <li><code>resumen_clinico</code> (ya existe)</li>
+        </ul>
+      </div>
+      <div class="entity">
+        <h3>agenda_reglas</h3>
+        <div class="note">Lo que hoy vive hardcodeado en JS, pasado a datos.</div>
+        <ul>
+          <li><code>profesional_id</code>, <code>dia_semana</code></li>
+          <li><code>hora_desde</code>, <code>hora_hasta</code></li>
+          <li><code>bloqueos</code>: fecha + motivo (licencia, feriado)</li>
+        </ul>
+      </div>
+      <div class="entity">
+        <h3>citas</h3>
+        <div class="note">El corazón: un turno. Mapea 1 a 1 contra lo que <code>/citas</code> de Dentalink ya expone.</div>
+        <ul>
+          <li><code>id</code>, <code>paciente_id</code>, <code>profesional_id</code></li>
+          <li><code>fecha</code>, <code>hora_inicio</code>, <code>duracion</code> (40 fijo hoy)</li>
+          <li><code>id_estado</code>: 1 anulado · 18 confirmado WhatsApp · 22 confirmado staff · default no-confirmado · atendido · no-asistió</li>
+          <li><code>comentario</code>, <code>created_at</code></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="disponibilidad">
+    <div class="epic">
+      <div class="epic-head">
+        <div>
+          <h3>Disponibilidad — clon de <code style="font-size:14px">GET /agendas</code></h3>
+          <div class="what">El paciente pide turno; el bot arma el bloque de mañana y tarde a partir de esta respuesta.</div>
+        </div>
+        <span class="prio p0">P0 — crítico</span>
+      </div>
+      <div class="epic-body">
+        <div class="reemplaza"><strong>Mismo filtro</strong> <code>q={id_sucursal,fecha,duracion,id_dentista}</code>, <strong>misma forma de respuesta</strong> (<code>data: [{fecha, hora_inicio}]</code>). Decidir una sola cosa a propósito: ¿se clona el formato de fecha DD/MM/YYYY de Dentalink en <code>/agendas</code>, o se normaliza a YYYY-MM-DD en los dos endpoints? El cliente del panel ya hace esa conversión (<code>dmyToIso</code>), así que normalizar del lado del servidor es estrictamente menos trabajo para todos los consumidores — y el bot nunca lee <code>fecha</code> cruda de esta respuesta, solo el <code>bloque</code> de texto ya armado.</div>
+        <details class="cb">
+          <summary>Casos a contemplar</summary>
+          <div class="inner">
+            <ul class="cb-list">
+              <li class="real"><strong>Caso ya ocurrido (exec 253552/253553, 06/08):</strong> un bug real en "Step 6b-prep" armaba el filtro en un campo (<code>dentalink_query_url</code>) que el nodo siguiente no leía (leía <code>q_horarios</code>) → Dentalink recibía <code>q=undefined</code> y devolvía siempre <code>data: []</code>. 8 escalaciones idénticas en 3 semanas, "no veo turnos" con turnos reales disponibles. El equivalente acá: testear el camino completo (handler → query real → respuesta), nunca solo que el handler "compile".</li>
+              <li><strong>Franja tarde fuera de Lunes/Miércoles:</strong> la regla de negocio (tarde = solo esos dos días) hoy está en código en al menos 2 lugares distintos con pequeñas diferencias de redacción entre copias. Al centralizarla en <code>agenda_reglas</code>, un solo lugar decide y los dos consumidores (bot y panel) ven lo mismo.</li>
+              <li><strong>Agenda vacía por semanas:</strong> responder <code>data: []</code> limpio, nunca inventar un horario ni devolver 500.</li>
+              <li><strong>Rendimiento en búsqueda profunda:</strong> hay lógica real (<code>apply_fix_deep_agenda_search.py</code>) que si no hay huecos en 14 días, itera día por día hasta 45 días buscando lunes/miércoles — eso tiene que resolver contra la base propia en milisegundos, no en llamadas HTTP en loop como hoy.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="reserva">
+    <div class="epic">
+      <div class="epic-head">
+        <div>
+          <h3>Reservar — clon de <code style="font-size:14px">POST /citas/</code></h3>
+          <div class="what">Confirmar uno de los horarios ofrecidos y dejarlo en la agenda.</div>
+        </div>
+        <span class="prio p0">P0 — crítico</span>
+      </div>
+      <div class="epic-body">
+        <div class="reemplaza">Body de entrada idéntico: <code>{id_dentista,id_sucursal,id_sillon,id_paciente,fecha,hora_inicio,duracion,comentario}</code>. Responder <code>{data:{id}}</code> con un id numérico — el bot y el panel lo persisten como <code>id_cita_dentalink</code> en varias tablas (recordatorios, notas internas), así que no puede ser un UUID.</div>
+        <details class="cb">
+          <summary>Casos a contemplar</summary>
+          <div class="inner">
+            <ul class="cb-list">
+              <li><strong>Dos personas piden el mismo horario a la vez:</strong> hoy Dentalink probablemente también tiene esta ventana de carrera (nada en el código la cubre explícitamente). La base propia sí puede cerrarla con una restricción de unicidad real por <code>(profesional_id, fecha, hora_inicio)</code> — una mejora genuina sobre el sistema actual, no solo paridad.</li>
+              <li><strong>El horario ofrecido ya no existe:</strong> el bot llama <code>reservar_turno</code> después del read-back del paciente, con una ventana de varios mensajes en el medio. Responder un error claro y distinguible (no un 500 genérico) para que el bot pueda reintentar con <code>buscar_horarios</code> en vez de escalar.</li>
+              <li><strong>Reintento del mismo turno dos veces:</strong> el prompt del bot dice "idempotencia estricta, nunca reservar 2 veces en el mismo turno LLM" — pero eso es una instrucción de texto, no una garantía. Igual que la carrera de arriba, conviene que la unicidad la garantice la base, no la buena conducta del LLM.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="pacientes">
+    <div class="epic">
+      <div class="epic-head">
+        <div>
+          <h3>Pacientes — clon de <code style="font-size:14px">GET/POST /pacientes</code></h3>
+          <div class="what">Encontrar la ficha a partir del teléfono, o crear una nueva.</div>
+        </div>
+        <span class="prio p0">P0 — crítico</span>
+      </div>
+      <div class="epic-body">
+        <div class="reemplaza">Dos formas de búsqueda a soportar porque las usan consumidores distintos: <code>lk</code> (contains, usa el bot con últimos 10 dígitos) y <code>eq</code> (exacto, usa el panel probando 4 variantes del número). Si el motor de búsqueda propio normaliza el teléfono a una sola forma canónica al guardar, <strong>ambas estrategias siguen funcionando sin tocarlas</strong> — es la base la que deja de necesitar 4 variantes, no el cliente.</div>
+        <details class="cb">
+          <summary>Casos a contemplar</summary>
+          <div class="inner">
+            <ul class="cb-list">
+              <li class="real"><strong>Un teléfono, varias fichas:</strong> ya está contemplado hoy en <code>pacientesByCelular</code> del panel (devuelve TODAS las fichas que matchean, no la primera) justamente porque pasa en la operación real. El reemplazo tiene que preservar ese comportamiento, no "simplificarlo" a devolver una sola.</li>
+              <li><strong>crear_paciente sin DNI real:</strong> ver sección "heredado a decidir" — es un hallazgo, no un caso borde nuevo a inventar.</li>
+              <li><strong>Duplicado por variante de formato:</strong> si alguien ya existe como <code>+5491161461034</code> y se busca con <code>5491161461034</code> sin el "+", no debe crearse una ficha nueva. Hoy esto lo resuelve a fuerza de probar 4 variantes en el cliente; con teléfono normalizado en la base propia, se resuelve una sola vez al guardar.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="cancelar">
+    <div class="epic">
+      <div class="epic-head">
+        <div>
+          <h3>Cancelar / confirmar — clon de <code style="font-size:14px">PUT /citas/{id}</code></h3>
+          <div class="what">Un único endpoint, un único campo de body, usado para tres cosas distintas según el valor de <code>id_estado</code>.</div>
+        </div>
+        <span class="prio p0">P0 — crítico</span>
+      </div>
+      <div class="epic-body">
+        <div class="reemplaza"><strong>Validación estricta de body:</strong> aceptar <code>{"id_estado": N}</code> y <strong>nada más</strong> — rechazar con 400 cualquier otro campo, igual que Dentalink real. Esto no es un capricho de paridad: el banlist y los scripts de fix del proyecto ya aprendieron esa lección a los golpes ("Parametro X no existe") y el bot tiene ese comportamiento internalizado en su prompt.</div>
+        <details class="cb">
+          <summary>Casos a contemplar</summary>
+          <div class="inner">
+            <ul class="cb-list">
+              <li><strong>Cancela un turno que ya pasó:</strong> hoy Dentalink no lo impide (el bot confía en el id_cita que trae de la nota interna del recordatorio). Decidir si la base propia lo bloquea — sería una mejora real, no solo paridad.</li>
+              <li><strong>id_estado inválido o inexistente:</strong> hoy el set conocido es 1 (anulado), 18 (confirmado WhatsApp), 22 (confirmado staff), más "no confirmado" (default), "Atendido" y "No asistió" que aparecen en las citas pero no se setean desde el bot ni el panel. Si llega un valor fuera de ese set, rechazar explícito en vez de guardar basura.</li>
+              <li><strong>Reprogramar = cancelar + crear, no un endpoint propio:</strong> así lo hace hoy el sub-workflow (Step 6a cancela con id_estado:1, Step 6d crea una cita nueva). El reemplazo puede mantener ese patrón de dos pasos tal cual, porque ningún consumidor espera un endpoint de "mover" turno.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="heredados">
+    <h2>Heredado a decidir</h2>
+    <p class="sub">Dos cosas que aparecieron leyendo el código real, no bugs del sistema propio — vienen de cómo quedó armado el v6 contra Dentalink. Conviene decidirlas ahora, con el proyecto nuevo como oportunidad, en vez de arrastrarlas en silencio.</p>
+    <div class="hallazgos">
+      <div class="hallazgo">
+        <div class="ico">●</div>
+        <div>
+          <h3>crear_paciente_dentalink pide DNI que nunca se guarda</h3>
+          <p>El prompt del bot dice "NUNCA crear sin DNI confirmado por el paciente", pero el body real que arma el nodo (<code>jsonBody</code>) solo manda <code>nombre, apellidos, celular</code> — el documento nunca llega a Dentalink pese a que el bot se lo pide al paciente. Con <code>pacientes.documento</code> ya en el modelo propio, es gratis corregirlo: basta con que el endpoint de alta acepte y guarde el campo que el bot ya recolecta.</p>
+          <div class="fuente">Fuente: v6_LIVE.json, nodo crear_paciente_dentalink (toolDescription vs. jsonBody)</div>
+        </div>
+      </div>
+      <div class="hallazgo">
+        <div class="ico">●</div>
+        <div>
+          <h3>Token de Dentalink en texto plano en el repo</h3>
+          <p>El script <code>apply_fix_deep_agenda_search.py</code> tiene el token real de Dentalink hardcodeado en el código fuente, versionado en git — viola la regla propia del proyecto de no pegar valores reales en el repo. No es parte de este backlog, pero vale rotar ese token y sacar el script del historial (o al menos del HEAD) antes de que el proyecto crezca más.</p>
+          <div class="fuente">Fuente: scripts/apply_fix_deep_agenda_search.py, línea 107</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="ia">
+    <h2>Fase 2: lo que necesita historial acumulado</h2>
+    <p class="sub">Esto sí es genuinamente "más adelante" — no porque sea menos importante, sino porque necesita semanas de datos propios para tener señal real. No bloquea el lanzamiento.</p>
+    <div class="ia-grid">
+      <div class="ia-card">
+        <h3>Alerta de ausentismo probable</h3>
+        <p>Si el historial de un paciente muestra que suele faltar o cancelar tarde, reforzar su recordatorio o pedir confirmación con más anticipación.</p>
+      </div>
+      <div class="ia-card">
+        <h3>Horario sugerido por historial</h3>
+        <p>Si un paciente siempre viene por la tarde, ofrecerle esa franja primero en vez de la más próxima en general.</p>
+      </div>
+      <div class="ia-card">
+        <h3>Aviso de hueco corto</h3>
+        <p>Si entre dos turnos queda un espacio chico difícil de llenar, avisarle a la clínica en vez de que se pierda solo.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="migracion">
+    <h2>Migración desde Dentalink</h2>
+    <p class="sub">Sin corte de un día para el otro, y sin que el bot ni el panel se enteren hasta el paso 3.</p>
+    <div class="pasos">
+      <div class="paso">
+        <div class="n">1</div>
+        <div class="t"><strong>Doble escritura</strong><span>Cada turno nuevo se guarda en Dentalink real y en la base propia al mismo tiempo, por unas semanas. El bot y el panel siguen apuntando a Dentalink, sin cambios.</span></div>
+      </div>
+      <div class="paso">
+        <div class="n">2</div>
+        <div class="t"><strong>Comparar</strong><span>Correr los 8 endpoints de "Agenda Propia" en paralelo contra los mismos pedidos reales y diffear la respuesta contra Dentalink, turno por turno.</span></div>
+      </div>
+      <div class="paso">
+        <div class="n">3</div>
+        <div class="t"><strong>Corte con interruptor</strong><span>Cambiar la URL base + credencial en los nodos del bot y en la config del panel. Un solo interruptor, reversible al toque si algo falla.</span></div>
+      </div>
+      <div class="paso">
+        <div class="n">4</div>
+        <div class="t"><strong>Historial</strong><span>Decidir si se importa todo lo pasado de Dentalink o solo queda disponible desde la fecha del corte (decisión de Raquel, no técnica).</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="qa">
+    <h2>Antes de apagar Dentalink</h2>
+    <ul class="checklist">
+      <li><strong>Las semanas de doble escritura sin diferencias</strong><span>— ningún turno aparece en un sistema y no en el otro.</span></li>
+      <li><strong>Los 8 endpoints probados con los payloads reales del bot y del panel</strong><span>— no payloads inventados, los que ya están documentados en este contrato.</span></li>
+      <li><strong>El camino completo con un número de prueba</strong><span>— agendar, confirmar, cancelar, reprogramar, recordatorio de 72 y de 24 horas.</span></li>
+      <li><strong>Reserva simultánea probada a propósito</strong><span>— dos pedidos al mismo horario, uno gana y el otro recibe un error claro, no un 500.</span></li>
+      <li><strong>El caso del teléfono con varias fichas probado</strong><span>— nunca asume, siempre devuelve todas y pregunta.</span></li>
+      <li><strong>PUT /citas rechaza body con campos extra</strong><span>— igual que Dentalink real, para no romper la lógica que ya depende de ese 400.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    Backlog vivo. Cada epica nueva entra con su propia lista de casos borde antes de empezar a construirla, no después.
+  </footer>
+
+</div>

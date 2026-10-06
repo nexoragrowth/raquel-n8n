@@ -78,7 +78,7 @@ const SALUDOS_SOLOS = ['hola','holaa','holaaa','holis','buenas','buen dia','buen
 const tSaludo = t.replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
 let ctxPrevio = 'no-se';
 try { ctxPrevio = String($('Build Router Context').first().json.ctx || '').trim(); } catch (e) { ctxPrevio = 'no-se'; }
-const conversacionNueva = ctxPrevio === '' || ctxPrevio === '(sin contexto)';
+const conversacionNueva = ctxPrevio === '' || ctxPrevio === '(sin contexto)' || ctxPrevio === '(sin mensajes previos)';
 if (SALUDOS_SOLOS.includes(tSaludo) && conversacionNueva) {
   const menuRow = $input.all().map(i => i.json).find(r => String(r.id) === 'dir:menu_bienvenida');
   if (menuRow && menuRow.contenido && String(menuRow.contenido).trim()) {

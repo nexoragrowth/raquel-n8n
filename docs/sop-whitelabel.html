@@ -1,0 +1,270 @@
+<title>Nexora Clinic OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: columna angosta de lectura + una espina numerada de fases a la izquierda (es un proceso real, secuencial) */
+  :root{
+    --bg:#f6f5f2; --surface:#ffffff; --surface-2:#edeae3; --ink:#1c1a17; --ink-dim:#5c574e;
+    --rule:#ddd8cd; --accent:#1f6f6a; --accent-ink:#0d3634; --accent-soft:#e3efed;
+    --warn:#8a5a1f; --warn-soft:#f4e9d8;
+    --font-display:'Fraunces',Georgia,'Times New Roman',serif;
+    --font-body:'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#15140f; --surface:#1d1b16; --surface-2:#28251e; --ink:#efece3; --ink-dim:#a8a194;
+      --rule:#39352b; --accent:#5fc2ba; --accent-ink:#dff6f2; --accent-soft:#20302e;
+      --warn:#e0ac5c; --warn-soft:#352a18;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#15140f; --surface:#1d1b16; --surface-2:#28251e; --ink:#efece3; --ink-dim:#a8a194;
+    --rule:#39352b; --accent:#5fc2ba; --accent-ink:#dff6f2; --accent-soft:#20302e;
+    --warn:#e0ac5c; --warn-soft:#352a18;
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.55;
+    padding-inline:20px;padding-block:48px 96px;}
+  .wrap{max-width:920px;margin-inline:auto}
+  h1,h2,h3{font-family:var(--font-display);font-weight:600;text-wrap:balance;color:var(--ink);margin:0}
+  p{margin:0 0 1em;max-width:62ch}
+  a{color:var(--accent-ink);text-decoration-color:var(--accent)}
+  code,.mono{font-family:var(--font-mono);font-size:0.92em}
+  .eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);
+    background:var(--accent-soft);display:inline-flex;padding:3px 9px;border-radius:4px;margin-bottom:10px}
+
+  /* ---- header ---- */
+  header{margin-bottom:56px}
+  header h1{font-size:clamp(30px,5vw,44px);line-height:1.08;margin-bottom:14px}
+  header .lede{font-size:17px;color:var(--ink-dim);max-width:58ch}
+  .meta-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;font-family:var(--font-mono);font-size:12.5px;color:var(--ink-dim)}
+  .meta-row span{background:var(--surface);border:1px solid var(--rule);border-radius:999px;padding:4px 11px}
+
+  /* ---- gate / prerequisite callout ---- */
+  .gate{background:var(--warn-soft);border:1px solid color-mix(in srgb, var(--warn) 35%, var(--rule));
+    border-radius:10px;padding:20px 22px;margin-bottom:56px}
+  .gate .eyebrow{background:transparent;border:1px solid var(--warn);color:var(--warn);padding:2px 8px}
+  .gate h2{font-size:19px;margin-bottom:8px}
+  .gate p{color:var(--ink);max-width:66ch}
+  .gate ul{margin:10px 0 0;padding-left:20px}
+  .gate li{margin-bottom:6px}
+
+  /* ---- phase spine ---- */
+  .phases{display:flex;flex-direction:column;gap:0}
+  .phase{display:grid;grid-template-columns:56px 1fr;gap:0 24px;position:relative}
+  .phase:not(:last-child){padding-bottom:44px}
+  .phase-rail{position:relative;display:flex;flex-direction:column;align-items:center}
+  .phase-num{font-family:var(--font-display);font-weight:600;font-size:19px;color:var(--surface);
+    background:var(--accent-ink);width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;z-index:1}
+  .phase:not(:last-child) .phase-rail::after{content:"";position:absolute;top:40px;bottom:-44px;width:2px;background:var(--rule)}
+  .phase-body{min-width:0;padding-top:4px}
+  .phase h2{font-size:22px;margin-bottom:6px}
+  .phase .phase-tag{font-family:var(--font-mono);font-size:12px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:block}
+  .phase p{color:var(--ink-dim)}
+  .phase p strong{color:var(--ink);font-weight:600}
+
+  .checklist{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .checklist li{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--rule);
+    border-radius:8px;padding:10px 13px;min-width:0}
+  .checklist li::before{content:"";width:16px;height:16px;border-radius:4px;border:1.5px solid var(--accent);flex-shrink:0;margin-top:2px}
+  .checklist li .t{min-width:0}
+  .checklist li .t strong{display:block;color:var(--ink);font-weight:600;margin-bottom:2px}
+  .checklist li .t span{color:var(--ink-dim);font-size:14.5px}
+
+  details{background:var(--surface);border:1px solid var(--rule);border-radius:8px;margin-top:14px;padding:0}
+  details summary{cursor:pointer;padding:11px 15px;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px}
+  details summary::-webkit-details-marker{display:none}
+  details summary::before{content:"▸";color:var(--accent-ink);transition:transform .15s}
+  details[open] summary::before{transform:rotate(90deg)}
+  details .inner{padding:0 15px 15px;color:var(--ink-dim)}
+  details .inner table{margin-top:6px}
+
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  caption{text-align:left;font-family:var(--font-mono);font-size:12px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{font-family:var(--font-mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-dim);font-weight:500}
+  td.yes{color:var(--accent-ink);font-weight:600}
+  td.no{color:var(--ink-dim)}
+  .table-scroll{overflow-x:auto;margin-top:12px}
+
+  .pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .pill{font-family:var(--font-mono);font-size:12.5px;background:var(--surface-2);border:1px solid var(--rule);
+    border-radius:999px;padding:4px 11px;color:var(--ink)}
+
+  footer{margin-top:72px;padding-top:24px;border-top:1px solid var(--rule);color:var(--ink-dim);font-size:13.5px}
+
+  @media (max-width:560px){
+    .phase{grid-template-columns:40px 1fr;gap:0 14px}
+    .phase-num{width:32px;height:32px;font-size:16px}
+    .phase:not(:last-child) .phase-rail::after{top:32px;bottom:-36px}
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">SOP interno · Nexora</span>
+    <h1>Nexora Clinic OS</h1>
+    <p class="lede">Cómo vender e instalar, en otra clínica, el mismo sistema que hoy corre para la Dra. Raquel: agente de WhatsApp con IA, panel de control y agenda propia, sin depender de Dentalink ni de ningún software de terceros.</p>
+    <div class="meta-row">
+      <span>8 fases</span>
+      <span>1 cliente insignia operando: Dra. Raquel</span>
+      <span>Base: n8n · Supabase · Evolution GO · Chatwoot</span>
+    </div>
+  </header>
+
+  <div class="gate">
+    <span class="eyebrow">Antes de vender la primera unidad</span>
+    <h2>Esto todavía no es un producto, es una instalación hecha a medida</h2>
+    <p>Hoy cada dato de la clínica (nombre, dirección, horarios, precios, tratamientos, textos del triaje) vive adentro del código del workflow y de los prompts, escrito a mano para Raquel. Instalarlo en otra clínica significa clonar y reescribir, no configurar. Dos cosas tienen que estar listas antes de ofrecerlo como whitelabel:</p>
+    <ul>
+      <li><strong>La agenda propia terminada</strong> (el reemplazo de Dentalink) y corriendo en paralelo con Raquel el tiempo suficiente para confiar en ella sin la agenda vieja de respaldo.</li>
+      <li><strong>Esos datos movidos a tablas de configuración</strong>, el mismo patrón que ya funciona para el precio de la consulta y los textos del triaje: editables sin tocar una línea de código ni volver a aplicar un workflow.</li>
+    </ul>
+  </div>
+
+  <div class="phases">
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-num">0</div></div>
+      <div class="phase-body">
+        <span class="phase-tag">Encaje</span>
+        <h2>¿A quién le sirve esto?</h2>
+        <p>El producto asume un consultorio chico o mediano, de uno a tres profesionales, con WhatsApp como canal único y horarios de atención fijos (no guardia 24 horas). El rubro ideal es el mismo que ya se validó: tratamientos con turnos programados, consulta inicial paga, y un puñado de urgencias típicas que se repiten (en ortodoncia: alambre que pincha, bracket suelto). Otros rubros médicos necesitan rediseñar esa última pieza, el resto del sistema es igual.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-num">1</div></div>
+      <div class="phase-body">
+        <span class="phase-tag">Venta</span>
+        <h2>Relevamiento, propuesta y cierre</h2>
+        <p>El mismo circuito comercial que ya usa Nexora para cualquier cliente, con una llamada de relevamiento enfocada en los datos que después van a cargar la instalación.</p>
+        <ul class="checklist">
+          <li><input type="checkbox" style="display:none"><div class="t"><strong>Diagnóstico y roadmap</strong><span>Mapear la operación actual del consultorio y dónde pierde tiempo o turnos.</span></div></li>
+          <li><div class="t"><strong>Relevamiento específico</strong><span>Horarios reales por día, tratamientos que ofrece, política de precio de consulta, dirección, si usa Dentalink u otra agenda hoy, volumen aproximado de WhatsApp por semana.</span></div></li>
+          <li><div class="t"><strong>Propuesta y cierre</strong><span>Alcance, fases de entrega y la primera cuota, igual que con Raquel.</span></div></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-num">2</div></div>
+      <div class="phase-body">
+        <span class="phase-tag">Infraestructura</span>
+        <h2>Qué se levanta por cliente nuevo</h2>
+        <p>Hoy el modelo es un entorno completo por clínica, el mismo que corre para Raquel, no una app compartida con selector de cliente.</p>
+        <ul class="checklist">
+          <li><div class="t"><strong>Línea de WhatsApp Business</strong><span>Número nuevo, instancia propia de Evolution GO conectada a ese número.</span></div></li>
+          <li><div class="t"><strong>Proyecto de base de datos propio</strong><span>Pacientes, citas, conversaciones, base de conocimiento, configuración del triaje y de los recordatorios, buckets de archivos. Alcanza con el plan gratuito para arrancar.</span></div></li>
+          <li><div class="t"><strong>Clon del flujo del agente</strong><span>El workflow principal y los satélites (recordatorios, chequeo de salud, reactivación automática, retención de archivos, vigía de alertas, acciones del panel) apuntando a la base de ese cliente.</span></div></li>
+          <li><div class="t"><strong>Instancia de mensajería del equipo</strong><span>Donde se marca si un chat lo está atendiendo el bot o una persona.</span></div></li>
+          <li><div class="t"><strong>Panel de control propio</strong><span>Un despliegue del panel para ese cliente.</span></div></li>
+        </ul>
+        <details>
+          <summary>Qué es compartido entre clientes y qué es propio de cada uno</summary>
+          <div class="inner">
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Pieza</th><th>Compartido</th><th>Por cliente</th></tr></thead>
+                <tbody>
+                  <tr><td>Lógica del agente (cómo clasifica, cuándo escala, el filtro de frases prohibidas)</td><td class="yes">Sí, código único</td><td class="no">—</td></tr>
+                  <tr><td>Número de WhatsApp y conexión</td><td class="no">—</td><td class="yes">Uno por clínica</td></tr>
+                  <tr><td>Base de datos y archivos</td><td class="no">—</td><td class="yes">Un proyecto por clínica</td></tr>
+                  <tr><td>Nombre, dirección, horarios, precios, tratamientos</td><td class="no">—</td><td class="yes">Datos de configuración</td></tr>
+                  <tr><td>Panel de control (código de la app)</td><td class="yes">Sí, código único</td><td class="yes">Un despliegue por clínica</td></tr>
+                  <tr><td>Nombre del asistente virtual</td><td class="no">—</td><td class="yes">A elección del cliente</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-num">3</div></div>
+      <div class="phase-body">
+        <span class="phase-tag">Configuración</span>
+        <h2>Cargar los datos de esa clínica</h2>
+        <p>Todo lo que hoy distingue a Raquel de cualquier otro cliente tiene que entrar como dato, nunca reescrito a mano en el código.</p>
+        <ul class="checklist">
+          <li><div class="t"><strong>Identidad</strong><span>Nombre de la clínica, dirección, nombre del asistente virtual.</span></div></li>
+          <li><div class="t"><strong>Horarios y agenda</strong><span>Días y franjas de atención por profesional.</span></div></li>
+          <li><div class="t"><strong>Tratamientos y precios</strong><span>Qué atiende, qué deriva, el valor de la primera consulta.</span></div></li>
+          <li><div class="t"><strong>Política de confirmación</strong><span>Si el turno se confirma con seña o pago previo, y de cuánto.</span></div></li>
+          <li><div class="t"><strong>Administradores</strong><span>Quién puede apagar el bot desde su propio WhatsApp.</span></div></li>
+          <li><div class="t"><strong>Urgencias con video</strong><span>Si el rubro lo permite: los casos típicos y sus videos explicativos, grabados por el profesional.</span></div></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-num">4</div></div>
+      <div class="phase-body">
+        <span class="phase-tag">Control de calidad</span>
+        <h2>Probar antes de que vea un paciente real</h2>
+        <p>El mismo chequeo que ya se corre antes de cualquier cambio en producción, aplicado a la instalación completa.</p>
+        <ul class="checklist">
+          <li><div class="t"><strong>Chequeo de salud automático</strong><span>Confirmar que cada pieza responde: la base, los videos, la conexión de WhatsApp, los flujos activos.</span></div></li>
+          <li><div class="t"><strong>Camino completo con un número de prueba</strong><span>Agendar, confirmar, cancelar, reprogramar, mandar un comprobante de pago, simular una urgencia.</span></div></li>
+          <li><div class="t"><strong>Pasaje a humano</strong><span>Que el bot se calle cuando alguien del equipo escribe, y vuelva solo cuando lo devuelven.</span></div></li>
+          <li><div class="t"><strong>Limpieza de los residuos de prueba</strong><span>Ningún mensaje de ensayo queda en la memoria del bot ni en el panel antes del primer paciente real.</span></div></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-num">5</div></div>
+      <div class="phase-body">
+        <span class="phase-tag">Lanzamiento</span>
+        <h2>Capacitación y rodaje gradual</h2>
+        <p>Nunca se abre a todos los pacientes el primer día.</p>
+        <ul class="checklist">
+          <li><div class="t"><strong>Capacitación del equipo</strong><span>Cómo leer el panel, cambiar un chat a modo humano, mandar una imagen, editar precios y horarios ellos mismos.</span></div></li>
+          <li><div class="t"><strong>Piloto acotado</strong><span>Una semana con un solo número de prueba antes de abrir el triaje y el agendamiento a todos los pacientes.</span></div></li>
+          <li><div class="t"><strong>Apertura completa</strong><span>Con el equipo ya usando el panel con confianza.</span></div></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-num">6</div></div>
+      <div class="phase-body">
+        <span class="phase-tag">Sostén</span>
+        <h2>Después de instalado</h2>
+        <ul class="checklist">
+          <li><div class="t"><strong>Alertas automáticas</strong><span>Si algo del sistema de ese cliente se cae, avisa solo antes de que lo note el consultorio.</span></div></li>
+          <li><div class="t"><strong>Reporte mensual</strong><span>Métricas contra la línea base y qué se hizo en el mes.</span></div></li>
+          <li><div class="t"><strong>Pedidos de cambio</strong><span>Cuando el cliente pide algo fuera del alcance firmado, se cotiza aparte antes de tocar nada.</span></div></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-num">7</div></div>
+      <div class="phase-body">
+        <span class="phase-tag">Comercial</span>
+        <h2>Cómo se cobra</h2>
+        <p>Mismo esquema validado con Raquel: una puesta en marcha única (instalación, carga de datos, capacitación) más una cuota mensual por el sostén y el uso de la infraestructura. Los montos para esta etapa quedan a definir cuando se arme la propuesta tipo.</p>
+        <div class="pill-row">
+          <span class="pill">puesta en marcha: único pago</span>
+          <span class="pill">cuota mensual: sostén + infraestructura</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Documento de trabajo interno. Reescribir cuando la agenda propia esté terminada y los primeros datos de configuración se muevan fuera del código: en ese momento la fase 2 y 3 se acortan a minutos en vez de a una instalación hecha a mano.
+  </footer>
+
+</div>

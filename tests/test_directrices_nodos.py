@@ -86,6 +86,7 @@ def main():
     casos = [
         gate("saludo nuevo", "Hola", "", [ROW_ALIAS, ROW_MENU]),
         gate("saludo con signos y emoji", "¡Buenas tardes! 👋", "(sin contexto)", [ROW_ALIAS, ROW_MENU]),
+        gate("saludo con el contexto vacio REAL de n8n", "Hola", "(sin mensajes previos)", [ROW_MENU]),
         gate("buen dia sin tilde", "buen dia", "", [ROW_MENU]),
         gate("saludo con conversacion previa", "Hola", "PACIENTE: hola\n---\nBOT: menu", [ROW_MENU]),
         gate("contexto falla", "Hola", "", [ROW_MENU], ctx_falla=True),
@@ -117,7 +118,7 @@ def main():
             fallas.append(msg)
 
     print("Gate Canned Directo — menu de bienvenida")
-    for nom in ("saludo nuevo", "saludo con signos y emoji", "buen dia sin tilde"):
+    for nom in ("saludo nuevo", "saludo con signos y emoji", "buen dia sin tilde", "saludo con el contexto vacio REAL de n8n"):
         x = r[nom]["res"][0]
         ok(x.get("direct_canned") is True and x.get("reason") == "menu_bienvenida" and x.get("output") == MENU_PANEL, f"{nom}: responde el texto de la directriz tal cual")
     for nom in ("saludo con conversacion previa", "contexto falla", "sin fila de menu", "fila de menu vacia", "saludo con pedido", "pregunta de precio"):

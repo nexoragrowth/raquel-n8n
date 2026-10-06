@@ -20,6 +20,7 @@
 - [ ] P1 **Banlist antes del Formatting Agent**: hoy un LLM reescribe el texto después del regex.
       Volver a correr el Banlist después del Formatting, o no pasar los canned por el Formatting.
 - [ ] P1 **El sub-flujo Cancelar/Reprogramar guarda las respuestas del bot con `source: 'wa_outbound'`** (Step 8a del sub-WF `5cAWJxiWJ50hxEq3`), la marca que el panel y el Logger usan para los mensajes del STAFF: en el panel aparecen como escritas por la Dra./secretaria (azul), cuentan como "modo humano reciente" y `Clear Old Memory` no las limpia (33 de 43 respuestas rápidas del "staff" a cancelaciones eran de Asiri). Arreglo: cambiar el source a otro valor (p. ej. `bot_subwf`) en Step 8a; revisar luego los comentarios del panel que dicen que `wa_outbound` lo escribe solo `Build fromMe AI memory`.
+- [ ] P1 **APLICAR `apply_politica_modo_humano.py`** (modo humano solo por pedido de persona/urgencia/queja/baja de datos o cuando una persona escribe) + prueba en vivo. Preparado y probado offline el 05/10.
 - [ ] **APLICAR directrices editables** (construido, probado offline, sin aplicar): 1) `python scripts/apply_agente_directrices_db.py --apply`
       2) `python scripts/apply_agente_directrices_n8n.py --apply` 3) prueba real (saludo solo + anuncio) 4) deploy del panel
       (`/opt/nexora-panel`, env `PANEL_ADMINS` opcional). Incluye: anuncio y menú sin Formatting Agent, canned en memoria.
@@ -448,3 +449,13 @@
 - [x] 2026-07-09 Cuota mensual $70.000 + regla desambiguación cuota/consulta/control (caso Valentina) — testeado E2E
 - [x] 2026-07-09 KB exportada para validación de la Dra → docs/kb-validacion-dra-2026-07-09.md (35 entradas, 22 categorías)
 - [ ] P2: Enviar kb-validacion-dra-2026-07-09.md a la Dra y aplicar sus correcciones/altas a la KB
+
+
+## v7 — construcción (orden con puertas; detalle en docs/v7-arquitectura-agente-asiri.md §7-8)
+- P1 Puerta 0: contratos de herramientas + `tests/harness_tool_v7.mjs` con los 24 escenarios de escritura portados + fixture del chequeo de afirmaciones (~40 frases) + rechazo de motivos de pasar_a_humano. Hecho: línea base de latencia del v6.
+- P1 Sub-workflow `v7 Tool - ejecutar_propuesta` (extraer 6d-prep→POST→IF→PUT→Consolidar y 6a del sub-WF de cambios; sin memoria ni avisos propios) + `v7 Tool - Agenda` (ver_turnos, buscar_horarios con ofertas/lotes en Redis, proponer_*, confirmar_turno) + Clínica (avisar_grupo con niveles, pasar_a_humano verificado, derivar_triaje, registrar_pago) + Info.
+- P1 Cerebro v7 como sub-workflow `{phone, texto, modo}` con modo sombra POR CÓDIGO (memoria `v7s:{tel}`, Redis `v7s:`, cero HTTP con efecto) + prompt de Asiri (≈1.500 chars + directrices del panel) + chequeo bidireccional de salida + banlist en "usted".
+- P1 Sombra retrospectiva sobre 90 días con Dentalink simulado → elige modelo y umbrales.
+- P2 Inserción en v6: nodo Redis `v7:tel:{tel}` antes del Router; sombra en vivo con métricas; examen vivo (ficha de prueba, teardown); piloto por cohortes de recordatorio supervisado; cutover con rollback drenado y `/v7 off`.
+- P2 Panel: config por fila (id del workflow principal, nodos editables), mostrar teléfonos en v7; directrices bajo cabecera fija.
+- P3 Verificar/corregir "Reprogramar" del panel (formato de hora).

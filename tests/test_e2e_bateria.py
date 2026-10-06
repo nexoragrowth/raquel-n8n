@@ -40,16 +40,18 @@ PHONE = "5491161461034"   # admin Lucas — la respuesta llega a su WhatsApp rea
 # BATERÍA BASE — casos multi-turn: el orden importa (comparten sesión = PHONE)
 # ────────────────────────────────────────────────────────────────────────────
 CASOS = [
-    {"tag": "precio", "mensaje": "Hola! cuanto cuesta la primera consulta?",
-     "espera": [r"50\.000"], "no_espera": [r"40\.000"]},
-    {"tag": "contexto", "mensaje": "y eso incluye el presupuesto?",
-     "espera": [r"(incluy|presupuesto|evaluaci)"], "pausa": 5},
+    {"tag": "onboarding", "mensaje": "Buenas tardes",
+     "espera": [r"(Asiri|Áurea|opci[oó]n|Tratamientos|Agendar|Precios)"], "pausa": 2},
+    {"tag": "precio", "mensaje": "Hola! cuanto cuesta la primera consulta y a que alias?",
+     "espera": [r"50\.000", r"dra\.raquel\.aurea"], "no_espera": [r"40\.000"], "pausa": 4},
+    {"tag": "blanqueamiento", "mensaje": "hacen blanqueamiento o limpieza dental?",
+     "espera": [r"(Ortodoncia|valoraci[oó]n|50\.000)"], "pausa": 4},
+    {"tag": "reprogramar", "mensaje": "queria consultar que posibilidad hay de cambiar el turno para la tarde?",
+     "espera": [r"(tarde|horario|secretaria|turno)"], "no_espera": [r"\[NO_REPLY\]"], "pausa": 4},
     {"tag": "cuota", "mensaje": "ya estoy en tratamiento, cuanto se paga la cuota por mes?",
-     "espera": [r"70\.000"], "no_espera": [r"50\.000"], "pausa": 5},
-    {"tag": "alias", "mensaje": "pasame el alias para transferir",
-     "espera": [r"dra\.raquel\.aurea"], "pausa": 5},
-    {"tag": "kb", "mensaje": "mi hijo tiene el frenillo corto, eso lo atienden?",
-     "espera": [r"(frenillo|consulta|evaluaci)"], "pausa": 5},
+     "espera": [r"70\.000"], "no_espera": [r"50\.000"], "pausa": 4},
+    {"tag": "urgencia_guardia", "mensaje": "se me salio el alambre un domingo, puedo ir ya a la clinica?",
+     "espera": [r"(privado|turno previo|guardia)"], "no_espera": [r"(venite|los esperamos|ahora mismo)"], "pausa": 4},
 ]
 
 

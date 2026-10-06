@@ -1,0 +1,973 @@
+{
+ "bot_textos": {
+  "SLOTS": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+  "SLOTS_NO_DISP": "Ese horario ya no está disponible.\nTenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n* Viernes 23 de octubre 9:10\n\nPor la tarde:\n* Lunes 2 de noviembre 16:20\n* Miércoles 4 de noviembre 15:00 , 15:40\n\nLe sirve alguno?",
+  "BUSQUEDA": "Esta semana no tenemos turnos disponibles, disculpe. ¿Quiere que le busque las fechas más próximas?",
+  "SIN_FRANJA": "La Dra. atiende por la tarde solo lunes y miércoles. No veo turnos disponibles ese día. ¿Le busco otra fecha?",
+  "CAMBIAR_O_SUMAR": "Perfecto, anoto Jueves 22 de octubre a las 09:20. Veo que ya tiene un turno reservado el viernes 16/10 a las 09:10. ¿Desea cambiar ese por el del 22/10 o sumar otro?",
+  "RB_REEMPLAZO": "Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, reemplazando el turno del viernes 16/10 a las 09:10. ¿Procedo con la reserva?",
+  "RB_RESERVA": "Le confirmo: Martes 20 de octubre a las 8:40 hs con la Dra. Raquel. ¿Procedo con la reserva?",
+  "PIDE_DATOS": "Perfecto. Para registrarla necesito su nombre completo y DNI, por favor.",
+  "PARA_QUIEN": "Con este número tengo registradas a Martina y Lucas. ¿Para quién es el turno?",
+  "CONFIRMADO": "Listo, su turno del jueves 22 de octubre a las 09:20 hs quedó reprogramado. Cualquier consulta nos puede escribir por este medio.",
+  "PRE_RESERVA": "Listo, le queda PRE-reservado para el martes 20 de octubre a las 8:40 hs. Para confirmarlo necesitamos el pago de la consulta hasta 72 hs antes.",
+  "CANCEL_RB": "¿Le confirmo que desea cancelar el turno del viernes 16 de octubre a las 09:10 hs?",
+  "CANCELADO": "Listo, su turno del viernes 16 de octubre quedó cancelado. Si desea reprogramar, avíseme y le busco otro horario.",
+  "RECORDATORIO": "Estimada Paciente, Le recordamos su turno con la Dra. Rodríguez Raquel: Viernes 16 de octubre 09:10 hs. Le pedimos confirmar su asistencia respondiendo este mensaje.",
+  "RECORDATORIO2": "Estimada Paciente, Le recordamos el turno de Luis con la Dra. Rodríguez Raquel: Viernes 16 de octubre 09:50 hs. Le pedimos confirmar su asistencia.",
+  "PRECIO": "El valor de la consulta es de $50.000. Puede abonar en efectivo o por transferencia.",
+  "TRIAJE": "Recibimos su mensaje. Le avisamos a la Dra. Raquel para que le coordine en su horario de atención.",
+  "NINGUNA": null
+ },
+ "escenarios": [
+  {
+   "id": "DANA-01",
+   "origen": "REAL exec 294718-294752",
+   "funcion": "reprogramar",
+   "exito": "turno 16/10 anulado y 22/10 9:20 reservado por el bot; la paciente recibe la confirmacion; sin modo humano; sin pasar por la secretaria",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Buen dia me pude cambiar ese turno",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "No podré tenia otro turno se me olvido",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "En esta semana écepto el 8 de octubre que fecha tendrá disponible por la tarde o por la mañana?",
+     "router": [
+      "agendar_nuevo",
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "BUSQUEDA"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "agendar_nuevo",
+      "confirmar_post_recordatorio"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "Jueves 22 de octubre 9y20 \nSi se llegara suspender algu turno antes de esta fecha me anotaria por favor",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CAMBIAR_O_SUMAR"
+    },
+    {
+     "p": "Si cambio el turno del 16 de octubre por el turno del 22 de octubre",
+     "router": [
+      "cancelar_o_reprogramar",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "El turno 22 de octubre  alas  9y20",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Si\nGracias",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    },
+    {
+     "p": "Gracias",
+     "router": [
+      "consulta_general"
+     ],
+     "espera": "consulta_general",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "DANA-02",
+   "origen": "variante limpia",
+   "funcion": "reprogramar",
+   "exito": "turno cambiado en 4 mensajes",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Quiero cambiar mi turno del 16/10",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "El jueves 22 a las 9:20",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    }
+   ]
+  },
+  {
+   "id": "DANA-03",
+   "origen": "variante: 'Si' y 'Gracias' en mensajes separados",
+   "funcion": "reprogramar",
+   "exito": "turno cambiado; el 'Gracias' no reabre nada",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Necesito pasar el turno para otro dia",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "Jueves 22 9y20",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    },
+    {
+     "p": "Gracias",
+     "router": [
+      "consulta_general"
+     ],
+     "espera": "consulta_general",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "DANA-04",
+   "origen": "variante: todo en una frase",
+   "funcion": "reprogramar",
+   "exito": "el bot entiende el cambio completo y pide solo la confirmacion",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "cambio el turno del 16 por el jueves 22 a las 9:20",
+     "router": [
+      "cancelar_o_reprogramar",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    }
+   ]
+  },
+  {
+   "id": "DANA-05",
+   "origen": "variante: el horario elegido ya no esta",
+   "funcion": "reprogramar",
+   "exito": "ofrece alternativas y termina cambiando a otro horario",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Quiero cambiar el turno",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS_NO_DISP"
+    },
+    {
+     "p": "El viernes 23 a las 9:10",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Dale",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    }
+   ]
+  },
+  {
+   "id": "DANA-06",
+   "origen": "variante: prefiere sumar otro turno, no cambiar",
+   "funcion": "agendar",
+   "exito": "queda con DOS turnos (no reemplaza)",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Jueves 22 a las 9:20",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "CAMBIAR_O_SUMAR"
+    },
+    {
+     "p": "No, mejor sumar otro, no cambiar",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "RB_RESERVA"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "PRE_RESERVA"
+    }
+   ]
+  },
+  {
+   "id": "DANA-07",
+   "origen": "variante: celular con dos fichas (familia)",
+   "funcion": "reprogramar",
+   "exito": "pregunta de quien es el turno una sola vez y lo cambia",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ],
+    [
+     "B",
+     "RECORDATORIO2"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Quiero cambiar el turno",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "PARA_QUIEN"
+    },
+    {
+     "p": "El de Martina",
+     "router": [
+      "consulta_general",
+      "agendar_nuevo",
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "El jueves 22 a las 9:20",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    }
+   ]
+  },
+  {
+   "id": "DANA-08",
+   "origen": "variante: se arrepiente y cancela",
+   "funcion": "cancelar",
+   "exito": "turno cancelado con read-back; ofrece reprogramar",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Quiero cambiar mi turno",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "Mejor lo cancelo, no puedo ir ninguno de esos dias",
+     "router": [
+      "cancelar_o_reprogramar",
+      "consulta_general"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CANCEL_RB"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CANCELADO"
+    }
+   ]
+  },
+  {
+   "id": "DANA-09",
+   "origen": "variante: pregunta el precio en medio del cambio",
+   "funcion": "reprogramar",
+   "exito": "responde el precio y retoma el cambio hasta cerrarlo",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Quiero cambiar el turno",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "¿Cuánto sale la consulta?",
+     "router": [
+      "consulta_general"
+     ],
+     "espera": "consulta_general",
+     "bot": "PRECIO"
+    },
+    {
+     "p": "Ok. Entonces el jueves 22 a las 9:20",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    }
+   ]
+  },
+  {
+   "id": "DANA-10",
+   "origen": "variante: aparece una urgencia en medio del cambio",
+   "funcion": "urgencia",
+   "exito": "el triaje toma el mensaje; el bot se silencia solo por urgencia",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Quiero cambiar el turno",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "Me duele mucho una muela y me sangra",
+     "router": [
+      "urgencia_dolor",
+      "consulta_general",
+      "agendar_nuevo"
+     ],
+     "espera": "urgencia_dolor",
+     "bot": "TRIAJE"
+    }
+   ]
+  },
+  {
+   "id": "AGE-01",
+   "origen": "REAL: primera consulta, paciente nueva",
+   "funcion": "agendar",
+   "exito": "ficha creada, turno pre-reservado, alias enviado",
+   "inicio": [],
+   "pasos": [
+    {
+     "p": "Buen dia, necesito un turno para consultar por una ortodoncia",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "Martes 20 de Octubre 8.40hs",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "PIDE_DATOS"
+    },
+    {
+     "p": "Camila Perez DNI 40123456",
+     "router": [
+      "consulta_general",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "RB_RESERVA"
+    },
+    {
+     "p": "Si por favor",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "PRE_RESERVA"
+    },
+    {
+     "p": "Gracias!",
+     "router": [
+      "consulta_general"
+     ],
+     "espera": "consulta_general",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "AGE-02",
+   "origen": "REAL: restriccion horaria 'solo puedo a las 17'",
+   "funcion": "agendar",
+   "exito": "explica lo que hay, ofrece lo mas cercano y reserva",
+   "inicio": [
+    [
+     "B",
+     "SLOTS"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Solo puedo a las 17hs",
+     "router": [
+      "agendar_nuevo",
+      "consulta_general"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "SIN_FRANJA"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "El lunes 2 de noviembre a las 16:20",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "RB_RESERVA"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "PRE_RESERVA"
+    }
+   ]
+  },
+  {
+   "id": "AGE-03",
+   "origen": "REAL: 'a las 9 y 10' tras el bloque de horarios",
+   "funcion": "agendar",
+   "exito": "reserva el 9:10",
+   "inicio": [
+    [
+     "B",
+     "SLOTS"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "A las 9 y 10",
+     "router": [
+      "agendar_nuevo",
+      "consulta_general"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "RB_RESERVA"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "PRE_RESERVA"
+    }
+   ]
+  },
+  {
+   "id": "AGE-04",
+   "origen": "REAL: pide turno y pregunta el pago en el mismo flujo",
+   "funcion": "agendar",
+   "exito": "responde el pago y sigue agendando",
+   "inicio": [],
+   "pasos": [
+    {
+     "p": "Quiero sacar un turno",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "¿Puedo abonar el día de la consulta?",
+     "router": [
+      "consulta_general"
+     ],
+     "espera": "consulta_general",
+     "bot": "PRECIO"
+    },
+    {
+     "p": "Perfecto, el miércoles 4 a las 15:00",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "RB_RESERVA"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "PRE_RESERVA"
+    }
+   ]
+  },
+  {
+   "id": "AGE-05",
+   "origen": "REAL: 'la semana que viene cualquier día después de las 17'",
+   "funcion": "agendar",
+   "exito": "busca esa ventana y reserva",
+   "inicio": [
+    [
+     "B",
+     "SLOTS"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "La semana que viene cualquier día después de las 17",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "SIN_FRANJA"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "El miércoles 4 a las 15:40",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "RB_RESERVA"
+    },
+    {
+     "p": "Dale",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "agendar_nuevo",
+     "bot": "PRE_RESERVA"
+    }
+   ]
+  },
+  {
+   "id": "AGE-06",
+   "origen": "REAL: 'quería un turno antes del que me toca'",
+   "funcion": "reprogramar",
+   "exito": "ofrece horarios anteriores y adelanta el turno",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Quería un turno antes del que me toca",
+     "router": [
+      "agendar_nuevo",
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "El jueves 22 a las 8:00",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    }
+   ]
+  },
+  {
+   "id": "AGE-07",
+   "origen": "inventado: ninguno de los horarios sirve",
+   "funcion": "agendar",
+   "exito": "no queda en bucle: busca otra ventana o deriva con aviso, sin silenciarse",
+   "inicio": [
+    [
+     "B",
+     "SLOTS"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Ninguno me sirve",
+     "router": [
+      "consulta_general",
+      "agendar_nuevo"
+     ],
+     "espera": null,
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "CON-01",
+   "origen": "REAL: 'Confirmo' (19 veces en 90 dias)",
+   "funcion": "confirmar",
+   "exito": "turno confirmado en la agenda y recordatorio cerrado",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Confirmo",
+     "router": [
+      "confirmar_post_recordatorio"
+     ],
+     "espera": "confirmar_post_recordatorio",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "CON-02",
+   "origen": "REAL: lo confirma un familiar",
+   "funcion": "confirmar",
+   "exito": "confirma el turno",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Buen día. Ahí estará Valentina presente en el turno.. gracias",
+     "router": [
+      "confirmar_post_recordatorio"
+     ],
+     "espera": "confirmar_post_recordatorio",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "CON-03",
+   "origen": "REAL: 'Hola!! Confirmo 💫'",
+   "funcion": "confirmar",
+   "exito": "confirma el turno",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Hola !! Confirmo 💫",
+     "router": [
+      "confirmar_post_recordatorio"
+     ],
+     "espera": "confirmar_post_recordatorio",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "CON-04",
+   "origen": "inventado: familia con dos recordatorios",
+   "funcion": "confirmar",
+   "exito": "confirma los dos turnos y los nombra",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ],
+    [
+     "B",
+     "RECORDATORIO2"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Confirmo los dos",
+     "router": [
+      "confirmar_post_recordatorio"
+     ],
+     "espera": "confirmar_post_recordatorio",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "CON-05",
+   "origen": "REAL: tras el recordatorio no puede ese dia",
+   "funcion": "reprogramar",
+   "exito": "ofrece horarios y reprograma",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Buen dia. Podria pasar el turno para otro dia? Ese dia no podré",
+     "router": [
+      "cancelar_o_reprogramar"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "SLOTS"
+    },
+    {
+     "p": "El miércoles 4 a las 15:00",
+     "router": [
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "RB_REEMPLAZO"
+    },
+    {
+     "p": "Si",
+     "router": [
+      "confirmar_post_recordatorio",
+      "agendar_nuevo"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": "CONFIRMADO"
+    }
+   ]
+  },
+  {
+   "id": "CON-06",
+   "origen": "REAL: 'No podré asistir' sin pedir nada",
+   "funcion": "reprogramar",
+   "exito": "pregunta una vez si lo reprogramamos y sigue",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Buenos días. Informo que no podré asistir dicha fecha a control",
+     "router": [
+      "cancelar_o_reprogramar",
+      "consulta_general"
+     ],
+     "espera": "cancelar_o_reprogramar",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "PAG-01",
+   "origen": "REAL: comprobante de la seña",
+   "funcion": "pagos",
+   "exito": "acusa recibo, avisa a la secretaria, el bot sigue disponible (sin modo humano)",
+   "inicio": [
+    [
+     "B",
+     "PRE_RESERVA"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "[IMAGEN] TIPO: COMPROBANTE MONTO: 50000 DESTINATARIO: Rodriguez Laura Raquel",
+     "router": [
+      "confirmar_post_recordatorio",
+      "consulta_general"
+     ],
+     "espera": [
+      "confirmar_post_recordatorio",
+      "consulta_general"
+     ],
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "PAG-02",
+   "origen": "REAL: 'Ya transferí'",
+   "funcion": "pagos",
+   "exito": "pide/acusa comprobante sin validar el pago",
+   "inicio": [
+    [
+     "B",
+     "PRE_RESERVA"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Ya transferí",
+     "router": [
+      "confirmar_post_recordatorio",
+      "consulta_general"
+     ],
+     "espera": [
+      "confirmar_post_recordatorio",
+      "consulta_general"
+     ],
+     "bot": null
+    }
+   ]
+  }
+ ]
+}

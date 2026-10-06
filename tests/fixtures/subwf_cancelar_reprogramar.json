@@ -1,0 +1,1159 @@
+{
+ "id": "5cAWJxiWJ50hxEq3",
+ "name": "Sub-WF - CancelarReprogramar",
+ "versionId": "f9fc24a8-e3f1-4173-81b4-538a70a0417d",
+ "nodes": [
+  {
+   "parameters": {
+    "inputSource": "jsonExample",
+    "jsonExample": "{\"phone\": \"5491161461034\", \"text\": \"cancelo\", \"pushName\": \"Lucas\"}"
+   },
+   "id": "trigger",
+   "name": "When called by v6",
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    240,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const phone = ($input.first().json.phone || '').replace(/^\\+/, '');\nconst last10 = phone.slice(-10);\nreturn [{ json: {\n  phone,\n  q_full: JSON.stringify({ celular: { lk: phone } }),\n  q_sin9: JSON.stringify({ celular: { lk: '+54' + last10 } }),\n  q_solo_local: JSON.stringify({ celular: { lk: last10 } }),\n  trigger: $input.first().json\n}}];"
+   },
+   "id": "prep",
+   "name": "Step 1.0: Prep Query",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    448,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "url": "https://api.dentalink.healthatom.com/api/v1/pacientes",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "sendQuery": true,
+    "queryParameters": {
+     "parameters": [
+      {
+       "name": "q",
+       "value": "={{ $json.q_solo_local }}"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "id": "lookup1",
+   "name": "Step 1a: Buscar full",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    640,
+    304
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "TwN6eBWsydjMdsCM",
+     "name": "Header Auth account 3"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "// Procesar resultado, retornar paciente o flag retry\nconst lookupRaw = $input.first().json;\nconst trigger = $('Step 1.0: Prep Query').first().json.trigger;\nconst __err1 = Array.isArray(lookupRaw) ? (lookupRaw[0] && lookupRaw[0].error) : (lookupRaw && lookupRaw.error);\nif (__err1) { return [{ json: { ok:false, step:'error_tecnico', tech_error:true, raw:lookupRaw, trigger } }]; }\nlet data = [];\nif (Array.isArray(lookupRaw)) data = lookupRaw[0]?.data || [];\nelse data = lookupRaw?.data || lookupRaw?.['0']?.data || [];\n\nif (data.length > 0) {\n  // FIX 2026-06-04: si multiple_fichas, intentar match por contexto del chat history\n  let pacienteResuelto = data[0];\n  let resolvedBy = null;\n  if (data.length > 1) {\n    try {\n      const chMem = $('Step 0a: Read Chat Memory').all() || [];\n      const isMultiList = (txt) => /tengo\\s+registrad[ao]s?\\s+a\\b|con\\s+este\\s+n[u\\u00fa]mero\\s+(figura|tengo|tiene)/i.test(txt);\n      const chatHistoryText = chMem.map(it => {\n        const m = it.json && it.json.message ? it.json.message : {};\n        const c = (m.content || '').toString();\n        if (isMultiList(c) || /\\u00c1UREA\\s+ODONTOLOG|\\[NOTA INTERNA|Le recordamos su turno|^-\\s*Paciente:/im.test(c)) return ''; // ROUND 14: fragmentos sueltos de recordatorio\n        return c;\n      }).filter(Boolean).join('\\n').toLowerCase();\n      const msgPaciente = (trigger && trigger.text || '').toLowerCase();\n      const searchPool = msgPaciente + '\\n' + chatHistoryText;\n      const STOP_TOKENS = new Set(['test','prueba','paciente','el','la','los','las','de','del','dr','dra','sr','sra']);\n      const tokenizar = (s) => (s || '').toLowerCase()\n        .replace(/[^a-z\\u00e1\\u00e9\\u00ed\\u00f3\\u00fa\\u00f10-9\\s]/gi, ' ')\n        .split(/\\s+/)\n        .filter(t => t.length >= 3 && !STOP_TOKENS.has(t));\n      const matchPorTokens = (texto) => { // ROUND 14: token completo (Set), no substring cruda\n        const poolTokens = new Set(tokenizar(texto));\n        return data.filter(p => {\n          const tokens = [...tokenizar(p.nombre || ''), ...tokenizar(p.apellidos || p.apellido || '')];\n          return tokens.length > 0 && tokens.some(t => poolTokens.has(t));\n        });\n      };\n      let matched = matchPorTokens(msgPaciente); // 1ra pasada: solo lo que dijo AHORA\n      if (matched.length !== 1) matched = matchPorTokens(searchPool); // fallback: pool completo\n      if (matched.length === 1) {\n        pacienteResuelto = matched[0];\n        resolvedBy = 'context_match';\n      }\n    } catch(e) { /* fallback a data[0] */ }\n  }\n  return [{ json: {\n    ok: true,\n    step: 'paciente_encontrado',\n    paciente: pacienteResuelto,\n    multiple_fichas: data.length > 1 && !resolvedBy,  // si resolved, ya no es ambiguo\n    multi_fichas_resolved_by: resolvedBy,\n    pacientes_all: data,\n    variant_used: 'celular_completo',\n    trigger\n  }}];\n}\n\nreturn [{ json: {\n  ok: false,\n  step: 'paciente_no_encontrado',\n  raw: lookupRaw,\n  trigger\n}}];"
+   },
+   "id": "consolidate",
+   "name": "Step 1b: Procesar resultado",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    848,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "url": "={{ \"https://api.dentalink.healthatom.com/api/v1/pacientes/\" + $json.paciente.id + \"/citas\" }}",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "options": {}
+   },
+   "id": "step2a",
+   "name": "Step 2a: Ver Turnos",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1040,
+    304
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "TwN6eBWsydjMdsCM",
+     "name": "Header Auth account 3"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const turnosRaw = $input.first().json;\nconst paciente = $('Step 1b: Procesar resultado').first().json.paciente;\nconst trigger = $('Step 1b: Procesar resultado').first().json.trigger;\nconst __err2 = Array.isArray(turnosRaw) ? (turnosRaw[0] && turnosRaw[0].error) : (turnosRaw && turnosRaw.error);\nconst __tech2b = !!__err2 || ($('Step 1b: Procesar resultado').first().json.tech_error === true);\n\nlet turnos = [];\nif (Array.isArray(turnosRaw)) turnos = turnosRaw[0]?.data || [];\nelse turnos = turnosRaw?.data || [];\n\nconst hoy = new Date();\nhoy.setHours(0,0,0,0);\nconst proximos = turnos\n  .filter(t => t.id_estado !== 1 && t.id_estado !== 14)\n  .filter(t => {\n    if (!t.fecha) return false;\n    const f = new Date(t.fecha + 'T00:00:00');\n    return f >= hoy;\n  })\n  .map(t => ({\n    id: t.id,\n    fecha: t.fecha,\n    hora_inicio: t.hora_inicio,\n    hora_fin: t.hora_fin,\n    id_estado: t.id_estado,\n    id_dentista: t.id_dentista,\n    comentario: t.comentario || '',\n    nombre_estado: t.nombre_estado || ''\n  }))\n  .sort((a, b) => String(a.fecha + ' ' + (a.hora_inicio || '')).localeCompare(String(b.fecha + ' ' + (b.hora_inicio || ''))));\n\nreturn [{ json: {\n  tech_error: __tech2b,\n  ok: proximos.length > 0,\n  paciente,\n  trigger,\n  turnos_proximos: proximos,\n  count: proximos.length\n}}];"
+   },
+   "id": "step2b",
+   "name": "Step 2b: Filtrar Turnos Proximos",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1216,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/chat/completions",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "openAiApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ $json.openai_body }}",
+    "options": {}
+   },
+   "id": "step3a",
+   "name": "Step 3a: LLM Extract Intent",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1520,
+    304
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "openAiApi": {
+     "id": "nYujqfon7GGDnJUO",
+     "name": "OpenAi account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const llmResp = $input.first().json;\nconst prev = $('Step 2b: Filtrar Turnos Proximos').first().json;\n\nlet parsed = { accion: 'ambiguo', fecha_objetivo: null, hora_objetivo: null, franja: null, hora_minima: null, insiste_horario: false, fecha_actual_mencionada: null, razon: 'sin parse' };\ntry {\n  const content = llmResp?.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed.razon = 'json parse fail: ' + String(e?.message || e);\n}\n\nreturn [{ json: {\n  paciente: prev.paciente,\n  trigger: prev.trigger,\n  turnos_proximos: prev.turnos_proximos,\n  count: prev.count,\n  intent: parsed,\n  step: 'intent_extracted'\n}}];"
+   },
+   "id": "step3b",
+   "name": "Step 3b: Parse Intent",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1648,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const prev = $input.first().json;\nconst text = prev.trigger?.text || '';\nconst state = prev.trigger?.multi_turn_state || 'conversacion_nueva';\nconst lastBot = prev.trigger?.last_bot_msg || '';\nconst convHistory = prev.trigger?.conversation_history || '';\nconst today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Jujuy' }).format(new Date()); // ROUND 14: bug UTC (21:00-23:59 ARG calculaba \"hoy\" mal)\n\nconst conversationContext = convHistory\n  ? \"HISTORIAL DE CONVERSACION RECIENTE (mas reciente abajo):\\n\" + convHistory + \"\\n\\nEl mensaje del paciente que tenes que parsear AHORA es: \\\"\" + text + \"\\\". Razona con el historial: si el bot acaba de preguntar algo y el paciente responde con palabra corta (si, no, ese, eso, dale), conecta los puntos. Ejemplos: bot dice 'Era ese el turno del [fecha]?' + paciente 'si' -> accion=cancelar + fecha_actual_mencionada=fecha. Bot ofrece slots + paciente 'el de las X' -> accion=reprogramar. Bot 'que dia preferis?' + paciente 'por la tarde' -> franja='tarde' + accion=reprogramar. Bot 'que hora?' + paciente 'despues de las 17hs' -> franja='tarde' + hora_minima=17 + accion=reprogramar. Si el bot acaba de ofrecer alternativas por la mañana y el paciente insiste 'solo puedo a las 17' o 'solo por la tarde' -> franja='tarde' + hora_minima=17 + insiste_horario=true + accion=reprogramar. No respondas en base solo al mensaje del paciente: tene en cuenta el flujo completo de la conversacion.\"\n  : \"\";\n\nconst body = {\n  model: 'gpt-5',\n  messages: [\n    { role: 'system', content: \"Sos un parser de mensajes de pacientes sobre sus turnos dentales. Hoy es \" + today + \". \" + conversationContext + \" Tu tarea: extraer del mensaje del paciente (en contexto del historial conversacional) la INTENT y campos relevantes. Responde SOLO con JSON valido, formato exacto: {\\\"accion\\\":\\\"cancelar\\\"|\\\"reprogramar\\\"|\\\"consultar_info\\\"|\\\"ambiguo\\\",\\\"fecha_objetivo\\\":\\\"YYYY-MM-DD\\\"|null,\\\"hora_objetivo\\\":\\\"HH:MM\\\"|null,\\\"franja\\\":\\\"tarde\\\"|\\\"manana\\\"|null,\\\"hora_minima\\\":17|null,\\\"insiste_horario\\\":true|false,\\\"fecha_actual_mencionada\\\":\\\"YYYY-MM-DD\\\"|null,\\\"info_solicitada\\\":\\\"cuando\\\"|\\\"donde\\\"|\\\"tratamiento\\\"|\\\"verificar_fecha\\\"|null,\\\"razon\\\":\\\"texto breve\\\"}. Reglas: (1) Si paciente dice 'cancelar el [fecha]' = cancelar + fecha_actual_mencionada. (2) Si dice 'reprogramar' o 'pasarlo a otro dia' o 'tengo clases' = reprogramar. (3) Si paciente indica franja ('tarde', 'mañana') o hora ('despues de las 17hs', 'solo a las 17'), extrae franja ('tarde'|'manana') y hora_minima (ej 17 para 17hs). (4) Si el bot le ofrecio mañanas y paciente dice 'solo puedo por la tarde/17hs', setea insiste_horario=true. (5) CONSULTA DE INFO: si paciente PREGUNTA sin querer accion -> accion='consultar_info'. NO uses con_quien. Calcula año: si fecha mencionada ya paso este año usa siguiente año.\" },\n    { role: 'user', content: 'Mensaje del paciente: ' + text }\n  ],\n  max_completion_tokens: 800,\n  reasoning_effort: 'minimal',\n  response_format: { type: 'json_object' }\n};\nreturn [{ json: { ...prev, openai_body: JSON.stringify(body) } }];"
+   },
+   "id": "step3-prep",
+   "name": "Step 3.0: Prep LLM Body",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1376,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Identificar turno objetivo + decidir next step\nconst prev = $input.first().json;\nconst intent = prev.intent || {};\nconst turnos = prev.turnos_proximos || [];\n\n// FIX 2026-07-01: error tecnico en lookup/ver-turnos -> escalar (no mentir \"no tenes turnos\").\nlet __techErr = false;\ntry { if ($('Step 1b: Procesar resultado').first().json.tech_error === true) __techErr = true; } catch(e){}\ntry { if ($('Step 2b: Filtrar Turnos Proximos').first().json.tech_error === true) __techErr = true; } catch(e){}\nif (__techErr) {\n  return [{ json: { ...prev, decision: {\n    siguiente_paso: 'escalar', razon: 'error_tecnico_dentalink',\n    canned: 'Disculpe, tuve un inconveniente tecnico para acceder a la agenda en este momento. Le paso a la secretaria, que la coordina en su horario de atencion (Lun y Mie 15 a 20 hs / Mar, Jue y Vie 8 a 13 hs).'\n  } }}];\n}\n\n// === Anti-loop / anti-frustracion (27/05) ===\n// Si el bot ya repitio la canned 2+ veces o el paciente esta frustrado,\n// cortar el loop y escalar a humano directo. Step 0b setea los flags.\nconst loopNoTurnos = prev.trigger?.loop_no_turnos === true;\nconst isFrustrated = prev.trigger?.is_frustrated === true;\nif (loopNoTurnos || isFrustrated) {\n  return [{ json: {\n    ...prev,\n    decision: {\n      siguiente_paso: 'escalar',\n      razon: loopNoTurnos && isFrustrated ? 'loop_canned_y_frustracion'\n           : loopNoTurnos ? 'loop_canned_repetida_2x'\n           : 'paciente_pide_ayuda_explicita',\n      canned: 'Le paso a la secretaria para que pueda ayudarle con esto.'\n    }\n  }}];\n}\n\n// === Fix B 2026-06-03: celular compartido por varias fichas (familia) -> PREGUNTAR (o usar contexto), NO escalar ===\nconst step1b = $('Step 1b: Procesar resultado').first().json;\nconst multipleFichas = step1b.multiple_fichas === true;\nif (multipleFichas) {\n  const pacientesAll = step1b.pacientes_all || [];\n  // FIX 2026-07-01: tras resolver ficha (DNI/contexto) enganchar el turno para NO dead-endear.\n  // Conservador: solo si los turnos ya fetcheados pertenecen a la ficha resuelta\n  // (turnos_proximos se traen para pacientesAll[0]); exige match de fecha si el paciente la menciono.\n  const __pickTurno = (rid) => {\n    try {\n      if (!(pacientesAll[0] && pacientesAll[0].id === rid)) return null;\n      const tp = prev.turnos_proximos || [];\n      if (!tp.length) return null;\n      const fm = (intent && intent.fecha_actual_mencionada) || null;\n      if (fm) return tp.find(t => t.fecha === fm) || null;\n      return tp.length === 1 ? tp[0] : null;\n    } catch (e) { return null; }\n  };\n  // Construir texto a buscar: mensaje actual del paciente + chat_history reciente\n  const msgPaciente = (prev.trigger && prev.trigger.text) || '';\n  let chatHistoryText = '';\n  try {\n    const chMem = $('Step 0a: Read Chat Memory').all() || [];\n    // FIX 2026-06-04: excluir mensajes del bot listando multiples pacientes\n    const isMultiList = (txt) => /tengo\\s+registrad[ao]s?\\s+a\\b|con\\s+este\\s+n[u\\u00fa]mero\\s+(figura|tengo|tiene)/i.test(txt);\n    chatHistoryText = chMem.map(it => {\n      const m = it.json && it.json.message ? it.json.message : {};\n      const c = (m.content || '').toString();\n      if (isMultiList(c)) return '';\n      return c;\n    }).filter(Boolean).join('\\n').toLowerCase();\n  } catch(e) { chatHistoryText = ''; }\n  const searchPool = (msgPaciente + '\\n' + chatHistoryText).toLowerCase();\n\n  // DNI match (pedido Dra 2026-06-17): si el paciente paso un DNI, matchear exacto contra rut de las fichas (sin puntos).\n  const dniRaw = (msgPaciente.replace(/[.\\-\\s]/g, '').match(/\\d{7,9}/) || [])[0];\n  if (dniRaw) {\n    const byDni = pacientesAll.filter(p => String(p.rut || '').replace(/\\D/g, '') === dniRaw);\n    if (byDni.length === 1) {\n      return [{ json: { ...prev, paciente_resuelto: byDni[0], paciente: byDni[0], turno_objetivo: __pickTurno(byDni[0].id), multi_fichas_resolved_by: 'dni_match', decision: __pickTurno(byDni[0].id) ? null : { siguiente_paso: 'escalar', razon: 'reprograma: identificado por DNI pero no se pudo enganchar el turno (coordinar a mano)', canned: 'Le paso a la secretaria para coordinar su reprogramacion.' } } }];\n    }\n  }\n\n  // FIX 2026-06-04 (token match): el matcheo anterior buscaba 'Test - Lucas' literal,\n  // pero memoria dice 'Lucas Silva' (sin 'Test -'). Ahora tokenizamos y matchamos\n  // si AL MENOS UN token relevante (>=3 chars, alfanumerico) coincide.\n  const STOP_TOKENS = new Set(['test','prueba','paciente','el','la','los','las','de','del','dr','dra','sr','sra']);\n  const tokenizar = (s) => (s || '').toLowerCase()\n    .replace(/[^a-záéíóúñ0-9\\s]/gi, ' ')\n    .split(/\\s+/)\n    .filter(t => t.length >= 3 && !STOP_TOKENS.has(t));\n  const matched = pacientesAll.filter(p => {\n    const nombre = (p.nombre || '').toLowerCase().trim();\n    const apellido = (p.apellido || '').toLowerCase().trim();\n    if (!nombre && !apellido) return false;\n    const tokens = [...tokenizar(nombre), ...tokenizar(apellido)];\n    if (tokens.length === 0) return false;\n    // Match si AL MENOS UN token aparece en searchPool\n    return tokens.some(t => searchPool.includes(t));\n  });\n\n  // DEBUG temporal\n  const DEBUG = { msgPaciente, chatHistoryText: chatHistoryText.slice(0, 500), searchPool: searchPool.slice(0, 500), pacientesAll_count: pacientesAll.length, matched_count: matched.length, matched_ids: matched.map(p=>p.id), pacientesAll_tokens: pacientesAll.map(p => ({id: p.id, nombre: p.nombre, tokens: [...tokenizar(p.nombre || ''), ...tokenizar(p.apellido || '')]})) };\n  if (matched.length === 1) {\n    return [{ json: {\n      ...prev,\n      paciente_resuelto: matched[0],\n      paciente: matched[0],\n      turno_objetivo: __pickTurno(matched[0].id),\n      multi_fichas_resolved_by: 'context_match',\n      decision: __pickTurno(matched[0].id) ? null : { siguiente_paso: 'escalar', razon: 'reprograma: identificado por contexto pero no se pudo enganchar el turno (coordinar a mano)', canned: 'Le paso a la secretaria para coordinar su reprogramacion.' },\n      _debug_match: DEBUG\n    }}];\n  }\n  // FALLBACK con debug\n  prev._debug_match = DEBUG;\n\n  // No hay match unico -> preguntar listando los nombres\n  const lista = pacientesAll.slice(0, 6).map(p => {\n    const n = (p.nombre || '').trim();\n    const a = (p.apellido || '').trim();\n    return (n + ' ' + a).trim() || '(sin nombre)';\n  });\n  return [{ json: {\n    ...prev,\n    decision: {\n      siguiente_paso: 'preguntar_nombre_paciente',\n      razon: 'multiple_fichas_pedir_clarificacion',\n      canned: 'Con este numero tengo registradas a ' + lista.slice(0,-1).join(', ') + (lista.length > 1 ? ' y ' + lista[lista.length-1] : lista[0]) + '. ¿Me pasás el DNI del paciente para identificarlo? (o su nombre y apellido)'\n    }\n  }}];\n}\n\nfunction fechaNatural(yyyyMmDd) {\n  if (!yyyyMmDd) return '';\n  const dias = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];\n  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];\n  const d = new Date(yyyyMmDd + 'T00:00:00');\n  if (isNaN(d.getTime())) return yyyyMmDd;\n  return dias[d.getDay()] + ' ' + d.getDate() + ' de ' + meses[d.getMonth()];\n}\nfunction horaNatural(hhmmss) {\n  if (!hhmmss) return '';\n  const m = String(hhmmss).match(/^(\\d{1,2}):(\\d{2})/);\n  if (!m) return hhmmss;\n  const h = parseInt(m[1], 10);\n  const mm = m[2];\n  const sufijo = h < 12 ? 'de la mañana' : (h < 19 ? 'de la tarde' : 'de la noche');\n  return h + (mm !== '00' ? ':' + mm : '') + ' ' + sufijo;\n}\n\n// NUEVO: si bot pregunto clarificacion ('era ese?'), y paciente dice si/ese/eso -> confirmar\nconst stateClar = prev.trigger?.multi_turn_state === 'esperando_confirmacion_clarificacion';\nconst lowerText = (prev.trigger?.text || '').toLowerCase().trim();\nconst isAffirm = /^(si+|sí+|sip+|claro|exacto|correcto|ese|ese mismo|ese si|ese sí|eso|eso es|eso mismo|asi es|así es|tal cual)\b/.test(lowerText);\nconst isNegative = /^(no+|nop+|nono|no era|ese no|no ese)\b/.test(lowerText);\nif (stateClar && turnos.length >= 1) {\n  if (isAffirm) {\n    return [{ json: {\n      ...prev,\n      turno_objetivo: turnos[0],\n      decision: { siguiente_paso: 'confirmar_cancelacion', razon: 'clarificacion_confirmada_paciente_acepto' }\n    }}];\n  }\n  if (isNegative) {\n    return [{ json: {\n      ...prev,\n      decision: {\n        siguiente_paso: 'responder_info',\n        razon: 'clarificacion_rechazada',\n        canned: 'Entendido, ese no era. Si tenes otro turno o queres coordinarlo decime y lo vemos.'\n      }\n    }}];\n  }\n}\n\n// NUEVO: consultar_info — responder con info sin escalar\nif (intent.accion === 'consultar_info') {\n  if (turnos.length === 0) {\n    return [{ json: {\n      ...prev,\n      decision: {\n        siguiente_paso: 'responder_info',\n        razon: 'consulta_info_sin_turnos_activos',\n        canned: 'Por el momento no tenes turnos activos a tu nombre. Si queres agendar uno avisame y te lo coordino.'\n      }\n    }}];\n  }\n\n  const info = intent.info_solicitada || 'cuando';\n\n  // Caso verificar_fecha: paciente pregunta \"tengo turno [tal dia]?\"\n  if (info === 'verificar_fecha' && intent.fecha_actual_mencionada) {\n    const match = turnos.find(t => t.fecha === intent.fecha_actual_mencionada);\n    let canned;\n    if (match) {\n      canned = 'Si, tenes turno el ' + fechaNatural(match.fecha) + ' a las ' + horaNatural(match.hora_inicio) + '.';\n    } else {\n      const proxLista = turnos.slice(0, 3).map(t => fechaNatural(t.fecha) + ' a las ' + horaNatural(t.hora_inicio)).join(' / ');\n      canned = 'No, no tenes turno el ' + fechaNatural(intent.fecha_actual_mencionada) + '. Tu proximo turno es: ' + proxLista + '.';\n    }\n    return [{ json: { ...prev, decision: { siguiente_paso: 'responder_info', razon: 'verificar_fecha', canned } } }];\n  }\n\n  // Caso cuando / con_quien / donde / tratamiento — todos con turno_objetivo (1+)\n  const turnosStr = turnos.length === 1\n    ? fechaNatural(turnos[0].fecha) + ' a las ' + horaNatural(turnos[0].hora_inicio)\n    : turnos.slice(0, 3).map(t => fechaNatural(t.fecha) + ' a las ' + horaNatural(t.hora_inicio)).join(' / ');\n\n  let canned;\n  if (info === 'cuando') {\n    canned = turnos.length === 1\n      ? 'Tu proximo turno es el ' + turnosStr + '.'\n      : 'Tenes ' + turnos.length + ' turnos proximos: ' + turnosStr + '.';\n  } else if (info === 'donde') {\n    canned = 'Tu turno es presencial en Balcarce 37, 2do piso, San Salvador de Jujuy. Fecha: ' + turnosStr + '.';\n  } else if (info === 'tratamiento') {\n    // No tenemos el campo de tratamiento por turno desde Dentalink en este flow.\n    canned = 'Para ver el detalle del tratamiento de tu proximo turno (' + turnosStr + ') te paso a la secretaria que tiene la ficha clinica.';\n  } else {\n    // Fallback consulta_info generica\n    canned = turnos.length === 1\n      ? 'Tu proximo turno es el ' + turnosStr + '.'\n      : 'Tenes ' + turnos.length + ' turnos proximos: ' + turnosStr + '.';\n  }\n  return [{ json: { ...prev, decision: { siguiente_paso: 'responder_info', razon: 'consulta_info_turno', canned } } }];\n}\n\n// Caso 1: NO HAY turnos proximos\nif (turnos.length === 0) {\n  if (intent.accion === 'cancelar' || intent.accion === 'reprogramar') {\n    return [{ json: {\n      ...prev,\n      decision: {\n        siguiente_paso: 'responder_info',\n        razon: 'paciente_sin_turnos_para_accion',\n        canned: 'No te encuentro turnos activos en este momento. Si queres coordinar uno nuevo avisame y te lo paso a la secretaria.'\n      }\n    }}];\n  }\n  return [{ json: {\n    ...prev,\n    decision: {\n      siguiente_paso: 'responder_info',\n      razon: 'consulta_turnos_sin_turnos_activos',\n      canned: 'Por el momento no tenes turnos activos a tu nombre. Si queres agendar uno avisame y te lo coordino.'\n    }\n  }}];\n}\n\n// Si paciente menciono fecha actual, verificar si matchea con algun turno\nconst fechaMencionada = intent.fecha_actual_mencionada;\nconst match = fechaMencionada ? turnos.find(t => t.fecha === fechaMencionada) : null;\n\nif (fechaMencionada && !match) {\n  return [{ json: {\n    ...prev,\n    decision: {\n      siguiente_paso: 'preguntar_cual_turno',\n      razon: 'fecha_mencionada_no_matchea_ningun_turno',\n      turnos_para_ofrecer: turnos.slice(0, 5).map(t => ({ id: t.id, fecha: t.fecha, hora: t.hora_inicio }))\n    }\n  }}];\n}\n\nif (match) {\n  return [{ json: {\n    ...prev,\n    turno_objetivo: match,\n    decision: {\n      siguiente_paso: intent.accion === 'cancelar' ? 'confirmar_cancelacion' :\n                      (intent.accion === 'reprogramar' ?\n                        (intent.fecha_objetivo ? 'buscar_horarios_objetivo' : 'pedir_fecha_objetivo')\n                        : 'preguntar_intent'),\n      razon: 'turno_matched_por_fecha_mencionada'\n    }\n  }}];\n}\n\n// Caso 2: UN solo turno proximo\nif (turnos.length === 1) {\n  const turno = turnos[0];\n  if (intent.accion === 'cancelar') {\n    return [{ json: {\n      ...prev,\n      turno_objetivo: turno,\n      decision: { siguiente_paso: 'confirmar_cancelacion', razon: 'turno_unico_proximo_a_cancelar' }\n    }}];\n  }\n  if (intent.accion === 'reprogramar') {\n    return [{ json: {\n      ...prev,\n      turno_objetivo: turno,\n      decision: {\n        siguiente_paso: intent.fecha_objetivo ? 'buscar_horarios_objetivo' : 'pedir_fecha_objetivo',\n        razon: intent.fecha_objetivo ? 'reprogramar_con_fecha_propuesta' : 'reprogramar_sin_fecha'\n      }\n    }}];\n  }\n  return [{ json: {\n    ...prev,\n    turno_objetivo: turno,\n    decision: { siguiente_paso: 'preguntar_intent', razon: 'intent_ambiguo_con_turno_unico' }\n  }}];\n}\n\n// Caso 3: MULTIPLES turnos sin fecha mencionada\nreturn [{ json: {\n  ...prev,\n  decision: {\n    siguiente_paso: 'preguntar_cual_turno',\n    razon: 'multiples_turnos_proximos_sin_match',\n    turnos_para_ofrecer: turnos.slice(0, 5).map(t => ({\n      id: t.id, fecha: t.fecha, hora: t.hora_inicio\n    }))\n  }\n}}];"
+   },
+   "id": "step4",
+   "name": "Step 4: Identificar Turno + Decision",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1840,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Decide accion ejecutable\nconst prev = $input.first().json;\nconst dec = prev.decision || {};\nconst intent = prev.intent || {};\nconst turno = prev.turno_objetivo;\nconst turnos = prev.turnos_proximos || [];\nconst accept = prev.acceptance_intent || { accepts: null, slot_chosen: null };\n\nfunction fechaNatural(yyyyMmDd) {\n  if (!yyyyMmDd) return '';\n  const dias = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];\n  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];\n  const d = new Date(yyyyMmDd + 'T00:00:00');\n  if (isNaN(d.getTime())) return yyyyMmDd;\n  return dias[d.getDay()] + ' ' + d.getDate() + ' de ' + meses[d.getMonth()];\n}\nfunction horaNatural(hhmmss) {\n  if (!hhmmss) return '';\n  const m = String(hhmmss).match(/^(\\d{1,2}):(\\d{2})/);\n  if (!m) return hhmmss;\n  const h = parseInt(m[1], 10);\n  const mm = m[2];\n  const sufijo = h < 12 ? 'de la mañana' : (h < 19 ? 'de la tarde' : 'de la noche');\n  return h + (mm !== '00' ? ':' + mm : '') + ' ' + sufijo;\n}\n\nif (dec.siguiente_paso === 'responder_info') {\n  return [{ json: { ...prev, action_to_execute: 'ninguna', mensaje_final: dec.canned || 'No tenes turnos activos en este momento.' } }];\n}\n\nif (accept.accepts === true && accept.slot_chosen && accept.slot_chosen.fecha) {\n  if (turnos.length === 0) {\n    return [{ json: { ...prev, action_to_execute: 'escalar', mensaje_final: 'Para confirmar la reserva del ' + fechaNatural(accept.slot_chosen.fecha) + ' a las ' + horaNatural(accept.slot_chosen.hora_inicio) + ', le paso a la secretaria, que en su horario de atención (Lun y Mié 15 a 20 hs / Mar, Jue y Vie 8 a 13 hs) se lo confirma.' }}];\n  }\n  // ROUND 14: turnos[0] a ciegas podia cancelar el turno EQUIVOCADO (ej. el de HOY\n  // ya ausente, o el otro turno si hay mas de uno candidato). Prioridad: turno_objetivo\n  // ya resuelto por Step 4; si no hay y sobra mas de uno, escalar en vez de adivinar.\n  const tCancelar = turno || (turnos.length === 1 ? turnos[0] : null);\n  if (!tCancelar) {\n    return [{ json: {\n      ...prev,\n      action_to_execute: 'escalar',\n      mensaje_final: 'Tenes varios turnos activos, le paso tu consulta a la secretaria para que coordine el cambio.'\n    }}];\n  }\n  return [{ json: {\n    ...prev,\n    action_to_execute: 'reservar_y_cancelar',\n    slot_a_reservar: accept.slot_chosen,\n    cita_a_cancelar: tCancelar.id,\n    cita_vieja_info: { fecha: tCancelar.fecha, hora: tCancelar.hora_inicio },\n    mensaje_final: 'Listo, reprogramado: cancele el ' + fechaNatural(tCancelar.fecha) + ' a las ' + horaNatural(tCancelar.hora_inicio) + ' y te reserve el ' + fechaNatural(accept.slot_chosen.fecha) + ' a las ' + horaNatural(accept.slot_chosen.hora_inicio) + '. Cualquier consulta nos escribis.'\n  }}];\n}\n\nif (dec.siguiente_paso === 'preguntar_cual_turno') {\n  const fechaMencionada = intent.fecha_actual_mencionada;\n  const turnosLista = turnos.slice(0, 5).map(t => fechaNatural(t.fecha) + ' a las ' + horaNatural(t.hora_inicio)).join(' / ');\n  let mensaje;\n  if (fechaMencionada && turnos.length === 1) {\n    const t = turnos[0];\n    mensaje = 'No veo turno tuyo el ' + fechaNatural(fechaMencionada) + '. Vi este: ' + fechaNatural(t.fecha) + ' a las ' + horaNatural(t.hora_inicio) + '. Era ese el que querias cancelar?';\n  } else if (fechaMencionada) {\n    mensaje = 'No veo turno tuyo el ' + fechaNatural(fechaMencionada) + '. Tenes estos turnos proximos: ' + turnosLista + '. Cual queres cancelar?';\n  } else {\n    mensaje = 'Tenes varios turnos proximos: ' + turnosLista + '. Cual queres cancelar?';\n  }\n  return [{ json: { ...prev, action_to_execute: 'ninguna', mensaje_final: mensaje } }];\n}\n\nif (dec.siguiente_paso === 'escalar') {\n  return [{ json: { ...prev, action_to_execute: 'escalar', mensaje_final: dec.canned || 'No veo turno activo. Le paso a la secretaria.' } }];\n}\n\nif (dec.siguiente_paso === 'preguntar_nombre_paciente') {\n  return [{ json: { ...prev, action_to_execute: 'ninguna', mensaje_final: dec.canned || 'Con este numero figuran varias personas. Para quien es la cancelacion? Pasame nombre y apellido.' } }];\n}\n\nif (!turno) {\n  return [{ json: { ...prev, action_to_execute: 'escalar', mensaje_final: 'No veo turno activo. Le paso a la secretaria.' } }];\n}\n\nif (intent.accion === 'cancelar') {\n  return [{ json: {\n    ...prev,\n    action_to_execute: 'cancelar_turno',\n    cita_a_cancelar: turno.id,\n    mensaje_final: 'Listo, su turno del ' + fechaNatural(turno.fecha) + ' a las ' + horaNatural(turno.hora_inicio) + ' queda cancelado. Si quiere reprogramar avisame y le busco otro horario.'\n  }}];\n}\n\n// PEDIDO DE LA DRA. (2026-09-07): reprogramar NO vuelve a preguntar por dia ni por franja (la frase\n// de la captura del 07/09 salia de aca).\n// Antes habia dos ramas: si el paciente ya habia dicho fecha/franja se buscaba agenda, y si no, se le\n// devolvia la pregunta (la captura que mando la Dra.). Ahora reprogramar SIEMPRE ofrece el bloque\n// (2 turnos de mañana + 2 de tarde, armado por \"Sub-WF - Buscar Horarios Validado\") y el paciente elige.\n// `prev.trigger` es la salida de \"Step 0b\" (la envuelve \"Step 1.0: Prep Query\"). A veces llega serializada:\n// el mismo destrampe que ya hace \"Step 3.5a: Prep Acceptance LLM\".\nlet trg = prev.trigger;\nif (typeof trg === 'string') { try { trg = JSON.parse(trg); } catch (e) { trg = {}; } }\ntrg = trg || {};\nconst bloqueOfrecido = String(trg.oferta_bloque || '');       // el bloque que ya vio el paciente (Step 0b)\nconst bloquesOfrecidos = Number(trg.bloques_ofrecidos) || 0;  // cuantos lotes se le mandaron ya\nconst esperandoEleccion = trg.multi_turn_state === 'oferta_horarios';\n\n// \"* Miercoles 30 de septiembre 16:20 , 17:00\" -> la misma linea filtrada por hora minima (null si no queda\n// ningun horario). Se copia el texto TAL CUAL: no se reescribe ni se recalcula el dia de la semana.\nfunction lineaDesdeHora(linea, horaMin) {\n  const m = /^(\\*\\s*.+?)\\s((?:\\d{1,2}:\\d{2})(?:\\s*,\\s*\\d{1,2}:\\d{2})*)\\s*$/.exec(linea);\n  if (!m) return null;\n  if (horaMin === null || horaMin === undefined || horaMin === '') return linea;\n  const horas = m[2].split(/\\s*,\\s*/).filter(h => parseInt(h.split(':')[0], 10) >= Number(horaMin));\n  return horas.length ? m[1] + ' ' + horas.join(' , ') : null;\n}\n\n// Devuelve el bloque recortado a UNA franja, con el MISMO formato (encabezado + seccion + cierre), o ''.\n// Conserva el encabezado a proposito: es la marca que usan \"Step 0b\" (para saber que hay una oferta\n// abierta) y el bypass del Formatting Agent en el v6.\nfunction seccionDelBloque(franja, horaMin) {\n  if (!bloqueOfrecido || (franja !== 'tarde' && franja !== 'manana')) return '';\n  const lineas = [];\n  let dentro = false;\n  for (const raw of bloqueOfrecido.split('\\n')) {\n    const l = raw.trim();\n    if (/^por la (mañana|manana|tarde)/i.test(l)) { dentro = (franja === 'tarde') === /tarde/i.test(l); continue; }\n    if (!dentro || l.charAt(0) !== '*') continue;\n    const filtrada = lineaDesdeHora(l, horaMin);\n    if (filtrada) lineas.push(filtrada);\n  }\n  if (!lineas.length) return '';\n  return ['Tenemos los próximos turnos disponibles:',\n          franja === 'tarde' ? 'Por la tarde:' : 'Por la mañana:'].concat(lineas, ['', 'Le sirve alguno?']).join('\\n');\n}\n\nif (intent.accion === 'reprogramar') {\n  // (1) Pide una FRANJA sobre el bloque que acaba de recibir: NO se busca otro lote ni se le pregunta nada.\n  //     Se le repiten las opciones de esa franja que YA estan en el bloque, copiadas letra por letra.\n  //     ESTA ES LA CAPTURA #2 DE LA DRA.: pidio \"A la tarde\" y el bot repitio las mismas 3 mañanas.\n  if (esperandoEleccion) {\n    const soloFranja = seccionDelBloque(intent.franja, intent.hora_minima);\n    if (soloFranja) {\n      return [{ json: { ...prev, action_to_execute: 'ninguna', mensaje_final: soloFranja } }];\n    }\n  }\n  // (2) Ya vio DOS bloques y sigue sin elegir: no hay un tercero, escala (regla de contrato del 07/09).\n  if (esperandoEleccion && bloquesOfrecidos >= 2) {\n    return [{ json: {\n      ...prev,\n      action_to_execute: 'escalar',\n      mensaje_final: 'Le paso la consulta a la secretaria para que le busque un turno que le sirva y se comunique con usted.'\n    }}];\n  }\n  // (3) Caso normal: se ofrece el (siguiente) bloque. `fecha_objetivo` viaja SOLO como \"desde donde\n  //     buscar\" (Step 6b-prep lo valida), nunca como filtro de un dia puntual. Si el paciente ya habia\n  //     recibido un bloque, el siguiente arranca despues del ultimo dia ofrecido (Step 0b lo calcula):\n  //     sin eso el segundo lote salia identico al primero, byte a byte.\n  return [{ json: {\n    ...prev,\n    action_to_execute: 'buscar_horarios',\n    fecha_objetivo: intent.fecha_objetivo || (esperandoEleccion ? (trg.oferta_siguiente_desde || '') : ''),\n    hora_objetivo: intent.hora_objetivo,\n    franja: null,\n    hora_minima: null,\n    insiste_horario: intent.insiste_horario\n  }}];\n}\n\nreturn [{ json: { ...prev, action_to_execute: 'ninguna', mensaje_final: 'Vi su turno del ' + fechaNatural(turno.fecha) + ' a las ' + horaNatural(turno.hora_inicio) + '. Lo querias cancelar o reprogramar?' } }];"
+   },
+   "id": "step5",
+   "name": "Step 5: Decidir Accion Ejecutable",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2048,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "rules": {
+     "values": [
+      {
+       "conditions": {
+        "options": {
+         "caseSensitive": true,
+         "leftValue": "",
+         "typeValidation": "strict"
+        },
+        "conditions": [
+         {
+          "leftValue": "={{ $json.action_to_execute }}",
+          "rightValue": "cancelar_turno",
+          "operator": {
+           "type": "string",
+           "operation": "equals"
+          }
+         }
+        ],
+        "combinator": "and"
+       },
+       "renameOutput": true,
+       "outputKey": "cancelar"
+      },
+      {
+       "conditions": {
+        "options": {
+         "caseSensitive": true,
+         "leftValue": "",
+         "typeValidation": "strict"
+        },
+        "conditions": [
+         {
+          "leftValue": "={{ $json.action_to_execute }}",
+          "rightValue": "buscar_horarios",
+          "operator": {
+           "type": "string",
+           "operation": "equals"
+          }
+         }
+        ],
+        "combinator": "and"
+       },
+       "renameOutput": true,
+       "outputKey": "buscar_horarios"
+      },
+      {
+       "conditions": {
+        "options": {
+         "caseSensitive": true,
+         "leftValue": "",
+         "typeValidation": "strict"
+        },
+        "conditions": [
+         {
+          "leftValue": "={{ $json.action_to_execute }}",
+          "rightValue": "escalar",
+          "operator": {
+           "type": "string",
+           "operation": "equals"
+          }
+         }
+        ],
+        "combinator": "and"
+       },
+       "renameOutput": true,
+       "outputKey": "escalar"
+      },
+      {
+       "conditions": {
+        "options": {
+         "caseSensitive": true,
+         "leftValue": "",
+         "typeValidation": "strict"
+        },
+        "conditions": [
+         {
+          "leftValue": "={{ $json.action_to_execute }}",
+          "rightValue": "reservar_y_cancelar",
+          "operator": {
+           "type": "string",
+           "operation": "equals"
+          }
+         }
+        ],
+        "combinator": "and"
+       },
+       "renameOutput": true,
+       "outputKey": "reservar_y_cancelar"
+      }
+     ]
+    },
+    "options": {
+     "fallbackOutput": "extra",
+     "renameFallbackOutput": "sin_accion"
+    }
+   },
+   "id": "step6-switch",
+   "name": "Step 6: Switch por Accion",
+   "type": "n8n-nodes-base.switch",
+   "typeVersion": 3.2,
+   "position": [
+    2240,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "method": "PUT",
+    "url": "={{ \"https://api.dentalink.healthatom.com/api/v1/citas/\" + $json.cita_a_cancelar }}",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({id_estado: 1}) }}",
+    "options": {}
+   },
+   "id": "step6a",
+   "name": "Step 6a: Cancelar en Dentalink",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2448,
+    112
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "TwN6eBWsydjMdsCM",
+     "name": "Header Auth account 3"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const cancelResp = $input.first().json;\nconst prev = $('Step 5: Decidir Accion Ejecutable').first().json;\n\nconst success = cancelResp?.data?.id_estado === 1 || (Array.isArray(cancelResp) && cancelResp[0]?.data?.id_estado === 1);\n\nreturn [{ json: {\n  ...prev,\n  cancel_success: success,\n  cancel_raw: cancelResp,\n  mensaje_final: success ? prev.mensaje_final : 'No pude cancelar el turno en el sistema. Le paso a la secretaria para que lo coordine.',\n  apply_label_humano: !success\n}}];"
+   },
+   "id": "step6a-out",
+   "name": "Step 6a-out: Resultado Cancelar",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2640,
+    112
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// \"Step 6b-prep: Prep Query Horarios\" — Sub-WF CancelarReprogramar (5cAWJxiWJ50hxEq3)\n//\n// ACA NACIA LA CAPTURA QUE MANDO LA DRA. EL 2026-09-07: este nodo armaba el `q` de UN SOLO dia\n// (fecha:{eq:fechaObjetivo}) y \"Step 6b-out\" listaba los 3 primeros slots, todos del mismo dia y todos de\n// mañana; cuando la paciente contestaba \"A la tarde\" volvia a salir lo mismo porque nadie filtraba nada.\n//\n// Ahora la busqueda la hace \"Sub-WF - Buscar Horarios Validado\" (GuDQ9VmKWZvQnerV), el MISMO que usa el\n// Sub-Agent Agendar: devuelve el bloque con 2 turnos de mañana + 2 de tarde ya armado y sin nombrar el\n// sistema de gestion. Este nodo solo decide DESDE cuando buscar.\n//\n// Regla de la Dra.: NUNCA se le pregunta al paciente la fecha ni la franja. `desde` se usa solo cuando el\n// paciente por su cuenta nombro una fecha futura (o cuando ya rechazo un lote): es \"traeme el siguiente\n// lote\", no un filtro. Si no hay nada valido, se busca desde hoy.\n\nconst prev = $input.first().json;\nconst intent = prev.intent || {};\n\nconst ISO = /^\\d{4}-\\d{2}-\\d{2}$/;\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Jujuy' }).format(new Date());\n\n// `fecha_objetivo` lo deja \"Step 5\": o la fecha que nombro el paciente por su cuenta, o —cuando ya se le\n// mando un bloque y lo rechazo— el dia siguiente al ultimo turno ofrecido (Step 0b lo calcula del texto\n// del bloque anterior). Sin ese arrastre el segundo lote salia identico al primero.\nlet desde = String(prev.fecha_objetivo || intent.fecha_objetivo || '').trim();\nif (!ISO.test(desde) || desde < hoy) desde = '';\n\nreturn [{\n  json: {\n    ...prev,\n    // `desde` es lo unico que consume \"Step 6b: Buscar Horarios (bloque)\". Vacio = buscar desde hoy.\n    desde: desde,\n    // franja / hora_minima ya no filtran nada: el bloque trae SIEMPRE las dos franjas.\n    franja: null,\n    hora_minima: null\n  }\n}];"
+   },
+   "id": "step6b-prep",
+   "name": "Step 6b-prep: Prep Query Horarios",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2448,
+    304
+   ]
+  },
+  {
+   "id": "step6b-buscar-horarios",
+   "name": "Step 6b: Buscar Horarios (bloque)",
+   "type": "n8n-nodes-base.executeWorkflow",
+   "typeVersion": 1.2,
+   "position": [
+    2640,
+    304
+   ],
+   "alwaysOutputData": true,
+   "continueOnFail": true,
+   "parameters": {
+    "workflowId": {
+     "__rl": true,
+     "value": "GuDQ9VmKWZvQnerV",
+     "mode": "id"
+    },
+    "workflowInputs": {
+     "mappingMode": "defineBelow",
+     "value": {
+      "fecha": "",
+      "desde": "={{ $json.desde }}"
+     },
+     "matchingColumns": [],
+     "schema": []
+    },
+    "options": {}
+   }
+  },
+  {
+   "parameters": {
+    "jsCode": "// \"Step 6b-out: Ofrecer Slots\" — Sub-WF CancelarReprogramar (5cAWJxiWJ50hxEq3)\n//\n// Antes armaba el mensaje a mano: \"Tengo disponibles en <sistema de gestion> los siguientes turnos\n// proximos: <3 slots del mismo dia separados por ' / '>. ¿Te sirve alguno?\" (captura de la Dra., 07/09).\n// Ahora el texto llega YA ARMADO desde \"Sub-WF - Buscar Horarios Validado\" (campo `bloque`) con el\n// formato exacto que pidio la Dra., y este nodo solo elige entre bloque / canned de escalada.\n//\n// NO se reescribe el bloque acá: es texto final para el paciente, y el bot lo manda tal cual\n// (\"Necesita Formatting?\" lo desvia del Formatting Agent y \"Split en Mensajes\" tiene el guard).\n\nconst respuesta = $input.first().json || {};\nconst prev = $('Step 6b-prep: Prep Query Horarios').first().json;\n\nconst bloque = typeof respuesta.bloque === 'string' ? respuesta.bloque.trim() : '';\nconst fallo = !!(respuesta.error || respuesta.error_tecnico);\n\nlet mensaje;\nlet escalar;\nif (bloque) {\n  mensaje = bloque;\n  escalar = false;\n} else if (fallo) {\n  mensaje = 'Disculpe, tuve un inconveniente tecnico para acceder a la agenda en este momento. Le dejo una nota a la secretaria para que se comunique con usted.';\n  escalar = true;\n} else {\n  mensaje = 'En este momento no tengo turnos disponibles para ofrecerle. Le dejo una nota a la secretaria para que se comunique con usted.';\n  escalar = true;\n}\n\nreturn [{\n  json: {\n    ...prev,\n    slots_match: [],\n    bloque_turnos: bloque,\n    total_manana: Number(respuesta.total_manana) || 0,\n    total_tarde: Number(respuesta.total_tarde) || 0,\n    siguiente_desde: respuesta.siguiente_desde || '',\n    mensaje_final: mensaje,\n    apply_label_humano: escalar\n  }\n}];"
+   },
+   "id": "step6b-out",
+   "name": "Step 6b-out: Ofrecer Slots",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2848,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const prev = $input.first().json;\nconst trigger = prev.trigger || {};\nconst text = trigger.text || '';\nconst phone = trigger.phone || '';\nconst resumen = '[CancelarReprogramar] phone ' + phone + ', mensaje: ' + text + '. Razon: ' + (prev.decision?.razon || 'sin razon');\nreturn [{ json: { ...prev, escalate_body: { text: resumen, phone } } }];"
+   },
+   "id": "step6c-prep",
+   "name": "Step 6c-prep: Prep Escalado",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2448,
+    512
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://n8n.raquelrodriguez.com.ar/webhook/notify-grupo",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify($json.escalate_body) }}",
+    "options": {}
+   },
+   "id": "step6c-http",
+   "name": "Step 6c: POST Helper",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2640,
+    512
+   ],
+   "alwaysOutputData": true,
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "// Consolidar mensaje final + side effects que el v6 tiene que aplicar.\n// Lee mensaje_final del Step 5 directo (el HTTP del 6c sobreescribe el contexto).\nconst fromStep5 = $('Step 5: Decidir Accion Ejecutable').first().json;\nconst prev = $input.first().json;\nconst mf = fromStep5.mensaje_final || prev.mensaje_final || 'Le paso a la secretaria.';\nconst action = fromStep5.action_to_execute || prev.action_to_execute;\n\n// apply_label_humano puede venir de cualquier rama: Step 5, Step 6a-out (cancel),\n// Step 6b-out (sin disponibilidad en franja), Step 6d-* (reserva). v6 NO consume este flag,\n// asi que el unico mecanismo real de silenciar el bot es POST a notify-grupo (la helper\n// aplica el label 'humano' en Chatwoot).\nconst labelNeeded = fromStep5.apply_label_humano === true || prev.apply_label_humano === true || action === 'escalar';\n\n// Ramas \"soft\" (cancel falla / reserva falla / sin disponibilidad) que NO pasaron por Step 6c:\n// avisar a Iri + aplicar label. 'escalar' ya pingueo en Step 6c -> no re-notificar.\nif (labelNeeded && action !== 'escalar') {\n  try {\n    const ph = (prev.trigger && prev.trigger.phone) || (fromStep5.trigger && fromStep5.trigger.phone) || '';\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://n8n.raquelrodriguez.com.ar/webhook/notify-grupo',\n      qs: { phone: ph, resumen: 'Reprogramacion/cancelacion que el bot no pudo cerrar solo: ' + mf },\n      json: true,\n    });\n  } catch (e) { /* fail-soft: igual respondemos al paciente */ }\n}\n\n// ROUND 14: una cancelacion/reprogramacion EXITOSA no avisaba a nadie - Iri se enteraba\n// recien si el paciente lo mencionaba o al revisar Dentalink a mano. Aviso FYI, sin\n// aplicar label humano (el bot ya resolvio bien, no hace falta que se calle).\nconst successWrite = (action === 'cancelar_turno' && prev.cancel_success === true)\n  || (action === 'reservar_y_cancelar' && prev.cancel_ok === true && prev.reserva_ok === true);\nif (successWrite) {\n  try {\n    const ph2 = (prev.trigger && prev.trigger.phone) || (fromStep5.trigger && fromStep5.trigger.phone) || '';\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://n8n.raquelrodriguez.com.ar/webhook/notify-grupo',\n      qs: { phone: ph2, resumen: '[FYI] Bot ' + (action === 'cancelar_turno' ? 'cancelo' : 'reprogramo') + ' un turno solo: ' + mf },\n      json: true,\n    });\n  } catch (e) { /* fail-soft */ }\n}\n\nconst __trg = prev.trigger || fromStep5.trigger || {};\nconst __lastBot = String(__trg.last_bot_msg || '').trim();\nconst __pMsg = String(__trg.text || '').toLowerCase();\nconst __isGreeting = /(^|\\s)(hola+|buen[ao]s|buen dia|buenos dias|buenas tardes|buenas noches)(\\s|$|,|\\.|!)/.test(__pMsg);\nconst __lastReminder = /^\\s*aurea|recordamos su turno|le recordamos/i.test(__lastBot);\nconst __lastHumanOrEmpty = !__lastBot || /^\\[atencion humana/i.test(__lastBot);\nconst __shouldIdentify = __isGreeting || __lastReminder || __lastHumanOrEmpty;\nconst mfFinal = (__shouldIdentify && !/asiri/i.test(mf))\n  ? 'Soy Asiri, la secretaria virtual de la Dra. Raquel \\ud83e\\udd17\\n\\n' + mf\n  : mf;\n\nreturn [{ json: {\n  mensaje_final: mfFinal,\n  apply_label_humano: labelNeeded,\n  flow: 'cancelar_reprogramar',\n  action_executed: action,\n  paciente_id: fromStep5.paciente?.id || prev.paciente?.id || null,\n  cita_id: fromStep5.cita_a_cancelar || prev.cita_a_cancelar || null,\n  debug: {\n    decision: fromStep5.decision,\n    intent: fromStep5.intent,\n    cancel_success: prev.cancel_success,\n    franja_detectada: prev.franja_detectada || null,\n    slots_match: (prev.slots_match && prev.slots_match.length) || 0,\n    slots_alternativos: (prev.slots_alternativos && prev.slots_alternativos.length) || 0\n  }\n}}];"
+   },
+   "id": "step7",
+   "name": "Step 7: Output Final",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3040,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "SELECT id, message FROM n8n_chat_histories WHERE session_id = $1 ORDER BY id DESC LIMIT 20;",
+    "options": {
+     "queryReplacement": "={{ $('When called by v6').first().json.phone }}"
+    }
+   },
+   "id": "step0-pg",
+   "name": "Step 0a: Read Chat Memory",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    352,
+    112
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "// Detect multi-turn state from last bot message in n8n_chat_histories\nconst msgs = $input.all().map(i => i.json);\nconst trigger = $('When called by v6').first().json;\n\nconst ROUTER_LABELS = new Set([\n  'cancelar_o_reprogramar', 'confirmar', 'agendar', 'urgencia',\n  'consulta_general', 'general', 'pago', 'derivar', 'silencio', 'no_reply',\n  'cancelar', 'reprogramar'\n]);\n\nlet lastBotMsg = null;\nlet lastUserMsg = null;\n// NUEVO: armar conversation_history con los ultimos 10 mensajes utiles\n// (filtrando labels del Router). Formato: \"ai: ... / user: ... / ai: ...\"\nconst historyPairs = [];\nfor (const m of msgs) {\n  if (m.error) continue;\n  let msgJson = m.message;\n  if (typeof msgJson === 'string') { try { msgJson = JSON.parse(msgJson); } catch (e) { continue; } }\n  if (!msgJson || typeof msgJson !== 'object') continue;\n  const type = msgJson.type;\n  const content = msgJson.content || msgJson?.data?.content || msgJson?.kwargs?.content || '';\n  const trimmed = String(content).trim().toLowerCase();\n  if (type === 'ai' && ROUTER_LABELS.has(trimmed)) continue;\n  if (type === 'ai' && !lastBotMsg) lastBotMsg = String(content);\n  if (type === 'human' && !lastUserMsg) lastUserMsg = String(content);\n  // Add to history (most recent first)\n  if (historyPairs.length < 10) {\n    historyPairs.push({ role: type === 'ai' ? 'bot' : 'paciente', content: String(content).slice(0, 300) });\n  }\n}\n\n// Reverse para tener cronologico (oldest first)\nhistoryPairs.reverse();\nconst conversation_history = historyPairs.map(h => h.role + ': ' + h.content).join('\\n');\n\nconst lower = (lastBotMsg || '').toLowerCase();\n\nlet multi_turn_state = 'conversacion_nueva';\n// 'turnos disponibles:' es la primera linea del bloque nuevo (\"Tenemos los próximos turnos disponibles:\",\n// pedido de la Dra. 2026-09-07). Sin esta pata el paciente elige un turno del bloque, \"Step 3.5a\" no\n// arranca el parser de aceptacion y se pierde la eleccion.\nif (/turnos disponibles:|te ofrezco|te puedo ofrecer|tengo disponible|cual confirma|cual prefiere/i.test(lower)) {\n  multi_turn_state = 'oferta_horarios';\n} else if (/que dia.*viene mejor|para reprogramar.*que/i.test(lower)) {\n  multi_turn_state = 'esperando_fecha';\n} else if (/te confirmo.*cancelar/i.test(lower)) {\n  multi_turn_state = 'esperando_confirmacion_cancelacion';\n} else if (/queda cancelado/i.test(lower)) {\n  multi_turn_state = 'cancelacion_ejecutada';\n} else if (/era ese el que querias cancelar|vi este.*era ese|no veo turno tuyo.*vi este/i.test(lower)) {\n  multi_turn_state = 'esperando_confirmacion_clarificacion';\n}\n\n// === Deteccion anti-loop / anti-frustracion (27/05) ===\n// Anti-pattern: caso Julieta - bot repitio \"No te encuentro turnos activos\" 3 veces.\n// Detectar dos señales independientes y propagarlas a Step 4 que decide.\nconst fraseLoop = /no te encuentro turnos activos|no veo turno activo|no tenes turnos activos|por el momento no tenes turnos|varios turnos pr[o\\u00f3]ximos|cu[a\\u00e1]l (quer[e\\u00e9]s|quiere|desea) cancelar/i;\nconst botMsgsRecientes = historyPairs.filter(h => h.role === 'bot').slice(-3);\nconst repeticionesBot = botMsgsRecientes.filter(h => fraseLoop.test(h.content)).length;\nconst loop_no_turnos = repeticionesBot >= 2;\n\nconst fraseFrustracion = /(^|\\s)(repito|ya te dije|ya dije|reitero|como te dije|otra vez te digo|no entiendo|no me entend[eé]s|insisto|cuantas veces)([\\s,.!?]|$)/i;\nconst userText = String(trigger.text || '').toLowerCase();\nconst is_frustrated = fraseFrustracion.test(userText);\n\n// === LOTE DE TURNOS YA OFRECIDO (2026-09-07, pedido de la Dra. Raquel) ===\n// El bot ahora ofrece un BLOQUE (\"Tenemos los proximos turnos disponibles:\" + seccion mañana + seccion\n// tarde). SIN ESTO el paciente que rechaza el bloque recibe EXACTAMENTE el mismo bloque de nuevo, para\n// siempre: \"Step 5\" volvia a buscar desde HOY porque nadie se acordaba de que ya se le habia ofrecido un\n// lote (esa es la captura #2 que mando la Dra. el 07/09). Aca se saca del ULTIMO mensaje del bot:\n//   (a) el bloque entero, para poder señalarle SOLO la franja que pide sin volver a buscar agenda,\n//   (b) desde cuando pedir el lote SIGUIENTE,\n//   (c) cuantos bloques se le ofrecieron ya, para escalar en vez de tirarle un tercero.\nconst MESES_BLOQUE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',\n                      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\nconst HOY_JUJUY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Jujuy' }).format(new Date());\nconst RE_BLOQUE = /turnos disponibles:/i;\nconst oferta_bloque = RE_BLOQUE.test(lastBotMsg || '') ? String(lastBotMsg) : '';\n\n// \"* Jueves 24 de septiembre 8:00 , 8:40\" -> \"2026-09-24\". El bloque NO lleva año: se usa el actual y, si\n// esa fecha ya paso, el que viene (mismo criterio que el parser de aceptacion de \"Step 3.5a\").\nfunction isoDeLineaBloque(linea) {\n  const m = /^\\*\\s*[^\\d]+?(\\d{1,2})\\s+de\\s+([a-zA-Zá-úÁ-Úñ]+)/.exec(String(linea).trim());\n  if (!m) return '';\n  const mes = MESES_BLOQUE.indexOf(m[2].toLowerCase()) + 1;\n  if (!mes) return '';\n  const mm = String(mes).padStart(2, '0');\n  const dd = String(Number(m[1])).padStart(2, '0');\n  const anio = Number(HOY_JUJUY.slice(0, 4));\n  const cand = anio + '-' + mm + '-' + dd;\n  return cand >= HOY_JUJUY ? cand : (anio + 1) + '-' + mm + '-' + dd;\n}\n\n// Ultimo dia ofrecido POR SECCION. El siguiente lote arranca al dia siguiente del MINIMO de las dos: la\n// tarde siempre cae mas lejos (la Dra. atiende tarde solo lunes y miercoles), asi que arrancar despues del\n// ultimo turno de TARDE se saltearia mañanas mas proximas que el paciente nunca vio.\nconst ultimoPorSeccion = {};\nlet seccionBloque = '';\nfor (const raw of oferta_bloque.split('\\n')) {\n  const l = raw.trim();\n  if (/^por la (mañana|manana|tarde)/i.test(l)) { seccionBloque = /tarde/i.test(l) ? 'tarde' : 'manana'; continue; }\n  if (!seccionBloque || l.charAt(0) !== '*') continue;\n  const iso = isoDeLineaBloque(l);\n  if (iso && (!ultimoPorSeccion[seccionBloque] || iso > ultimoPorSeccion[seccionBloque])) ultimoPorSeccion[seccionBloque] = iso;\n}\nconst ultimosBloque = Object.keys(ultimoPorSeccion).map(k => ultimoPorSeccion[k]).sort();\nlet oferta_siguiente_desde = '';\nif (ultimosBloque.length) {\n  const pb = ultimosBloque[0].split('-').map(Number);\n  oferta_siguiente_desde = new Date(Date.UTC(pb[0], pb[1] - 1, pb[2] + 1)).toISOString().slice(0, 10);\n}\n\n// Cuantos bloques se le mandaron en los ultimos 10 mensajes. El marcador esta en la PRIMERA linea del\n// bloque, asi que el slice(0, 300) de historyPairs no lo pierde.\nconst bloques_ofrecidos = historyPairs.filter(h => h.role === 'bot' && RE_BLOQUE.test(h.content)).length;\n\nreturn [{ json: {\n  ...trigger,\n  multi_turn_state,\n  // 600 y no 300: el bloque de turnos mide ~230 chars y con el \"Soy Asiri...\" adelante se pasaba de 300.\n  // Este campo es lo unico que ve el parser de aceptacion (Step 3.5a) para matchear el turno elegido:\n  // truncado en 300 se perdia la seccion \"Por la tarde\" entera.\n  last_bot_msg: (lastBotMsg || '').slice(0, 600),\n  oferta_bloque,\n  oferta_siguiente_desde,\n  bloques_ofrecidos,\n  last_user_msg: (lastUserMsg || '').slice(0, 200),\n  conversation_history,\n  loop_no_turnos,\n  is_frustrated\n}}];\n"
+   },
+   "id": "step0-detect",
+   "name": "Step 0b: Detect Multi-Turn State",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    544,
+    112
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const prev = $input.first().json;\nlet trig = prev.trigger;\nif (typeof trig === 'string') {\n  try { trig = JSON.parse(trig); } catch(e) { trig = {}; }\n}\ntrig = trig || {};\nconst state = trig.multi_turn_state || prev.multi_turn_state || 'conversacion_nueva';\nif (state !== 'oferta_horarios') {\n  return [{ json: { ...prev, _skip_acceptance: true } }];\n}\nconst lastBot = trig.last_bot_msg || prev.last_bot_msg || '';\nconst text = trig.text || prev.text || '';\nconst today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Jujuy' }).format(new Date()); // ROUND 14: bug UTC (21:00-23:59 ARG calculaba \"hoy\" mal)\nconst sysPrompt = \"Sos un parser. El bot dental ofrecio horarios al paciente, y este respondio. Hoy es \" + today + \". Determinar si el paciente acepta un slot ofrecido y cual. Responde SOLO JSON valido, formato exacto: {\\\"accepts\\\":true|false,\\\"slot_chosen\\\":{\\\"fecha\\\":\\\"YYYY-MM-DD\\\",\\\"hora_inicio\\\":\\\"HH:MM\\\"}|null,\\\"razon\\\":\\\"breve\\\"}. Reglas: (1) Si paciente dice si/dale/ok/perfecto sin especificar slot Y solo se ofrecio UN slot, accepts=true con ese slot. (2) Si se ofrecieron varios slots y paciente dice solo si, accepts=false. (3) Si paciente menciona una hora especifica (ej 8, 8:00, 8 de la manana, 15:10) o fecha, matcheala con uno de los slots ofrecidos. (4) Si paciente rechaza, accepts=false slot_chosen=null. (5) Si paciente cambia de tema, accepts=false slot_chosen=null. Para fecha: usa SIEMPRE el año actual (\" + today.slice(0,4) + \") o el siguiente si la fecha mencionada ya paso este año. NUNCA uses años anteriores.\";\nconst body = {\n  model: 'gpt-5',\n  messages: [\n    { role: 'system', content: sysPrompt },\n    { role: 'user', content: 'Slots ofrecidos por el bot: ' + lastBot + '\\n\\nRespuesta del paciente: ' + text }\n  ],\n  max_completion_tokens: 600,\n  reasoning_effort: 'minimal',\n  response_format: { type: 'json_object' }\n};\nreturn [{ json: { ...prev, accept_openai_body: JSON.stringify(body), _skip_acceptance: false } }];\n"
+   },
+   "id": "step3-5a",
+   "name": "Step 3.5a: Prep Acceptance LLM",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1744,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/chat/completions",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "openAiApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ $json.accept_openai_body || \"{\\\"skip\\\":true}\" }}",
+    "options": {}
+   },
+   "id": "step3-5b",
+   "name": "Step 3.5b: LLM Acceptance",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1952,
+    304
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "openAiApi": {
+     "id": "nYujqfon7GGDnJUO",
+     "name": "OpenAi account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const llmResp = $input.first().json;\nconst prev = $('Step 3.5a: Prep Acceptance LLM').first().json;\n\n// Si skipeamos LLM (no era oferta_horarios), pasar accepts=null\nif (prev._skip_acceptance === true) {\n  return [{ json: { ...prev, acceptance_intent: { accepts: null, slot_chosen: null, razon: 'no_aplica' } } }];\n}\n\nlet parsed = { accepts: false, slot_chosen: null, razon: 'sin parse' };\ntry {\n  const content = llmResp?.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch (e) { parsed.razon = 'parse fail: ' + String(e?.message || e); }\n\nreturn [{ json: { ...prev, acceptance_intent: parsed } }];"
+   },
+   "id": "step3-5c",
+   "name": "Step 3.5c: Parse Acceptance",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2144,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const prev = $input.first().json;\nconst slot = prev.slot_a_reservar || {};\nconst paciente = prev.paciente || {};\n\nconst body = {\n  id_dentista: 1,\n  id_sucursal: 1,\n  id_sillon: 1,\n  id_paciente: paciente.id,\n  fecha: slot.fecha,\n  // El bloque de turnos escribe las horas SIN cero adelante (\"8:00\", \"8:40\") — asi las pidio la Dra. — y el\n  // parser de aceptacion (Step 3.5c, un LLM) las copia de ahi. La agenda espera HH:MM: se normaliza aca,\n  // que es el ultimo lugar antes del POST de reserva.\n  hora_inicio: (function (h) { const m = /^(\\d{1,2}):(\\d{2})/.exec(String(h || '')); return m ? m[1].padStart(2, '0') + ':' + m[2] : h; })(slot.hora_inicio),\n  duracion: 40,\n  comentario: 'Reprogramado por bot (sub-WF)'\n};\n\nreturn [{ json: { ...prev, reserva_body: JSON.stringify(body) } }];"
+   },
+   "id": "step6d-prep",
+   "name": "Step 6d-prep: Build Reserva Body",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2448,
+    704
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.dentalink.healthatom.com/api/v1/citas/",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ $json.reserva_body }}",
+    "options": {}
+   },
+   "id": "step6d-1",
+   "name": "Step 6d-1: POST Reservar",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2640,
+    704
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "TwN6eBWsydjMdsCM",
+     "name": "Header Auth account 3"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict"
+     },
+     "conditions": [
+      {
+       "leftValue": "={{ $json?.data?.id_estado || $json[0]?.data?.id_estado || 0 }}",
+       "rightValue": 0,
+       "operator": {
+        "type": "number",
+        "operation": "gt"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "step6d-2",
+   "name": "Step 6d-2: Reserva OK?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    2848,
+    704
+   ]
+  },
+  {
+   "parameters": {
+    "method": "PUT",
+    "url": "={{ \"https://api.dentalink.healthatom.com/api/v1/citas/\" + $('Step 6d-prep: Build Reserva Body').first().json.cita_a_cancelar }}",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({id_estado: 1}) }}",
+    "options": {}
+   },
+   "id": "step6d-3a",
+   "name": "Step 6d-3a: PUT Cancelar Viejo",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    3040,
+    608
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "TwN6eBWsydjMdsCM",
+     "name": "Header Auth account 3"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const prev = $('Step 6d-prep: Build Reserva Body').first().json;\nconst reservaResp = $('Step 6d-1: POST Reservar').first().json;\nreturn [{ json: {\n  ...prev,\n  reserva_status: 'fail',\n  reserva_resp: reservaResp,\n  mensaje_final: 'No pude reservar el horario que elegiste. Le paso a la secretaria para que lo coordine manualmente.',\n  apply_label_humano: true,\n  flow: 'reservar_y_cancelar_fail_at_reserve'\n}}];"
+   },
+   "id": "step6d-3b",
+   "name": "Step 6d-3b: Escalar Reserva Falla",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3040,
+    800
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const cancelResp = $input.first().json;\nconst prev = $('Step 6d-prep: Build Reserva Body').first().json;\nconst reservaResp = $('Step 6d-1: POST Reservar').first().json;\n\n// reserva OK garantizado (vino por rama TRUE)\nconst cancelOk = cancelResp?.data?.id_estado === 1 || (Array.isArray(cancelResp) && cancelResp[0]?.data?.id_estado === 1);\n\nlet mensaje;\nif (cancelOk) {\n  mensaje = prev.mensaje_final; // ya viene armado del Step 5\n} else {\n  // Reservo OK pero no canceló viejo. Doble booking → escalar\n  mensaje = 'Te reserve el nuevo turno, pero no logre cancelar el anterior automaticamente. Le paso a la secretaria para que ajuste.';\n}\n\nreturn [{ json: {\n  ...prev,\n  reserva_ok: true,\n  cancel_ok: cancelOk,\n  reserva_resp: reservaResp,\n  cancel_resp: cancelResp,\n  mensaje_final: mensaje,\n  apply_label_humano: !cancelOk,\n  flow: 'reservar_y_cancelar'\n}}];"
+   },
+   "id": "step6d-4",
+   "name": "Step 6d-4: Consolidar Resultado",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3248,
+    608
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Step 8a: Prep INSERT human msg\nconst out = $('Step 7: Output Final').first().json;\nconst trigger = $('When called by v6').first().json;\nconst phone = String(trigger?.phone || '');\nconst userText = String(trigger?.text || '');\nconst humanMsg = {\n  type: 'human',\n  content: userText,\n  additional_kwargs: { source: 'wa_inbound' },\n  response_metadata: {},\n  tool_calls: [],\n  invalid_tool_calls: []\n};\nreturn [{ json: {\n  session_id: phone,\n  message_json: JSON.stringify(humanMsg),\n  ai_message_json: JSON.stringify({\n    type: 'ai',\n    content: String(out.mensaje_final || ''),\n    additional_kwargs: { source: 'wa_outbound' },\n    response_metadata: {},\n    tool_calls: [],\n    invalid_tool_calls: []\n  }),\n  // Forward for return\n  out\n} }];\n"
+   },
+   "id": "step8a-prep",
+   "name": "Step 8a: Prep Memory Writeback",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3280,
+    304
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb)",
+    "options": {
+     "queryReplacement": "={{ $json.session_id }},={{ $json.message_json }}"
+    }
+   },
+   "id": "step8b-pg-human",
+   "name": "Step 8b: INSERT human msg",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    3520,
+    224
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb)",
+    "options": {
+     "queryReplacement": "={{ $('Step 8a: Prep Memory Writeback').first().json.session_id }},={{ $('Step 8a: Prep Memory Writeback').first().json.ai_message_json }}"
+    }
+   },
+   "id": "step8c-pg-ai",
+   "name": "Step 8c: INSERT ai msg",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    3520,
+    384
+   ],
+   "alwaysOutputData": true,
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "return $('Step 8a: Prep Memory Writeback').first().json.out ? [{json: $('Step 8a: Prep Memory Writeback').first().json.out}] : [{json:{}}];"
+   },
+   "id": "step8d-return",
+   "name": "Step 8d: Return Output",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3760,
+    304
+   ]
+  }
+ ],
+ "connections": {
+  "When called by v6": {
+   "main": [
+    [
+     {
+      "node": "Step 0a: Read Chat Memory",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 1.0: Prep Query": {
+   "main": [
+    [
+     {
+      "node": "Step 1a: Buscar full",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 1a: Buscar full": {
+   "main": [
+    [
+     {
+      "node": "Step 1b: Procesar resultado",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 1b: Procesar resultado": {
+   "main": [
+    [
+     {
+      "node": "Step 2a: Ver Turnos",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 2a: Ver Turnos": {
+   "main": [
+    [
+     {
+      "node": "Step 2b: Filtrar Turnos Proximos",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 2b: Filtrar Turnos Proximos": {
+   "main": [
+    [
+     {
+      "node": "Step 3.0: Prep LLM Body",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 3a: LLM Extract Intent": {
+   "main": [
+    [
+     {
+      "node": "Step 3b: Parse Intent",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 3.0: Prep LLM Body": {
+   "main": [
+    [
+     {
+      "node": "Step 3a: LLM Extract Intent",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 3b: Parse Intent": {
+   "main": [
+    [
+     {
+      "node": "Step 3.5a: Prep Acceptance LLM",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 4: Identificar Turno + Decision": {
+   "main": [
+    [
+     {
+      "node": "Step 5: Decidir Accion Ejecutable",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 5: Decidir Accion Ejecutable": {
+   "main": [
+    [
+     {
+      "node": "Step 6: Switch por Accion",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6: Switch por Accion": {
+   "main": [
+    [
+     {
+      "node": "Step 6a: Cancelar en Dentalink",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Step 6b-prep: Prep Query Horarios",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Step 6c-prep: Prep Escalado",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Step 6d-prep: Build Reserva Body",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Step 7: Output Final",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6a: Cancelar en Dentalink": {
+   "main": [
+    [
+     {
+      "node": "Step 6a-out: Resultado Cancelar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6a-out: Resultado Cancelar": {
+   "main": [
+    [
+     {
+      "node": "Step 7: Output Final",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6b-prep: Prep Query Horarios": {
+   "main": [
+    [
+     {
+      "node": "Step 6b: Buscar Horarios (bloque)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6b-out: Ofrecer Slots": {
+   "main": [
+    [
+     {
+      "node": "Step 7: Output Final",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6c-prep: Prep Escalado": {
+   "main": [
+    [
+     {
+      "node": "Step 6c: POST Helper",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6c: POST Helper": {
+   "main": [
+    [
+     {
+      "node": "Step 7: Output Final",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 0a: Read Chat Memory": {
+   "main": [
+    [
+     {
+      "node": "Step 0b: Detect Multi-Turn State",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 0b: Detect Multi-Turn State": {
+   "main": [
+    [
+     {
+      "node": "Step 1.0: Prep Query",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 3.5a: Prep Acceptance LLM": {
+   "main": [
+    [
+     {
+      "node": "Step 3.5b: LLM Acceptance",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 3.5b: LLM Acceptance": {
+   "main": [
+    [
+     {
+      "node": "Step 3.5c: Parse Acceptance",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 3.5c: Parse Acceptance": {
+   "main": [
+    [
+     {
+      "node": "Step 4: Identificar Turno + Decision",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6d-prep: Build Reserva Body": {
+   "main": [
+    [
+     {
+      "node": "Step 6d-1: POST Reservar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6d-1: POST Reservar": {
+   "main": [
+    [
+     {
+      "node": "Step 6d-2: Reserva OK?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6d-2: Reserva OK?": {
+   "main": [
+    [
+     {
+      "node": "Step 6d-3a: PUT Cancelar Viejo",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Step 6d-3b: Escalar Reserva Falla",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6d-3a: PUT Cancelar Viejo": {
+   "main": [
+    [
+     {
+      "node": "Step 6d-4: Consolidar Resultado",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6d-4: Consolidar Resultado": {
+   "main": [
+    [
+     {
+      "node": "Step 7: Output Final",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6d-3b: Escalar Reserva Falla": {
+   "main": [
+    [
+     {
+      "node": "Step 7: Output Final",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 7: Output Final": {
+   "main": [
+    [
+     {
+      "node": "Step 8a: Prep Memory Writeback",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 8a: Prep Memory Writeback": {
+   "main": [
+    [
+     {
+      "node": "Step 8b: INSERT human msg",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 8b: INSERT human msg": {
+   "main": [
+    [
+     {
+      "node": "Step 8c: INSERT ai msg",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 8c: INSERT ai msg": {
+   "main": [
+    [
+     {
+      "node": "Step 8d: Return Output",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Step 6b: Buscar Horarios (bloque)": {
+   "main": [
+    [
+     {
+      "node": "Step 6b-out: Ofrecer Slots",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "callerPolicy": "workflowsFromSameOwner",
+  "availableInMCP": false,
+  "binaryMode": "separate",
+  "errorWorkflow": "yop6TIVoKiWUxfEn"
+ }
+}

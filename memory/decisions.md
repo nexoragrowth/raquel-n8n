@@ -760,3 +760,11 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 **Las respuestas fijas ahora se guardan en la memoria del chat** (antes no: el panel no las mostraba y el bot no sabía qué había mandado).
 **Alternativas descartadas:** editar el prompt crudo con PUT desde el panel para todo el equipo; guardar las directrices como filas de `knowledge_base` (se vectorizan y aparecerían en las búsquedas; mezcla conceptos).
 **Revisable:** sí. Pendiente de aplicar (ver current-state).
+
+
+## 2026-10-06 — v7: un solo agente conversacional + herramientas de código (no sub-agentes LLM anidados)
+
+**Decisión**: reemplazar el v6 (Router + 5 sub-agentes + sub-workflow if/else de cambios) por Asiri plano: un AI Agent que lleva toda la conversación y resuelve todo lo que el paciente demanda; escala a una persona solo si el paciente delega explícitamente, queja, baja de datos o urgencia (urgencia → triaje, no silencio). Herramientas = sub-workflows determinísticos; ninguna escritura recibe identificadores del modelo.
+**Razón**: el problema es de arquitectura (el estado se adivina por regex sobre el último mensaje; cada arreglo rompe otra cosa); en 90 días el bot completó 1 cambio de turno; línea base p50 12 s / p95 48 s + 22 s de buffer.
+**Alternativas descartadas**: (a) seguir parchando el v6; (b) sub-agentes LLM anidados estilo "parent agent": la revisión los descartó (ids elegidos por un modelo, ok escrito por un modelo, 20-30 s por respuesta). Quedan como opción si el examen de entrada muestra que plano no alcanza.
+**Revisable**: sí, tras la sombra retrospectiva (modelo, latencia) y el examen vivo. Diseño: `docs/v7-arquitectura-agente-asiri.md`.

@@ -62,3 +62,9 @@
   prefieren devolverle el chat al bot a mano? Decisión de Lucas y la Dra.
 - **¿El bot debe dejar de confirmar consultas sin comprobante?** (8/9, R7) El template nuevo dice "si ya está abonado
   responda confirmo", pero el Sub-Agent Confirmar marca confirmado cualquier "confirmo". Decisión de la Dra./Lucas.
+
+
+## 2026-10-06 — v7
+- ¿Aplicar igual los parches del 05/10 al v6 mientras se construye el v7 (protegen de falso "Listo" y cruce de fichas)? Lucas frenó el apply; pendiente.
+- Con la Dra. antes del piloto: regla de 2 lotes (¿tercer lote o pedir preferencia?), política de 48 h (¿no anular + aviso, o anular + aviso?), ¿Irina entra al grupo de avisos?, ¿quién trabaja la lista de espera?
+- ¿"Reprogramar"/"Nuevo turno" del panel funcionan? (0 citas creadas desde el panel; POST con "HH:MM:00" dio 400). Verificar con una cita de prueba y corregir a "HH:MM" si falla.
