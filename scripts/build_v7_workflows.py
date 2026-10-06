@@ -39,13 +39,17 @@ let p = null; try {{ p = JSON.parse($input.first().json.propuesta_raw || 'null')
 const r = AgendaCore.pasoInicial({{ propuesta: p, exec_id_actual: String(e.exec_id_actual), enviada: !!(p && p.enviada === true), modo: e.modo }}, new Date().toISOString());
 return [{{ json: {JS_FIN_O_SIGUE} }}];""", 440, 300, usar=("agenda_core",))
     g.si("¿Termina? (inicial)", "$json.terminado === true", 660, 300)
-    g.redis_incr("Redis INCR ejecutando", "'ejecutando:' + $json.estado.propuesta.id", 300, 880, 360)
+    g.redis_incr("Redis INCR ejecutando", "'ejecutando:' + $json.estado.propuesta.id", 1800, 880, 360)
     g.code("Paso consumo", f"""const estado = $('Paso inicial').first().json.estado;
 const v = Object.values($input.first().json || {{}})[0];
 const consumida = (v === undefined || v === null || v === '') ? undefined : (parseInt(v) === 1);
 const r = AgendaCore.pasoConsumo(estado, consumida);
 return [{{ json: {JS_FIN_O_SIGUE} }}];""", 1100, 360, usar=("agenda_core",))
     g.si("¿Termina? (consumo)", "$json.terminado === true", 1320, 360)
+    # La propuesta queda CONSUMIDA apenas se toma el candado (haya salido bien o mal después): un segundo "sí" minutos más tarde ya no puede
+    # volver a escribir (antes el candado INCR vencía a los 5 min y la propuesta seguía 'pendiente' 30 min → doble reserva posible).
+    g.redis_set("Redis SET propuesta consumida", "'propuesta:' + $('Entrada').first().json.tel", "JSON.stringify({ ...$('Paso consumo').first().json.estado.propuesta, estado: 'ejecutada', consumida_exec: String($execution.id) })", 1800, 1430, 480)
+    g.code("Reemitir estado", "return [{ json: $('Paso consumo').first().json }];", 1485, 480)
     g.si("¿Hay cita vieja?", "!!$json.estado.propuesta.cita_vieja", 1540, 420)
     g.dentalink("GET cita vieja", "GET", f"'{DENTALINK}/citas/' + $json.estado.propuesta.cita_vieja.id", None, 1760, 360)
     g.code("Paso cita", f"""const estado = $('Paso consumo').first().json.estado;
@@ -95,7 +99,7 @@ return [{{ json: {{ avisado: !!f.aviso }} }}];""", 5280, 300)
 
     for a, b, s in [("Entrada", "Redis GET propuesta", 0), ("Redis GET propuesta", "Paso inicial", 0), ("Paso inicial", "¿Termina? (inicial)", 0),
                     ("¿Termina? (inicial)", "Final", 0), ("¿Termina? (inicial)", "Redis INCR ejecutando", 1), ("Redis INCR ejecutando", "Paso consumo", 0),
-                    ("Paso consumo", "¿Termina? (consumo)", 0), ("¿Termina? (consumo)", "Final", 0), ("¿Termina? (consumo)", "¿Hay cita vieja?", 1),
+                    ("Paso consumo", "¿Termina? (consumo)", 0), ("¿Termina? (consumo)", "Final", 0), ("¿Termina? (consumo)", "Redis SET propuesta consumida", 1), ("Redis SET propuesta consumida", "Reemitir estado", 0), ("Reemitir estado", "¿Hay cita vieja?", 0),
                     ("¿Hay cita vieja?", "GET cita vieja", 0), ("¿Hay cita vieja?", "Paso cita (sin cita)", 1), ("GET cita vieja", "Paso cita", 0),
                     ("Paso cita", "¿Termina? (cita)", 0), ("Paso cita (sin cita)", "¿Termina? (cita)", 0), ("¿Termina? (cita)", "Final", 0), ("¿Termina? (cita)", "¿Es cancelación?", 1),
                     ("¿Es cancelación?", "Armar anulación", 0), ("¿Es cancelación?", "Armar reserva", 1), ("Armar reserva", "POST reserva", 0), ("POST reserva", "Paso reserva", 0),

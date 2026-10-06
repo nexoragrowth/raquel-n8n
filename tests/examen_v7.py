@@ -7,6 +7,7 @@ avisos y memoria simulados por código; no manda WhatsApp). El paciente lo juega
   python tests/examen_v7.py --offline                          # prueba el examen en sí, con cerebro y paciente falsos (sin red)
   python tests/examen_v7.py --solo AGE-03 CON-01               # escenarios puntuales contra el v7 real
   python tests/examen_v7.py --todos --reps 5                   # los 25 escenarios × 5 repeticiones
+  python tests/examen_v7.py --todos --guion                    # cerebro REAL en sombra, paciente que sigue el guion real (sin OPENAI_API_KEY): humo, no examen
   python tests/examen_v7.py --todos --reps 1 --phone 549...    # otro celular de prueba (tiene que tener fichas de prueba)
 
 Necesita: N8N_BASE_URL + ruta del webhook de prueba (data/v7_test_ruta.txt, activo) + OPENAI_API_KEY (solo para el paciente simulado).
@@ -255,6 +256,17 @@ def correr_escenario(esc, cerebro, paciente, phone, push, nombre_paciente, verbo
     for fila in reversed(historial):
         charla.append({"role": "user" if fila["message"]["type"] == "ai" else "assistant", "content": fila["message"]["content"]})
     turnos = []; texto = primer_mensaje(esc)
+    # Escenarios que arrancan "después del bloque de horarios": el bloque tiene que ser el REAL (así las ofertas quedan en Redis y el
+    # chequeo de salida no frena un horario del fixture que hoy no existe). Se consigue con un pedido real previo, que cuenta como turno 0.
+    if any(clave.startswith("SLOTS") for _, clave in esc.get("inicio", [])):
+        r0, seg0 = cerebro.responder(phone, push, "Hola, quiero sacar un turno", historial)
+        turnos.append({"turno": 0, "paciente": "Hola, quiero sacar un turno", "asiri": r0.get("texto"), "enviar": r0.get("enviar"), "silencio": r0.get("silencio"), "derivar_triaje": r0.get("derivar_triaje"),
+                       "tools": r0.get("tools") or [], "motivo_chequeo": r0.get("motivo_chequeo"), "motivo_banlist": r0.get("motivo_banlist"), "fallo_agente": r0.get("fallo_agente"), "segundos": round(seg0, 1), "error": r0.get("error"), "preparacion": True})
+        if verbose: print(f"    [0] (preparación) PACIENTE: Hola, quiero sacar un turno\n        ASIRI ({seg0:.1f} s): " + str(r0.get("texto") or "").replace("\n", "\n            "))
+        historial = [f for f in historial if not str(f["message"]["content"]).startswith("Tenemos los próximos turnos")]   # fuera el bloque del fixture
+        historial.insert(0, {"message": {"type": "human", "content": "Hola, quiero sacar un turno", "additional_kwargs": {"source": "wa_inbound"}}})
+        if r0.get("enviar") and r0.get("texto"): historial.insert(0, {"message": {"type": "ai", "content": r0["texto"], "additional_kwargs": {"source": "wa_outbound"}}})
+        charla = [{"role": "assistant", "content": "Hola, quiero sacar un turno"}] + ([{"role": "user", "content": r0["texto"]}] if r0.get("enviar") and r0.get("texto") else [])
     for n in range(1, MAX_TURNOS + 1):
         r, seg = cerebro.responder(phone, push, texto, historial)
         tu = {"turno": n, "paciente": texto, "asiri": r.get("texto"), "enviar": r.get("enviar"), "silencio": r.get("silencio"), "derivar_triaje": r.get("derivar_triaje"),
@@ -287,7 +299,7 @@ def necesita_turno(esc):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--offline", action="store_true"); ap.add_argument("--todos", action="store_true"); ap.add_argument("--solo", nargs="*", default=[])
+    ap.add_argument("--offline", action="store_true"); ap.add_argument("--guion", action="store_true", help="cerebro real, paciente de guion (sin modelo)"); ap.add_argument("--todos", action="store_true"); ap.add_argument("--solo", nargs="*", default=[])
     ap.add_argument("--reps", type=int, default=1); ap.add_argument("--phone", default=PHONE_PRUEBA); ap.add_argument("--push", default="Lucas Test")
     ap.add_argument("--nombre", default="Lucas", help="nombre de la ficha de prueba que el paciente simulado dice cuando le preguntan"); ap.add_argument("-q", action="store_true")
     a = ap.parse_args()
@@ -296,7 +308,7 @@ def main():
     cerebro = CerebroFalso() if a.offline else CerebroReal()
     vigentes, _ = cerebro.turnos_vigentes(a.phone)
     hay_turno = len(vigentes) > 0
-    print(f"EXAMEN v7 · {'OFFLINE (cerebro y paciente falsos)' if a.offline else 'SOMBRA contra n8n real'} · celular {a.phone} · turnos vigentes de prueba: {vigentes or 'NINGUNO'} · {len(escs)} escenarios × {a.reps}")
+    print(f"EXAMEN v7 · {'OFFLINE (cerebro y paciente falsos)' if a.offline else ('SOMBRA contra n8n real, paciente de GUION (humo)' if a.guion else 'SOMBRA contra n8n real, paciente SIMULADO')} · celular {a.phone} · turnos vigentes de prueba: {vigentes or 'NINGUNO'} · {len(escs)} escenarios × {a.reps}")
     resultados = []
     try:
         for esc in escs:
@@ -308,7 +320,7 @@ def main():
             for k in range(1, a.reps + 1):
                 cerebro.reset(a.phone)
                 if a.offline: cerebro.funcion, cerebro.esc_id = esc["funcion"], esc["id"]
-                paciente = PacienteFalso(esc) if a.offline else PacienteReal()
+                paciente = PacienteFalso(esc) if (a.offline or a.guion) else PacienteReal()
                 if a.reps > 1: print(f"  -- repetición {k}")
                 turnos = correr_escenario(esc, cerebro, paciente, a.phone, a.push, a.nombre, verbose=not a.q)
                 ok, motivos = juzgar(esc, turnos)
