@@ -25,7 +25,7 @@ HERRAMIENTAS = [
      FIJOS, {}),
     ("elegir_ficha", "elegir_ficha", "Fija para quién es el turno cuando el celular tiene varias fichas (familia). Pasá el nombre o el DNI que dijo el paciente. El código lo verifica contra las fichas reales; si no coincide, te dice qué pedir.",
      FIJOS, {"nombre": "Nombre y/o apellido del paciente tal como lo dijo, o vacío si dio el DNI.", "dni": "DNI del paciente si lo dio, o vacío."}),
-    ("buscar_horarios", "buscar_horarios", "Devuelve el bloque de turnos disponibles (mañana y tarde) ya escrito para el paciente: pegalo TEXTUAL, sin cambiarlo. No le preguntes franja ni fecha. Solo se puede reservar lo que esta herramienta ofreció. Hay un máximo de dos bloques por conversación.",
+    ("buscar_horarios", "buscar_horarios", "Devuelve el bloque de turnos disponibles (mañana y tarde) ya escrito para el paciente: pegalo TEXTUAL, sin cambiarlo. No le preguntes franja ni fecha. Solo se puede reservar lo que esta herramienta ofreció. Si el paciente dice que ninguno le sirve, volvé a llamarla con desde = el día siguiente al último horario ofrecido (máximo dos bloques por conversación).",
      FIJOS, {"desde": "Opcional. Fecha YYYY-MM-DD desde la que buscar el SIGUIENTE bloque.", "hasta": "Opcional. Fecha límite inclusiva YYYY-MM-DD si el paciente restringe la búsqueda (por ejemplo 'esta semana')."}),
     ("proponer", "proponer", "Prepara un cambio, una reserva, una suma de turno o una cancelación y te devuelve el texto de confirmación para el paciente: pegalo TEXTUAL y esperá su 'sí' en su PRÓXIMO mensaje. No escribe nada en la agenda. Tipos: cambio (cambia un turno que ya tiene), reserva (turno nuevo sin turno vigente), sumar (otro turno además del que ya tiene, solo si el paciente lo pidió), cancelacion.",
      FIJOS, {"tipo": "cambio | reserva | sumar | cancelacion", "fecha": "Fecha YYYY-MM-DD del turno nuevo (vacío si es cancelacion). Tiene que ser una fecha de buscar_horarios.", "hora": "Hora HH:MM del turno nuevo (vacío si es cancelacion). Tiene que ser una hora de buscar_horarios.",
@@ -82,6 +82,10 @@ const bloqueExec = String($('Redis GET bloque_exec').first().json.bloque_exec_ra
 const ag = $('Asiri').first().json || {};
 const triaje = pj('Redis GET triaje', 'triaje_raw', null);   // la dejó derivar_triaje en ESTA ejecución: el triaje del v6 le contesta al paciente
 let texto = typeof ag.output === 'string' ? ag.output.trim() : '';
+// Frases internas que el modelo a veces antepone al texto de una herramienta ("Le copio el mensaje para que lo confirme:", "Pegá este bloque TEXTUAL al paciente:"):
+// se quitan por código, línea por línea, solo cuando terminan en ':' y preceden al texto real (examen 06/10: 3 de 8 conversaciones las mostraron).
+const RE_META = /^\\s*(?:(?:le|te) (?:copio|paso|comparto|transmito|dejo|env[ií]o) (?:el |la |este |esta )?(?:mensaje|bloque|texto|confirmaci[oó]n)[^\\n:]{0,60}:|peg[aá](?:lo|le|selo)? [^\\n:]{0,80}:|ac[aá] (?:va|tiene|le va)[^\\n:]{0,60}:|mensaje (?:para|de) confirmaci[oó]n:)\\s*/i;
+let metaQuitada = false; while (RE_META.test(texto)) { texto = texto.replace(RE_META, '').trim(); metaQuitada = true; }
 const hayOk = libros.some((l) => l && l.ok === true);
 const avisos = []; let fallo_agente = false;
 if (!texto || ag.error) {
@@ -116,7 +120,7 @@ const humano = { type: 'human', content: String(e.texto || ''), additional_kwarg
 const ai = { type: 'ai', content: texto, additional_kwargs: { source: 'wa_outbound' }, response_metadata: {}, tool_calls: [], invalid_tool_calls: [] };
 if (vivo) for (const a of avisos) { try { await this.helpers.httpRequest({ method: 'POST', url: '""" + GRUPO + """', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }
 const tools = (Array.isArray(ag.intermediateSteps) ? ag.intermediateSteps : []).map((s) => ({ tool: s && s.action && s.action.tool, input: s && s.action && s.action.toolInput, obs: String((s && s.observation) || '').slice(0, 400) }));
-return [{ json: { phone: e.phone, modo: e.modo || 'vivo', texto, enviar: !silencio, silencio, derivar_triaje, triaje: derivar_triaje ? triaje : null, motivo_chequeo, motivo_banlist, fallo_agente, propuesta_json, tools, avisos, guardar: vivo && !silencio,
+return [{ json: { phone: e.phone, modo: e.modo || 'vivo', texto, enviar: !silencio, silencio, derivar_triaje, meta_quitada: metaQuitada, triaje: derivar_triaje ? triaje : null, motivo_chequeo, motivo_banlist, fallo_agente, propuesta_json, tools, avisos, guardar: vivo && !silencio,
   msg_human: JSON.stringify(humano), msg_ai: JSON.stringify(ai) } }];"""
 
 

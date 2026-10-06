@@ -131,7 +131,7 @@ def main():
     print("\nbuscar_horarios")
     x = r["B1 primer bloque"]; a = x["reps"][0]
     ofertas = json.loads(x["redis_final"][f"ofertas:{TEL}"])
-    chequear("B1 devuelve el bloque TEXTUAL de la clínica y le dice que no lo cambie", a["salida"]["bloque"] == BLOQUE and "TEXTUAL" in a["salida"]["para_asiri"], a["salida"])
+    chequear("B1 devuelve el bloque de la clínica tal cual y la nota para Asiri es interna (no parece un mensaje al paciente)", a["salida"]["bloque"] == BLOQUE and a["salida"]["para_asiri"].startswith("[Nota interna") and "tal cual" in a["salida"]["para_asiri"], a["salida"])
     chequear("B1 registra los 6 horarios ofrecidos con fecha ISO (lo único reservable)", len(ofertas) == 6 and ofertas[1] == {"fecha": "2026-10-22", "hora": "09:20"}, ofertas)
     chequear("B1 guarda el bloque, el pedido, cuenta el lote y marca el bloque de ESTA ejecución (el código lo exige pegado)", x["redis_final"][f"bloque:{TEL}"] == BLOQUE and x["redis_final"][f"lotes:{TEL}"] == 1 and x["redis_final"][f"bloque_req:{TEL}"] == "|" and x["redis_final"][f"bloque_exec:{TEL}:ex-2"] == BLOQUE, x["redis_final"])
     x = r["B2 tercer pedido: límite"]; a = x["reps"][0]

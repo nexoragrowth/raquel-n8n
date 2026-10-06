@@ -103,6 +103,14 @@ def juzgar(esc, turnos):
             if "proponer" in nombres and "ejecutar_propuesta" in nombres and any(_obs_json(t).get("ok") for t in tu["tools"] if t.get("tool") == "ejecutar_propuesta"):
                 motivos.append("ejecutó en el mismo mensaje en que propuso")
         if esc["id"] == "DANA-06" and not _propuso(turnos, "sumar"): motivos.append("DANA-06 exige sumar (dos turnos), no cambiar")
+        if esc["id"] == "AGE-07":
+            # acá el éxito NO es reservar: es no quedar en bucle (busca otra ventana, anota en lista de espera o avisa) y no callarse
+            motivos = [m for m in motivos if not m.startswith("nunca propuso") and not m.startswith("nunca ejecutó")]
+            busquedas = _llamadas(turnos, "buscar_horarios")
+            salida = _llamadas(turnos, "lista_espera") + _llamadas(turnos, "avisar_grupo") + [b for b in busquedas[1:] if (b.get("input") or {}).get("desde")]
+            if not salida: motivos.append("ante 'ninguno me sirve' no buscó otra ventana (con desde), ni anotó lista de espera, ni avisó")
+            if len(busquedas) >= 2 and not any((b.get("input") or {}).get("desde") for b in busquedas[1:]): motivos.append("repitió buscar_horarios sin 'desde': recibe el mismo bloque")
+            if any(tu.get("silencio") and not tu.get("motivo_chequeo") == "cierre_puro" for tu in turnos): motivos.append("se silenció sin resolver")
     elif f == "confirmar":
         c = [t for t in _llamadas(turnos, "confirmar_turno") if _obs_json(t).get("ok") is True]
         if not c: motivos.append("nunca confirmó con ok")
@@ -161,6 +169,8 @@ def historial_inicial(esc, nombre_paciente):
     textos = ESCENARIOS["bot_textos"]; filas = []
     for quien, clave in esc.get("inicio", []):
         txt = textos.get(clave) or ""
+        if clave == "PRE_RESERVA":
+            txt = "Listo, su turno quedó pre-reservado. Para confirmarlo, abone la seña con el alias dra.raquel.aurea y envíe el comprobante por este chat."
         if clave.startswith("RECORDATORIO"):
             txt = f"Estimado/a {nombre_paciente}, le recordamos su turno con la Dra. Rodríguez Raquel. Por favor confirme su asistencia respondiendo 'Confirmo'."
         filas.insert(0, {"message": {"type": "ai" if quien == "B" else "human", "content": txt, "additional_kwargs": {"source": "reminder_note" if clave.startswith("RECORDATORIO") else "wa_outbound"}}})
@@ -174,11 +184,15 @@ class CerebroReal:
         self.ruta = (ROOT / "data" / "v7_test_ruta.txt").read_text(encoding="utf-8").strip()
     def _post(self, body):
         req = urllib.request.Request(f"{self.base}/webhook/{self.ruta}", data=json.dumps(body).encode(), method="POST", headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=170) as r:
-                out = json.loads(r.read().decode()); return out[0] if isinstance(out, list) and out else out
-        except urllib.error.HTTPError as e:
-            return {"error": f"HTTP {e.code}: {e.read().decode()[:400]}"}
+        for intento in range(2):   # un corte de conexión (reset by peer, timeout) no tira el examen: se reintenta una vez y si no, queda como error del turno
+            try:
+                with urllib.request.urlopen(req, timeout=170) as r:
+                    out = json.loads(r.read().decode()); return out[0] if isinstance(out, list) and out else out
+            except urllib.error.HTTPError as e:
+                return {"error": f"HTTP {e.code}: {e.read().decode()[:400]}"}
+            except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as e:
+                ultimo = e; time.sleep(3)
+        return {"error": f"red: {ultimo!r}"}
     def responder(self, phone, push, texto, historial):
         t0 = time.time()
         r = self._post({"destino": "cerebro", "phone": phone, "texto": texto, "pushName": push, "modo": "sombra", "historial_json": json.dumps(historial, ensure_ascii=False)})
@@ -338,6 +352,7 @@ def main():
                 if a.reps > 1: print(f"  -- repetición {k}")
                 turnos = correr_escenario(esc, cerebro, paciente, a.phone, a.push, a.nombre, verbose=not a.q)
                 ok, motivos = juzgar(esc, turnos)
+                if any(tu.get("error") for tu in turnos): ok, motivos = False, motivos + ["error de red o del webhook en un turno: " + str(next(tu["error"] for tu in turnos if tu.get("error")))[:120]]
                 lat = [t["segundos"] for t in turnos]
                 reps.append({"ok": ok, "motivos": motivos, "mensajes": len(turnos), "latencias": lat, "turnos": turnos})
                 print(f"  {'APROBADO' if ok else 'REPROBADO'} · {len(turnos)} mensajes · máx {max(lat) if lat else 0:.1f} s" + ("" if ok else f" · {motivos}"))

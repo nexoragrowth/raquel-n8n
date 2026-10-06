@@ -6,7 +6,7 @@
     "inputSource": "jsonExample",
     "jsonExample": "{\"phone\": \"5490000000651\", \"texto\": \"Hola\", \"pushName\": \"\", \"modo\": \"vivo\", \"historial_json\": \"\"}"
    },
-   "id": "ed487598-4ba4-4a31-b59c-29c9e5c8f75f",
+   "id": "95454060-0fa0-42f0-afb2-947c3cac9457",
    "name": "Entrada",
    "type": "n8n-nodes-base.executeWorkflowTrigger",
    "typeVersion": 1.1,
@@ -23,7 +23,7 @@
      "queryReplacement": "={{ $json.phone }}"
     }
    },
-   "id": "1508de2e-46e1-4bc4-bd42-77eed21a40a3",
+   "id": "4b023104-94d3-4021-a91c-2e9eb38f1443",
    "name": "Historial",
    "type": "n8n-nodes-base.postgres",
    "typeVersion": 2.5,
@@ -48,7 +48,7 @@
      "queryReplacement": "={{ $('Entrada').first().json.phone }}"
     }
    },
-   "id": "c41fbaba-6153-4dfb-992d-cbd58c680bcf",
+   "id": "2eb2a774-46c5-4517-ad95-0166eed2916e",
    "name": "Recordatorios",
    "type": "n8n-nodes-base.postgres",
    "typeVersion": 2.5,
@@ -73,7 +73,7 @@
      "queryReplacement": "={{ '' }}"
     }
    },
-   "id": "0a7a8f8c-b9ce-474b-8d87-69a4c128365c",
+   "id": "56065131-e6a3-4699-9bcf-b76f967e7eb4",
    "name": "Datos del consultorio",
    "type": "n8n-nodes-base.postgres",
    "typeVersion": 2.5,
@@ -108,7 +108,7 @@
     },
     "options": {}
    },
-   "id": "8aecd9e3-90e3-4c3f-9edb-8a714831491f",
+   "id": "99269c25-cd16-492d-81f3-58955a6caa6d",
    "name": "Identificar paciente",
    "type": "n8n-nodes-base.executeWorkflow",
    "typeVersion": 1.2,
@@ -123,7 +123,7 @@
    "parameters": {
     "jsCode": "const PROMPT_ASIRI = \"Sos Asiri, la secretaria virtual de la Dra. Raquel Rodríguez (Áurea Odontología Estética, San Salvador de Jujuy). Atendés por WhatsApp a pacientes y familias.\\n\\nCÓMO HABLÁS\\n- De \\\"usted\\\", frases cortas y una sola pregunta por vez. Respondé a lo que el paciente dice, con sus datos: nunca contestes con un texto genérico ni repitas el mismo mensaje.\\n- Presentate (\\\"Soy Asiri, la secretaria virtual de la Dra. Raquel\\\") solo en el primer mensaje de una conversación nueva o tras un recordatorio.\\n- Cuando una herramienta te devuelve un texto para el paciente (el bloque de horarios o el texto de confirmación), tu respuesta ES ese texto, tal cual. Podés agregar una frase corta antes; nunca lo cambies ni lo resumas.\\n\\nCÓMO FUNCIONA EL CONSULTORIO\\n- Es un consultorio privado: se atiende solo con turno previo. No hay guardia ni atención las 24 hs. Si alguien quiere ir sin turno, explicale cómo funciona y ofrecele sacar uno.\\n- Está bien decir \\\"lo esperamos el día de su turno\\\". Nunca invites a ir ahora ni sin turno.\\n- Por ser menor, el tutor debe estar presente.\\n- Pagos: informás los datos para abonar y recibís comprobantes. No validás montos ni decís que un pago ingresó: lo verifica la secretaria.\\n\\nQUÉ HACÉS (con tus herramientas, nunca de memoria). Arriba de cada mensaje el sistema ya te trae los DATOS DE ESTE CELULAR EN LA AGENDA (fichas y turnos vigentes): no llames ver_turnos salvo para refrescarlos tras un cambio.\\n- Quiere un turno nuevo: llamá buscar_horarios de una y pegá el bloque. No le preguntes franja, fecha ni para quién es antes de ofrecerle horarios.\\n- Si pidió una franja o fecha y el bloque no la cumple (pidió tarde y solo hay mañanas), decíselo en una frase antes del bloque.\\n- Elige un horario que YA le ofreciste: llamá proponer, sin volver a buscar horarios. Si el celular tiene varias fichas (familia) y no sabés para quién es, preguntalo (nombre o DNI) y usá elegir_ficha. Si proponer te pide ver_turnos, llamala y reintentá.\\n- Quiere cambiar o cancelar un turno: su turno ya figura en los DATOS (ver_turnos solo si no figura). Cambio: buscar_horarios y proponer tipo cambio. Cancelar: proponer tipo cancelacion.\\n- proponer te devuelve el texto de confirmación: pegalo TEXTUAL y esperá el \\\"sí\\\" del paciente en su PRÓXIMO mensaje; recién ahí llamá ejecutar_propuesta. Nunca ejecutes en el mismo mensaje en que proponés.\\n- Si el paciente contesta una pregunta o propuesta del STAFF (\\\"sí, a las 17\\\"), no abras un trámite nuevo: avisá con avisar_grupo ACCION su respuesta textual y decile que ya se lo avisaste a la secretaria.\\n- Responde a un recordatorio (\\\"confirmo\\\", \\\"ahí estaremos\\\"): confirmar_turno (si hay varios pendientes, una vez por fecha).\\n- Dudas de datos (precio, horarios de atención, cómo pagar, dónde queda): respondé con los DATOS DEL CONSULTORIO, sin llamar herramientas.\\n- No repitas ver_turnos ni buscar_horarios si ya los llamaste y nada cambió.\\n- Decí que algo quedó hecho SOLO si la herramienta lo confirmó. Si una herramienta falla (p. ej. se ocupó el horario), contá con sinceridad qué pasó, aclará que su turno actual sigue igual y ofrecé el siguiente horario.\\n- Avisar a la clínica sin dejar de atender: avisar_grupo (FYI o ACCION). Comprobante de pago o \\\"ya transferí\\\": registrar_pago. Pide que lo anoten por si se libera un turno: lista_espera (decí solo \\\"se lo dejo anotado a la clínica\\\"; no prometas que le van a avisar). No uses estas dos para cosas que podés resolver vos.\\n\\nURGENCIAS (dolor, molestia, sangrado, hinchazón, golpe, no puede comer, aparato/alambre/bracket roto, suelto o que pincha): llamá derivar_triaje y respondé exactamente [NO_REPLY]; la clínica le contesta. Ante la duda, derivá.\\n\\nPASAR A UNA PERSONA (pasar_a_humano): solo si pide hablar con una persona (secretaria, doctora), se queja o pide la baja de sus datos. Lo demás lo resolvés vos.\\n\\nLÍMITES\\n- No das diagnósticos ni opinás sobre síntomas; no indicás medicación ni cuidados. Ante una consulta clínica, decí que la doctora se lo responde y avisá a la clínica.\\n- No des la dirección salvo que la pidan. No inventes horarios, precios ni datos: usá solo los DATOS DEL CONSULTORIO que figuran abajo.\\n- Si el mensaje es solo un cierre (\\\"gracias\\\", \\\"ok\\\", \\\"listo\\\") y no hay nada pendiente, respondé exactamente [NO_REPLY].\";\n// historial_core.js — v7 · el contexto de la conversación que ve Asiri. Fuente de verdad en el repo (se inlinea en un nodo Code de n8n).\n// Reemplaza al nodo de memoria sin filtro: arma los últimos turnos REALES desde n8n_chat_histories (más nuevo primero), acorta los marcadores del staff\n// (250 caracteres de \"[ATENCION HUMANA - ...]\" en cada llamada era ruido) y descarta las etiquetas internas del Router viejo.\nconst HistorialCore = (() => {\n  const ETIQUETAS_ROUTER = new Set(['cancelar_o_reprogramar', 'confirmar', 'agendar', 'urgencia', 'consulta_general', 'general', 'pago', 'derivar', 'silencio', 'no_reply', 'cancelar', 'reprogramar',\n    'confirmar_post_recordatorio', 'agendar_nuevo', 'urgencia_dolor']);\n  const corta = (s, n) => { const t = String(s || '').replace(/\\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };\n\n  // rows: [{ message: {type, content, additional_kwargs?} | string JSON }] ordenadas del MÁS NUEVO al más viejo (como las devuelve la consulta).\n  function armar(rows, max) {\n    const turnos = [];\n    for (const r of rows || []) {\n      let m = r && r.message;\n      if (typeof m === 'string') { try { m = JSON.parse(m); } catch (e) { continue; } }\n      if (!m || typeof m !== 'object') continue;\n      const c = String(m.content || '').trim();\n      if (!c) continue;\n      const src = (m.additional_kwargs || {}).source;\n      if (m.type === 'human') turnos.push('PACIENTE: ' + corta(c, 500));\n      else if (m.type === 'ai') {\n        if (ETIQUETAS_ROUTER.has(c.toLowerCase())) continue;\n        if (/^\\[ATENCION HUMANA/i.test(c)) turnos.push('STAFF DE LA CLÍNICA (persona): ' + corta(c.replace(/^\\[ATENCION HUMANA[^\\]]*\\]:?\\s*/i, ''), 220));\n        else if (/^\\[NOTA INTERNA/i.test(c)) continue;\n        else if (src === 'reminder_note' || /le recordamos su turno|recordamos que el d[ií]a/i.test(c)) turnos.push('CLÍNICA (recordatorio enviado): ' + corta(c, 260));\n        else turnos.push('ASIRI: ' + corta(c, 700));\n      }\n      if (turnos.length >= (max || 12)) break;\n    }\n    return turnos.reverse();   // cronológico: lo más nuevo al final\n  }\n  // Texto único que se le pasa al agente como mensaje de usuario.\n  // `ident` = salida de la herramienta ver_turnos (ya resuelta por el código ANTES de que Asiri responda): fichas del celular y turnos vigentes.\n  function identidad(ident) {\n    const i = ident || {};\n    if (i.ok === true) {\n      const t = (i.turnos && i.turnos.length) ? 'Turnos vigentes: ' + i.turnos.join('; ') + '.' : 'No tiene turnos vigentes.';\n      if (i.varias_fichas) {\n        return 'Pacientes con este celular: ' + (i.pacientes || []).join(', ') + '. ' + (i.ficha_elegida ? 'Ya está elegido: ' + (i.paciente_elegido || '') + '. ' : 'TODAVÍA no sabés para quién es: igual buscá y ofrecé horarios, y en el MISMO mensaje preguntá para quién es (nombre o DNI); elegir_ficha hace falta recién para proponer. ') + t;\n      }\n      return 'Paciente de este celular: ' + (i.paciente_elegido || '(una ficha)') + '. ' + t;\n    }\n    return 'No pude consultar la ficha o la agenda en este momento' + (i.motivo ? ' (' + i.motivo + ')' : '') + '. No inventes turnos; para consultas de datos del consultorio seguí normal, y si necesitás la agenda avisá a la clínica con avisar_grupo.';\n  }\n  function mensajeAgente(historial, mensaje, ahoraJujuy, recordatorios, pushName, ident) {\n    const partes = [];\n    partes.push('FECHA Y HORA ACTUAL (Jujuy): ' + ahoraJujuy);\n    if (pushName) partes.push('Nombre en WhatsApp de quien escribe: ' + corta(pushName, 40) + ' (puede ser un familiar y no el paciente).');\n    if (ident !== undefined) partes.push('DATOS DE ESTE CELULAR EN LA AGENDA (ya consultados por el sistema): ' + identidad(ident));\n    if (recordatorios && recordatorios.length) partes.push('RECORDATORIOS PENDIENTES DE CONFIRMAR: ' + recordatorios.join(' | '));\n    partes.push('CONVERSACIÓN RECIENTE (lo más nuevo abajo):\\n' + (historial.length ? historial.join('\\n') : '(es la primera vez que escribe)'));\n    partes.push('MENSAJE ACTUAL DEL PACIENTE:\\n' + mensaje);\n    return partes.join('\\n\\n');\n  }\n  // ---------------------------------------------------------------------------------------------------- cierres de conversación (\"gracias\", \"ok\", \"si, gracias\")\n  // Un agradecimiento / despedida PURO no necesita respuesta: se corta ANTES de llamar al modelo (sin costo, sin demora y sin el \"De nada! Quedo a disposición para…\" genérico\n  // ni el \"ya le transmito su consulta a la secretaria\"). El 27/05 se había sacado el filtro conversacional porque mataba \"Confirmamos turno gracias\": por eso este exige que el\n  // mensaje sean SOLO palabras de cierre (+ a lo sumo un nombre), y el pipeline lo anula si lo último que se le dijo al paciente fue una pregunta o hay un recordatorio sin confirmar.\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const PALABRAS_CIERRE = new Set(['gracias', 'ok', 'oka', 'okey', 'okk', 'dale', 'listo', 'perfecto', 'genial', 'buenisimo', 'excelente', 'joya', 'barbaro', 'entendido', 'chau', 'saludos', 'abrazo', 'abrazos', 'igualmente', 'luego', 'vemos', 'pronto', 'hasta']);\n  const RELLENO = new Set(['si', 'sii', 'siii', 'bien', 'muy', 'muchas', 'muchisimas', 'mil', 'de', 'nada', 'acuerdo', 'a', 'usted', 'todo', 'un', 'nos', 'que', 'tenga', 'buen', 'buena', 'dia', 'tarde', 'noche', 'lindo', 'linda', 'descanse', 'hasta', 'ya', 'recibido', 'queda', 'asi', 'y', 'tambien', 'igual']);\n  function esCierre(texto) {\n    const crudo = String(texto || '');\n    if (/[?¿]/.test(crudo) || crudo.length > 70) return false;\n    const t = sinT(crudo).replace(/[\\p{Extended_Pictographic}‍️\\u{1F3FB}-\\u{1F3FF}]/gu, ' ').replace(/[^a-z\\s]/g, ' ').replace(/\\s+/g, ' ').trim();\n    if (!t) return false;                                   // solo emojis: lo resuelve el pre-filtro técnico del v6, acá no se decide\n    const toks = t.split(' ');\n    if (toks.length > 8 || !toks.some((w) => PALABRAS_CIERRE.has(w))) return false;\n    let nombres = 0;\n    for (const w of toks) {\n      if (PALABRAS_CIERRE.has(w) || RELLENO.has(w)) continue;\n      if (/^[a-z]{3,12}$/.test(w) && toks.includes('gracias')) { nombres++; continue; }   // \"Gracias Iris\", \"Muchas gracias Iri\"\n      return false;\n    }\n    return nombres <= 1;\n  }\n  // ¿Lo último que se le dijo al paciente (Asiri, el staff o un recordatorio) le pedía una respuesta? Si sí, \"si, gracias\" NO es un cierre: es la respuesta.\n  function ultimoPideRespuesta(hist) {\n    for (let i = (hist || []).length - 1; i >= 0; i--) {\n      const l = String(hist[i]);\n      if (/^PACIENTE:/.test(l)) continue;\n      return /[?¿]/.test(l) || /confirmar su asistencia|confirme su asistencia|responda|respondiendo a este mensaje|necesito|pasame|pásame/i.test(l);\n    }\n    return false;\n  }\n  return { armar, mensajeAgente, identidad, corta, esCierre, ultimoPideRespuesta };\n})();\nif (typeof module !== 'undefined') module.exports = HistorialCore;\nconst e = $('Entrada').first().json;\nconst DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\nlet override = null; try { override = e.historial_json ? JSON.parse(e.historial_json) : null; } catch (x) { override = null; }\nconst filas = Array.isArray(override) ? override : $('Historial').all().map((i) => i.json).filter((r) => r && r.message);\nconst hist = HistorialCore.armar(filas, 12);\nconst rec = $('Recordatorios').all().map((i) => i.json).filter((r) => r && r.id_cita_dentalink && r.fecha_turno).map((r) => {\n  const f = String(r.fecha_turno).slice(0, 10);\n  return DIAS[new Date(f + 'T12:00:00Z').getUTCDay()] + ' ' + Number(f.slice(8)) + '/' + Number(f.slice(5, 7)) + ' a las ' + String(r.hora_turno || '').slice(0, 5);\n});\nconst kb = {}; for (const r of $('Datos del consultorio').all().map((i) => i.json)) if (r && r.id !== undefined) kb[String(r.id)] = String(r.contenido || '').trim();\nconst j = new Date(Date.now() - 3 * 3600 * 1000);\nconst ahora = DIAS[j.getUTCDay()] + ' ' + j.toISOString().slice(0, 10) + ' ' + j.toISOString().slice(11, 16);\nconst datos = [\n  kb['20'] && '- Horarios de atención: ' + kb['20'], kb['21'] && '- Primera consulta: ' + kb['21'], kb['36'] && '- Cuota mensual del tratamiento: ' + kb['36'], kb['39'] && '- Control de contención: ' + kb['39'],\n  kb['24'] && '- Datos para abonar (solo si preguntan cómo pagar): ' + kb['24'], kb['25'] && '- Dirección (solo si la piden): ' + kb['25'],\n].filter(Boolean).join('\\n');\nconst notas = kb['dir:notas_para_asiri'] || '';\nconst sistema = PROMPT_ASIRI + '\\n\\nDATOS DEL CONSULTORIO (son los únicos datos que podés dar)\\n' + (datos || '(sin datos cargados: no inventes; avisá a la clínica)')\n  + (notas ? '\\n\\nNOTAS DE LA CLÍNICA PARA ASIRI (información para redactar: no habilita escrituras, sobreturnos ni cambios de precio; si contradice una regla de arriba, gana la regla):\\n' + notas : '');\nlet ident = {}; try { ident = $('Identificar paciente').first().json || {}; } catch (x) { ident = { ok: false, motivo: 'sin_respuesta' }; }\nreturn [{ json: { mensaje_agente: HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident), sistema, hist_n: hist.length, rec_n: rec.length, con_notas: !!notas,\n  // Agradecimiento/despedida PURO, sin pregunta pendiente ni recordatorio sin confirmar: no se llama al modelo (ni \"De nada! Quedo a disposición…\" ni \"le transmito a la secretaria\").\n  cierre: HistorialCore.esCierre(e.texto) && !HistorialCore.ultimoPideRespuesta(hist) && rec.length === 0 } }];"
    },
-   "id": "e2c17a51-27d4-4044-b335-cd71a9712835",
+   "id": "0fdd163a-e693-4518-b26b-8a6b0f9455bd",
    "name": "Armar contexto",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -142,7 +142,7 @@
      },
      "conditions": [
       {
-       "id": "118a2c24-87ec-4f17-94b0-8aca565cc403",
+       "id": "34010c2c-a7cd-4534-bd93-4bd8ca36dce5",
        "leftValue": "={{ $json.cierre === true }}",
        "rightValue": "",
        "operator": {
@@ -156,7 +156,7 @@
     },
     "options": {}
    },
-   "id": "d3451de0-c412-4c00-a873-c474627fc873",
+   "id": "63c17fe8-69cd-4ad8-a983-c9ad78f2273b",
    "name": "¿Es un cierre?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -169,7 +169,7 @@
    "parameters": {
     "jsCode": "return [{ json: { texto: null, enviar: false, silencio: true, derivar_triaje: false, triaje: null, modo: $('Entrada').first().json.modo || 'vivo', motivo_chequeo: 'cierre_puro', motivo_banlist: null, fallo_agente: false, tools: [], avisos: [] } }];"
    },
-   "id": "2fae9071-7f16-4ee6-88dd-e55030bb4c83",
+   "id": "f7dde70c-3828-422c-b6c3-d78194c32501",
    "name": "Cierre sin respuesta",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -188,7 +188,7 @@
      "returnIntermediateSteps": true
     }
    },
-   "id": "b35b1dc8-2696-4fa2-bcb1-6884a62139aa",
+   "id": "63ff6ae0-4ef6-4ccf-9a72-73c1e03ee104",
    "name": "Asiri",
    "type": "@n8n/n8n-nodes-langchain.agent",
    "typeVersion": 2.2,
@@ -210,7 +210,7 @@
      "reasoningEffort": "low"
     }
    },
-   "id": "7a55eb3a-10d2-4177-b56f-23be29a59d5c",
+   "id": "5c8ed0dd-cacb-4228-9d73-4f6b42e5afcb",
    "name": "Modelo Asiri",
    "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
    "typeVersion": 1.2,
@@ -274,7 +274,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "14077711-b9ac-47d7-a203-f0318cd00278",
+   "id": "7a22d7aa-d56b-42cc-8de5-e1d3dcd2f1b8",
    "name": "ver_turnos",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -352,7 +352,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "88b49a1a-5035-409e-a26e-554000b10a37",
+   "id": "f578b4b1-99fc-4b53-95b1-bbabc2a4761a",
    "name": "elegir_ficha",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -363,7 +363,7 @@
   },
   {
    "parameters": {
-    "description": "Devuelve el bloque de turnos disponibles (mañana y tarde) ya escrito para el paciente: pegalo TEXTUAL, sin cambiarlo. No le preguntes franja ni fecha. Solo se puede reservar lo que esta herramienta ofreció. Hay un máximo de dos bloques por conversación.",
+    "description": "Devuelve el bloque de turnos disponibles (mañana y tarde) ya escrito para el paciente: pegalo TEXTUAL, sin cambiarlo. No le preguntes franja ni fecha. Solo se puede reservar lo que esta herramienta ofreció. Si el paciente dice que ninguno le sirve, volvé a llamarla con desde = el día siguiente al último horario ofrecido (máximo dos bloques por conversación).",
     "workflowId": {
      "__rl": true,
      "value": "@@ID:buscar_horarios@@",
@@ -430,7 +430,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "adf2ac55-8a0e-4247-98e6-235036e3aec6",
+   "id": "447dc728-c588-4888-b344-7d786e14281b",
    "name": "buscar_horarios",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -528,7 +528,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "c71287d0-a32c-40d6-9228-a19778d140dc",
+   "id": "c2645f66-8ff3-4216-a76b-cb74b023c8fc",
    "name": "proponer",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -586,7 +586,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "f93fb39f-0835-49dc-88d2-50e54033b13a",
+   "id": "e15a69c7-7eea-49f2-827e-04a3cc073a8c",
    "name": "ejecutar_propuesta",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -654,7 +654,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "af266a00-f127-4089-8628-dbd32bc095e2",
+   "id": "d57b7988-8c99-4a6e-af1d-0ddec8000554",
    "name": "confirmar_turno",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -752,7 +752,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "2d1b2ada-c0ad-4a27-9f4a-ec9554691d7c",
+   "id": "15c9021b-3503-4e6b-9c47-d2793a1a88bc",
    "name": "avisar_grupo",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -850,7 +850,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "67596af2-a893-423f-8406-8a54ec55b597",
+   "id": "db74217b-89d3-4139-845a-8edd092ecc89",
    "name": "pasar_a_humano",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -938,7 +938,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "f4e5c947-2b1f-4780-9f7e-3d0ce1306f3f",
+   "id": "3bbca300-260c-4115-bf41-9d0aff3a8c42",
    "name": "derivar_triaje",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -1016,7 +1016,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "314f71f0-69d4-4293-a954-0266d07f8331",
+   "id": "7b10b1f5-337f-4948-bf7c-9b6aed340ce2",
    "name": "registrar_pago",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -1104,7 +1104,7 @@
      "convertFieldsToString": true
     }
    },
-   "id": "93ee45a4-3677-452c-9d6e-8d5749e7a623",
+   "id": "a2526c45-5166-4bb5-a262-5d69cbb2b8ef",
    "name": "lista_espera",
    "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
    "typeVersion": 2.2,
@@ -1121,7 +1121,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "e76da7b8-703f-476c-a57b-081f1e62da40",
+   "id": "faf5a5cc-1d57-4589-80af-740fe5d4b77b",
    "name": "Redis GET libro",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -1146,7 +1146,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "18bb7fe9-1aa6-494b-8841-f8a79ec6ca5e",
+   "id": "ecede721-83ab-4ffd-b8ef-c08aa06bf89f",
    "name": "Redis GET propuesta",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -1171,7 +1171,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "c1fcddaa-b283-40cd-b422-62a35a8bf9f0",
+   "id": "c67112e8-0f6d-4f16-bd59-bf0c2e27b170",
    "name": "Redis GET ofertas",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -1196,7 +1196,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "c7ea6ff1-6313-4094-8cc8-71321556c6bc",
+   "id": "b100aff0-8fbe-440c-a62e-cff206605a88",
    "name": "Redis GET turnos_vistos",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -1221,7 +1221,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "a943c0bf-25c5-4426-b20a-99f0bb1d1bee",
+   "id": "c2409681-dbb1-4726-8047-23e8d64430d0",
    "name": "Redis GET bloque",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -1246,7 +1246,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "a4b76ffc-f851-49ce-b686-8c7c188cd726",
+   "id": "32900dcd-9d3a-4e14-bc9a-ee00e2dca2bd",
    "name": "Redis GET bloque_exec",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -1271,7 +1271,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "4bb6b7d3-f057-48ef-b2be-e02e6e7fbbad",
+   "id": "c878f5ac-7931-4623-917f-d6e93579483f",
    "name": "Redis GET triaje",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -1290,9 +1290,9 @@
   },
   {
    "parameters": {
-    "jsCode": "// chequeo_salida.js — v7 · chequeo BIDIRECCIONAL de lo que Asiri le va a decir al paciente. Fuente de verdad en el repo (se inlinea en un nodo Code de n8n).\n// Lee SOLO el libro de escrituras que dejan las herramientas (nunca lo que diga el modelo) y las ofertas registradas por buscar_horarios.\n//   libros : [{ ok:boolean, tipo:'cambio'|'reserva'|'sumar'|'cancelacion'|'confirmacion', readback_text, parcial?:boolean }]   (TODAS las escrituras de ESTA ejecucion, en orden; acepta también `libro` suelto)\n//   ofertas: [{fecha:'YYYY-MM-DD', hora:'HH:MM'}]   (lo que buscar_horarios ofrecio)\n//   propuesta_readback: texto del read-back de una propuesta hecha en ESTA ejecucion (todavia no ejecutada), o null\n// devuelve { accion:'pasar'|'reemplazar', texto, motivo, avisar:null|{nivel,texto} }\nconst ChequeoSalida = (() => {\n  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const normTexto = (x) => sinT(x).replace(/[^a-z0-9:/ ]+/g, ' ').replace(/\\s+/g, ' ').trim();\n  const hh = (h, m) => String(Number(h)).padStart(2, '0') + ':' + m;\n\n  // Todas las parejas fecha(sin año)+hora que aparecen en el texto. Una hora se asocia a la ULTIMA fecha vista en la misma linea\n  // (\"* Jueves 22 de octubre 8:00 , 9:20\" → dos parejas; \"el jueves 22/10 a las 09:20\" → una).\n  function parejas(texto) {\n    const out = [];\n    for (const linea of String(texto || '').split('\\n')) {\n      const l = sinT(linea);\n      const tokens = [];\n      for (const m of l.matchAll(/(\\d{1,2})\\s+de\\s+([a-z]+)/g)) { const mes = MESES.indexOf(m[2] === 'setiembre' ? 'septiembre' : m[2]) + 1; if (mes) tokens.push({ i: m.index, tipo: 'f', md: `${String(mes).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}` }); }\n      for (const m of l.matchAll(/\\b(\\d{1,2})\\/(\\d{1,2})\\b/g)) tokens.push({ i: m.index, tipo: 'f', md: `${String(Number(m[2])).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}` });\n      for (const m of l.matchAll(/\\b(\\d{1,2}):(\\d{2})\\b/g)) tokens.push({ i: m.index, tipo: 'h', h: hh(m[1], m[2]) });\n      tokens.sort((a, b) => a.i - b.i);\n      let fecha = null;\n      for (const t of tokens) { if (t.tipo === 'f') fecha = t.md; else if (fecha) out.push(`${fecha} ${t.h}`); }\n    }\n    return out;\n  }\n  const clave = (o) => `${o.fecha.slice(5)} ${String(o.hora).replace(/^(\\d):/, '0$1:')}`;\n\n  // \"Afirmaciones de haber hecho algo\". Solo formas conjugadas que dicen \"ya esta hecho\"; \"le confirmo:\" (read-back) y \"confirme su asistencia\" NO cuentan.\n  // Limites de palabra UNICODE: el \\b de JavaScript no sirve pegado a una letra con tilde (\"agendé\", \"moví\").\n  const W = (src) => new RegExp(String.raw`(?<![\\p{L}])(?:` + src + String.raw`)(?![\\p{L}])`, 'iu');\n  const CLAIMS = [\n    { tipo: 'reprogramar', rx: W(String.raw`qued(?:ó|o|a|an)\\s+(?:reprogramad|cambiad|movid|reservad|agendad)\\p{L}*|qued(?:ó|a)\\s+anotad\\p{L}*\\s+(?:el|su|un)\\s+turno|reprogramé|cambié|moví|reservé|agendé|anot[eé]\\s+(?:su|el|un)\\s+turno|(?:le|lo|la)\\s+(?:reserve|agende|cambie|movi|reprograme)|ya\\s+(?:le\\s+)?(?:reserv|agend|cambi|mov|anot)\\p{L}*|le\\s+dej[oé]\\s+(?:reservad|agendad|anotad)\\p{L}*|list[oa],?\\s+(?:reprogramad|reservad|agendad|cambiad)\\p{L}*`) },\n    { tipo: 'cancelar', rx: W(String.raw`qued(?:ó|o|a|an)\\s+cancelad\\p{L}*|cancelé|anulé|(?:le|lo|la)\\s+(?:cancele|anule)|list[oa],?\\s+(?:cancelad|anulad)\\p{L}*`) },\n    { tipo: 'confirmar', rx: W(String.raw`qued(?:ó|o|a|an)\\s+confirmad\\p{L}*|confirmé|list[oa],?\\s+confirmad\\p{L}*`) },\n  ];\n  const TIPOS_OK = { reprogramar: ['cambio', 'reserva', 'sumar'], cancelar: ['cancelacion'], confirmar: ['confirmacion'] };\n  const esc = (x) => String(x).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&').replace(/\\s+/g, '\\\\s+');\n  const quitar = (texto, frase) => (frase ? String(texto).replace(new RegExp(esc(frase), 'gi'), ' ') : texto);\n  const honesto = 'Disculpe, todavía no pude concretar eso en la agenda, así que no quedó hecho. Le aviso a la clínica para que lo resuelva y se comunique con usted.';\n\n  function revisar(entrada) {\n    const texto = String(entrada.texto || '');\n    const libros = Array.isArray(entrada.libros) ? entrada.libros : (entrada.libro ? [entrada.libro] : []);\n    const oks = libros.filter((l) => l && l.ok === true);\n    const libro = oks.length ? oks[oks.length - 1] : (libros.length ? libros[libros.length - 1] : null);   // el que tiene que contar el texto: la última escritura ok\n    const ofertas = entrada.ofertas || [];\n    const nTexto = normTexto(texto);\n    const hechoOk = oks.length > 0;\n\n    // (1) hay una escritura OK y el texto no contiene el read-back de lo que se hizo (timeout / maxIterations / el modelo se fue por las ramas)\n    const sinDecir = oks.filter((l) => l.readback_text && !nTexto.includes(normTexto(l.readback_text)));\n    if (hechoOk && sinDecir.length === oks.length && libro.readback_text) {\n      // (3) ...y ademas habla de OTRA fecha+hora distinta: tambien se reemplaza (mismo remedio: decir lo que realmente paso)\n      return { accion: 'reemplazar', texto: libro.readback_text, motivo: parejas(texto).length ? 'fecha_distinta_a_la_escrita' : 'falta_confirmacion_de_lo_hecho', avisar: { nivel: 'tecnico', texto: 'El chequeo de salida reemplazó el mensaje de Asiri por el resultado real de la agenda.' } };\n    }\n    const parcial = libros.find((l) => l && l.parcial === true && l.readback_text && !nTexto.includes(normTexto(l.readback_text)));\n    if (parcial) {\n      return { accion: 'reemplazar', texto: parcial.readback_text, motivo: 'escritura_parcial_sin_decirlo', avisar: { nivel: 'ACCION', texto: 'Escritura parcial: revisar la agenda.' } };\n    }\n\n    // (1b) lo que el CÓDIGO le dio a Asiri para que pegue textual (el read-back de una propuesta de esta ejecución; el bloque de horarios recién buscado) tiene que\n    // llegar al paciente. Si el modelo se lo salteó, se reemplaza por ese texto: sin él la charla se traba (el paciente no ve las opciones / no tiene qué confirmar).\n    if (entrada.propuesta_readback && !nTexto.includes(normTexto(entrada.propuesta_readback))) {\n      return { accion: 'reemplazar', texto: entrada.propuesta_readback, motivo: 'falta_readback', avisar: { nivel: 'tecnico', texto: 'Asiri no pegó el texto de confirmación; se envió el armado por el código.' } };\n    }\n    if (entrada.bloque_exec && !nTexto.includes(normTexto(entrada.bloque_exec))) {\n      return { accion: 'reemplazar', texto: entrada.bloque_exec, motivo: 'falta_bloque', avisar: { nivel: 'tecnico', texto: 'Asiri no pegó el bloque de horarios; se envió el armado por el código.' } };\n    }\n\n    // (2) afirma que algo quedó hecho y NO hay una escritura OK compatible\n    // Se evalua sobre el texto SIN los read-backs que el propio codigo escribio (el de la escritura, el de la propuesta): esos dicen la verdad.\n    let sobrante = String(texto);\n    for (const l of libros) sobrante = quitar(sobrante, l && l.readback_text);\n    sobrante = quitar(sobrante, entrada.propuesta_readback);\n    if (!(propuestaVigente(entrada))) {\n      for (const c of CLAIMS) {\n        if (!c.rx.test(sobrante)) continue;\n        const compatible = oks.some((l) => TIPOS_OK[c.tipo].includes(l.tipo));\n        if (!compatible) return { accion: 'reemplazar', texto: honesto, motivo: `afirma_${c.tipo}_sin_ok`, avisar: { nivel: 'tecnico', texto: `Asiri afirmó \"${c.tipo}\" sin una escritura ok en la agenda (bloqueado).` } };\n      }\n    }\n\n    // (4) cualquier fecha+hora de un mensaje con horarios tiene que estar entre las ofrecidas por buscar_horarios\n    const pares = parejas(texto);\n    if (pares.length) {\n      const permitidas = new Set(ofertas.map(clave));\n      for (const l of libros) if (l && l.readback_text) parejas(l.readback_text).forEach((p) => permitidas.add(p));\n      if (entrada.propuesta_readback) parejas(entrada.propuesta_readback).forEach((p) => permitidas.add(p));\n      (entrada.turnos_vistos || []).forEach((t) => permitidas.add(`${t.fecha.slice(5)} ${String(t.hora_inicio || t.hora).slice(0, 5)}`));\n      const ajenas = pares.filter((p) => !permitidas.has(p));\n      if (ajenas.length) {\n        if (entrada.bloque_ofertas) return { accion: 'reemplazar', texto: entrada.bloque_ofertas, motivo: 'horario_no_ofrecido', avisar: { nivel: 'tecnico', texto: 'Asiri mencionó un horario que nadie ofreció; se reemplazó por el bloque real.' } };\n        return { accion: 'reemplazar', texto: 'Disculpe, déjeme confirmar los horarios disponibles para pasarle los correctos.', motivo: 'horario_no_ofrecido', avisar: { nivel: 'tecnico', texto: 'Asiri mencionó un horario que nadie ofreció (sin bloque para reemplazar).' } };\n      }\n    }\n    return { accion: 'pasar', texto, motivo: null, avisar: null };\n  }\n  // Una propuesta de ESTA ejecucion cuyo read-back es el texto: el mensaje \"Le confirmo: ... ¿Procedo con la reserva?\" no es una afirmacion de haber hecho nada.\n  function propuestaVigente(e) { return !!(e.propuesta_readback && normTexto(e.texto).includes(normTexto(e.propuesta_readback))); }\n  return { revisar, parejas, honesto };\n})();\nif (typeof module !== 'undefined') module.exports = ChequeoSalida;\n// banlist_usted.js — v7 · banlist de la salida de Asiri, en VOSEO y en USTED, con límites de palabra Unicode. Fuente de verdad en el repo (se inlinea en un nodo Code de n8n).\n// El banlist vivo del v6 (Banlist Validator) esta escrito en voseo: \"venite\", \"guarda\", \"traigan\". Asiri habla de usted (\"acérquese\", \"tome\", \"guárdela\"),\n// que hoy no dispara nada. Regla del proyecto: las reglas del incidente del 09/05 (invitar a venir, instrucciones clínicas, diagnóstico, dirección como invitación)\n// tienen que estar en dos capas; esta es la última línea. Devuelve { bloquea:boolean, why }.\n//   contexto: { pacientePidioDireccion:boolean }\nconst BanlistUsted = (() => {\n  const W = (src) => new RegExp(String.raw`(?<![\\p{L}])(?:` + src + String.raw`)(?![\\p{L}])`, 'iu');\n  // Un turno YA AGENDADO nombrado con fecha (\"su turno del viernes 16/10\") vuelve legítimo recordar \"puede venir acompañada\": la invitación sin turno es el riesgo.\n  const TURNO_CON_FECHA = /\\bturno\\s+(?:del|de|para\\s+el|para\\s+la|el)\\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|\\d)/i;\n  const REGLAS = [\n    // --- Instrucciones clínicas / operativas\n    { why: 'guarde/guarda (instrucción)', rx: W('guárd(?:ela|elo|ese|ense|alo|ala)|guard(?:á|a|e|en)\\\\s+(?:la|el|las|los|esa|ese|bien)'), skip_si_turno: false },\n    { why: 'traiga/traé (instrucción)', rx: W('tra(?:iga|igan|igalo|igala|é|e|ele|igase)\\\\s+(?:el|la|los|las|su|sus|tu|tus|dni|documento|estudios?|radiograf[ií]as?)'), skip_si_turno: true },\n    { why: 'tome/tomá medicación', rx: W('(?:tome|tomen|tomá|tómese|tomate)\\\\s+(?:\\\\d|un|una|el|la|los|las|cada|ibuprofeno|paracetamol|analg[eé]sico|antiinflamatorio|antibi[oó]tico|algo)'), skip_si_turno: false },\n    { why: 'saque/sacá (instrucción)', rx: W('(?:saque|saquen|sacá|sáquese)\\\\s+(?:la|el|los|las)\\\\b'), skip_si_turno: false },\n    { why: 'aplique/aplicá (instrucción médica)', rx: W('aplí(?:quese|quen)|aplique(?:n)?\\\\s+(?:hielo|fr[ií]o|calor|cera|gel|pasta|crema)|aplic(?:á|ate)\\\\s+(?:hielo|fr[ií]o|calor|cera|gel|pasta|crema)'), skip_si_turno: false },\n    { why: 'enjuague/enjuagá', rx: W('enjuáguese|enjuaguese|enjuague(?:n)?(?:se)?\\\\s+(?:con|la\\\\s+boca)|enjuag(?:á|ate)'), skip_si_turno: false },\n    { why: 'coloque/colocá', rx: W('colóque(?:se|nse)|coloque(?:n)?\\\\s+(?:cera|algod[oó]n|hielo|el|la)|coloc(?:á|ate)\\\\s+(?:cera|algod[oó]n|hielo)'), skip_si_turno: false },\n    { why: 'ponga/poné cera, hielo, algodón', rx: W('(?:ponga|pongan|póngase|poné|ponete)\\\\s+(?:cera|hielo|algod[oó]n|fr[ií]o|calor)'), skip_si_turno: false },\n    { why: 'evite/deje de comer', rx: W('evit(?:e|en)\\\\s+(?:comer|masticar|tocar|mover)|no\\\\s+(?:coma|mastique|toque)\\\\b'), skip_si_turno: false },\n    // --- Diagnóstico / opinión\n    { why: 'no se preocupe / no te preocupes', rx: W('no\\\\s+(?:se\\\\s+)?preocup(?:e|es|és|ese)|no\\\\s+te\\\\s+preocup(?:es|és)'), skip_si_turno: false },\n    { why: 'no es grave / es normal (diagnóstico)', rx: W('no\\\\s+es\\\\s+(?:nada\\\\s+)?grave|es\\\\s+(?:algo\\\\s+)?(?:normal|habitual|com[uú]n)\\\\s+(?:que|en)|es\\\\s+normal\\\\b|no\\\\s+es\\\\s+nada\\\\b'), skip_si_turno: false },\n    { why: 'opinión emocional', rx: W('qu[eé]\\\\s+(?:macana|embromado|l[aá]stima|feo)'), skip_si_turno: false },\n    // --- Promesas que la clínica no puede cumplir\n    { why: 'le aviso si se libera', rx: W('(?:le|te)\\\\s+avis(?:o|aremos|amos)\\\\s+si\\\\s+se\\\\s+(?:libera|desocupa|cancela)'), skip_si_turno: false },\n  ];\n\n  // INVITACIÓN: decir \"los esperamos\", \"venga\", \"acérquese\" NO está mal por sí solo: es el negocio (\"lo esperamos el día de su turno\"). Lo que fue peligroso el 09/05\n  // fue invitar a ir AHORA y SIN turno a una clínica cerrada. Entonces: se bloquea si invita a ir de inmediato (siempre), o si invita sin ninguna referencia a un turno concreto.\n  const INVITA = W(String.raw`ven[ií]te?|veng(?:a|an|amos)|acérque(?:se|nse)|acercarse|acérca(?:te|se)|pase(?:n)?\\s+por|pasar\\s+por\\s+(?:la\\s+)?(?:cl[ií]nica|consultorio)|(?:los|las|lo|la|te|le|les)\\s+esperamos|pued(?:e|en)\\s+(?:venir|pasar|acercarse)|(?:lo|la|los|las)\\s+(?:atendemos|vemos|recibimos)\\s+(?:hoy|ahora|ya)|salg(?:a|an)\\s+(?:ya|ahora|para)|dirí(?:ja|jase|jan)se`);\n  const INMEDIATO = /\\b(?:ahora\\s+mismo|ya\\s+mismo|de\\s+inmediato|enseguida|cuanto\\s+antes|lo\\s+antes\\s+posible)\\b/i;\n  const TURNO_CONCRETO = /\\bturno\\b.{0,70}(?:\\d{1,2}[:.]\\d{2}|\\d{1,2}\\/\\d{1,2}|\\b(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)\\b)|\\bd[ií]a\\s+(?:de|del)\\s+(?:su|la|el)\\s+(?:turno|consulta|cita)\\b|\\ba\\s+las\\s+\\d{1,2}[:.]\\d{2}/i;\n  const DIRECCION = /balcarce\\s*(?:n[º°.]?\\s*)?37/i;\n\n  function revisar(texto, contexto) {\n    const t = String(texto || '');\n    const conTurno = TURNO_CON_FECHA.test(t);\n    if (INVITA.test(t)) {\n      if (INMEDIATO.test(t)) return { bloquea: true, why: 'invita a ir de inmediato' };\n      if (!TURNO_CONCRETO.test(t)) return { bloquea: true, why: 'invita a ir sin referirse a un turno' };\n    }\n    for (const r of REGLAS) {\n      if (r.skip_si_turno && conTurno) continue;\n      if (r.rx.test(t)) return { bloquea: true, why: r.why };\n    }\n    if (DIRECCION.test(t) && !(contexto && contexto.pacientePidioDireccion)) return { bloquea: true, why: 'dirección sin que la pidan' };\n    return { bloquea: false, why: null };\n  }\n  return { revisar, REGLAS };\n})();\nif (typeof module !== 'undefined') module.exports = BanlistUsted;\nconst e = $('Entrada').first().json;\nconst execId = String($execution.id);\nconst pj = (n, c, d) => { try { const v = JSON.parse($(n).first().json[c] || 'null'); return v === null ? d : v; } catch (x) { return d; } };\nconst libros = [].concat(pj('Redis GET libro', 'libro_raw', []));\nconst prop = pj('Redis GET propuesta', 'propuesta_raw', null);\nconst ofertas = pj('Redis GET ofertas', 'ofertas_raw', []);\nconst vistos = pj('Redis GET turnos_vistos', 'vistos_raw', []);\nconst bloque = String($('Redis GET bloque').first().json.bloque_raw || '');\nconst bloqueExec = String($('Redis GET bloque_exec').first().json.bloque_exec_raw || '');\nconst ag = $('Asiri').first().json || {};\nconst triaje = pj('Redis GET triaje', 'triaje_raw', null);   // la dejó derivar_triaje en ESTA ejecución: el triaje del v6 le contesta al paciente\nlet texto = typeof ag.output === 'string' ? ag.output.trim() : '';\nconst hayOk = libros.some((l) => l && l.ok === true);\nconst avisos = []; let fallo_agente = false;\nif (!texto || ag.error) {\n  fallo_agente = true;\n  if (hayOk) texto = '';   // el chequeo lo reemplaza por el resultado real de la agenda\n  else { texto = 'Disculpe, tuve un inconveniente para responderle en este momento. Le aviso a la clínica para que se comunique con usted.'; avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no pudo responder (error del agente o tiempo agotado): revisar y contestar a mano.' }); }\n}\nlet silencio = false;\nif (texto === '[NO_REPLY]' && !hayOk) silencio = true;\n// Urgencia derivada: Asiri no contesta (el triaje manda el video, la pregunta o el aviso de que la doctora se comunica) y la memoria la guarda el triaje.\n// Si en la MISMA respuesta hubo una escritura en la agenda, gana contarle lo que se hizo y la urgencia va al grupo como [ACCIÓN] (no se pierde ninguna de las dos).\nlet derivar_triaje = false;\nif (triaje && !hayOk) { derivar_triaje = true; silencio = true; texto = null; }\nelse if (triaje && hayOk) avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] La paciente mencionó una urgencia en el mismo mensaje en que se hizo un cambio en la agenda: revisar y contestarle. «' + String(triaje.cita || '').slice(0, 160) + '»' });\nlet motivo_chequeo = null, motivo_banlist = null;\nif (!silencio) {\n  const propReadback = (prop && String(prop.exec_id) === execId) ? prop.readback_text : null;\n  const c = ChequeoSalida.revisar({ texto, libros, ofertas, turnos_vistos: vistos, propuesta_readback: propReadback, bloque_ofertas: bloque || null, bloque_exec: bloqueExec || null });\n  if (c.accion === 'reemplazar') { texto = c.texto; motivo_chequeo = c.motivo; if (c.avisar && c.avisar.nivel === 'ACCION') avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] ' + c.avisar.texto }); }\n  const pidioDir = /direcci[oó]n|d[oó]nde (queda|est[aá]n|es)|ubicaci[oó]n|c[oó]mo (llego|llegar)/i.test(e.texto || '');\n  const b = BanlistUsted.revisar(texto, { pacientePidioDireccion: pidioDir });\n  if (b.bloquea) { motivo_banlist = b.why; texto = 'Disculpe, déjeme consultarlo con la clínica para darle la información correcta. Ya les aviso.'; avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] El filtro de seguridad bloqueó una respuesta de Asiri (' + b.why + '): revisar la conversación.' }); }\n}\n// La propuesta de ESTA ejecución queda \"enviada\" solo si su read-back realmente va en el mensaje (así ejecutar_propuesta sabe que el paciente lo vio).\nlet propuesta_json = null;\nif (!silencio && prop && String(prop.exec_id) === execId && prop.enviada !== true && prop.readback_text) {\n  const norm = (x) => String(x || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9:\\/ ]+/g, ' ').replace(/\\s+/g, ' ').trim();\n  if (norm(texto).includes(norm(prop.readback_text))) propuesta_json = JSON.stringify({ ...prop, enviada: true });\n}\nconst vivo = e.modo !== 'sombra';\nconst humano = { type: 'human', content: String(e.texto || ''), additional_kwargs: { source: 'wa_inbound' }, response_metadata: {} };\nconst ai = { type: 'ai', content: texto, additional_kwargs: { source: 'wa_outbound' }, response_metadata: {}, tool_calls: [], invalid_tool_calls: [] };\nif (vivo) for (const a of avisos) { try { await this.helpers.httpRequest({ method: 'POST', url: 'https://n8n.raquelrodriguez.com.ar/webhook/notify-grupo', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }\nconst tools = (Array.isArray(ag.intermediateSteps) ? ag.intermediateSteps : []).map((s) => ({ tool: s && s.action && s.action.tool, input: s && s.action && s.action.toolInput, obs: String((s && s.observation) || '').slice(0, 400) }));\nreturn [{ json: { phone: e.phone, modo: e.modo || 'vivo', texto, enviar: !silencio, silencio, derivar_triaje, triaje: derivar_triaje ? triaje : null, motivo_chequeo, motivo_banlist, fallo_agente, propuesta_json, tools, avisos, guardar: vivo && !silencio,\n  msg_human: JSON.stringify(humano), msg_ai: JSON.stringify(ai) } }];"
+    "jsCode": "// chequeo_salida.js — v7 · chequeo BIDIRECCIONAL de lo que Asiri le va a decir al paciente. Fuente de verdad en el repo (se inlinea en un nodo Code de n8n).\n// Lee SOLO el libro de escrituras que dejan las herramientas (nunca lo que diga el modelo) y las ofertas registradas por buscar_horarios.\n//   libros : [{ ok:boolean, tipo:'cambio'|'reserva'|'sumar'|'cancelacion'|'confirmacion', readback_text, parcial?:boolean }]   (TODAS las escrituras de ESTA ejecucion, en orden; acepta también `libro` suelto)\n//   ofertas: [{fecha:'YYYY-MM-DD', hora:'HH:MM'}]   (lo que buscar_horarios ofrecio)\n//   propuesta_readback: texto del read-back de una propuesta hecha en ESTA ejecucion (todavia no ejecutada), o null\n// devuelve { accion:'pasar'|'reemplazar', texto, motivo, avisar:null|{nivel,texto} }\nconst ChequeoSalida = (() => {\n  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const normTexto = (x) => sinT(x).replace(/[^a-z0-9:/ ]+/g, ' ').replace(/\\s+/g, ' ').trim();\n  const hh = (h, m) => String(Number(h)).padStart(2, '0') + ':' + m;\n\n  // Todas las parejas fecha(sin año)+hora que aparecen en el texto. Una hora se asocia a la ULTIMA fecha vista en la misma linea\n  // (\"* Jueves 22 de octubre 8:00 , 9:20\" → dos parejas; \"el jueves 22/10 a las 09:20\" → una).\n  function parejas(texto) {\n    const out = [];\n    for (const linea of String(texto || '').split('\\n')) {\n      const l = sinT(linea);\n      const tokens = [];\n      for (const m of l.matchAll(/(\\d{1,2})\\s+de\\s+([a-z]+)/g)) { const mes = MESES.indexOf(m[2] === 'setiembre' ? 'septiembre' : m[2]) + 1; if (mes) tokens.push({ i: m.index, tipo: 'f', md: `${String(mes).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}` }); }\n      for (const m of l.matchAll(/\\b(\\d{1,2})\\/(\\d{1,2})\\b/g)) tokens.push({ i: m.index, tipo: 'f', md: `${String(Number(m[2])).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}` });\n      for (const m of l.matchAll(/\\b(\\d{1,2}):(\\d{2})\\b/g)) tokens.push({ i: m.index, tipo: 'h', h: hh(m[1], m[2]) });\n      tokens.sort((a, b) => a.i - b.i);\n      let fecha = null;\n      for (const t of tokens) { if (t.tipo === 'f') fecha = t.md; else if (fecha) out.push(`${fecha} ${t.h}`); }\n    }\n    return out;\n  }\n  const clave = (o) => `${o.fecha.slice(5)} ${String(o.hora).replace(/^(\\d):/, '0$1:')}`;\n\n  // \"Afirmaciones de haber hecho algo\". Solo formas conjugadas que dicen \"ya esta hecho\"; \"le confirmo:\" (read-back) y \"confirme su asistencia\" NO cuentan.\n  // Limites de palabra UNICODE: el \\b de JavaScript no sirve pegado a una letra con tilde (\"agendé\", \"moví\").\n  const W = (src) => new RegExp(String.raw`(?<![\\p{L}])(?:` + src + String.raw`)(?![\\p{L}])`, 'iu');\n  const CLAIMS = [\n    { tipo: 'reprogramar', rx: W(String.raw`qued(?:ó|o|a|an)\\s+(?:reprogramad|cambiad|movid|reservad|agendad)\\p{L}*|qued(?:ó|a)\\s+anotad\\p{L}*\\s+(?:el|su|un)\\s+turno|reprogramé|cambié|moví|reservé|agendé|anot[eé]\\s+(?:su|el|un)\\s+turno|(?:le|lo|la)\\s+(?:reserve|agende|cambie|movi|reprograme)|ya\\s+(?:le\\s+)?(?:reserv|agend|cambi|mov|anot)\\p{L}*|le\\s+dej[oé]\\s+(?:reservad|agendad|anotad)\\p{L}*|list[oa],?\\s+(?:reprogramad|reservad|agendad|cambiad)\\p{L}*`) },\n    { tipo: 'cancelar', rx: W(String.raw`qued(?:ó|o|a|an)\\s+cancelad\\p{L}*|cancelé|anulé|(?:le|lo|la)\\s+(?:cancele|anule)|list[oa],?\\s+(?:cancelad|anulad)\\p{L}*`) },\n    { tipo: 'confirmar', rx: W(String.raw`qued(?:ó|o|a|an)\\s+confirmad\\p{L}*|confirmé|list[oa],?\\s+confirmad\\p{L}*`) },\n  ];\n  const TIPOS_OK = { reprogramar: ['cambio', 'reserva', 'sumar'], cancelar: ['cancelacion'], confirmar: ['confirmacion'] };\n  const esc = (x) => String(x).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&').replace(/\\s+/g, '\\\\s+');\n  const quitar = (texto, frase) => (frase ? String(texto).replace(new RegExp(esc(frase), 'gi'), ' ') : texto);\n  const honesto = 'Disculpe, todavía no pude concretar eso en la agenda, así que no quedó hecho. Le aviso a la clínica para que lo resuelva y se comunique con usted.';\n\n  function revisar(entrada) {\n    const texto = String(entrada.texto || '');\n    const libros = Array.isArray(entrada.libros) ? entrada.libros : (entrada.libro ? [entrada.libro] : []);\n    const oks = libros.filter((l) => l && l.ok === true);\n    const libro = oks.length ? oks[oks.length - 1] : (libros.length ? libros[libros.length - 1] : null);   // el que tiene que contar el texto: la última escritura ok\n    const ofertas = entrada.ofertas || [];\n    const nTexto = normTexto(texto);\n    const hechoOk = oks.length > 0;\n\n    // (1) hay una escritura OK y el texto no contiene el read-back de lo que se hizo (timeout / maxIterations / el modelo se fue por las ramas)\n    const sinDecir = oks.filter((l) => l.readback_text && !nTexto.includes(normTexto(l.readback_text)));\n    if (hechoOk && sinDecir.length === oks.length && libro.readback_text) {\n      // (3) ...y ademas habla de OTRA fecha+hora distinta: tambien se reemplaza (mismo remedio: decir lo que realmente paso)\n      return { accion: 'reemplazar', texto: libro.readback_text, motivo: parejas(texto).length ? 'fecha_distinta_a_la_escrita' : 'falta_confirmacion_de_lo_hecho', avisar: { nivel: 'tecnico', texto: 'El chequeo de salida reemplazó el mensaje de Asiri por el resultado real de la agenda.' } };\n    }\n    const parcial = libros.find((l) => l && l.parcial === true && l.readback_text && !nTexto.includes(normTexto(l.readback_text)));\n    if (parcial) {\n      return { accion: 'reemplazar', texto: parcial.readback_text, motivo: 'escritura_parcial_sin_decirlo', avisar: { nivel: 'ACCION', texto: 'Escritura parcial: revisar la agenda.' } };\n    }\n\n    // (1b) lo que el CÓDIGO le dio a Asiri para que pegue textual (el read-back de una propuesta de esta ejecución; el bloque de horarios recién buscado) tiene que\n    // llegar al paciente. Si el modelo se lo salteó, se reemplaza por ese texto: sin él la charla se traba (el paciente no ve las opciones / no tiene qué confirmar).\n    if (entrada.propuesta_readback && !nTexto.includes(normTexto(entrada.propuesta_readback))) {\n      return { accion: 'reemplazar', texto: entrada.propuesta_readback, motivo: 'falta_readback', avisar: { nivel: 'tecnico', texto: 'Asiri no pegó el texto de confirmación; se envió el armado por el código.' } };\n    }\n    if (entrada.bloque_exec && !nTexto.includes(normTexto(entrada.bloque_exec))) {\n      return { accion: 'reemplazar', texto: entrada.bloque_exec, motivo: 'falta_bloque', avisar: { nivel: 'tecnico', texto: 'Asiri no pegó el bloque de horarios; se envió el armado por el código.' } };\n    }\n\n    // (2) afirma que algo quedó hecho y NO hay una escritura OK compatible\n    // Se evalua sobre el texto SIN los read-backs que el propio codigo escribio (el de la escritura, el de la propuesta): esos dicen la verdad.\n    let sobrante = String(texto);\n    for (const l of libros) sobrante = quitar(sobrante, l && l.readback_text);\n    sobrante = quitar(sobrante, entrada.propuesta_readback);\n    if (!(propuestaVigente(entrada))) {\n      for (const c of CLAIMS) {\n        if (!c.rx.test(sobrante)) continue;\n        const compatible = oks.some((l) => TIPOS_OK[c.tipo].includes(l.tipo));\n        if (!compatible) return { accion: 'reemplazar', texto: honesto, motivo: `afirma_${c.tipo}_sin_ok`, avisar: { nivel: 'tecnico', texto: `Asiri afirmó \"${c.tipo}\" sin una escritura ok en la agenda (bloqueado).` } };\n      }\n    }\n\n    // (4) cualquier fecha+hora de un mensaje con horarios tiene que estar entre las ofrecidas por buscar_horarios\n    const pares = parejas(texto);\n    if (pares.length) {\n      const permitidas = new Set(ofertas.map(clave));\n      for (const l of libros) if (l && l.readback_text) parejas(l.readback_text).forEach((p) => permitidas.add(p));\n      if (entrada.propuesta_readback) parejas(entrada.propuesta_readback).forEach((p) => permitidas.add(p));\n      (entrada.turnos_vistos || []).forEach((t) => permitidas.add(`${t.fecha.slice(5)} ${String(t.hora_inicio || t.hora).slice(0, 5)}`));\n      const ajenas = pares.filter((p) => !permitidas.has(p));\n      if (ajenas.length) {\n        if (entrada.bloque_ofertas) return { accion: 'reemplazar', texto: entrada.bloque_ofertas, motivo: 'horario_no_ofrecido', avisar: { nivel: 'tecnico', texto: 'Asiri mencionó un horario que nadie ofreció; se reemplazó por el bloque real.' } };\n        return { accion: 'reemplazar', texto: 'Disculpe, déjeme confirmar los horarios disponibles para pasarle los correctos.', motivo: 'horario_no_ofrecido', avisar: { nivel: 'tecnico', texto: 'Asiri mencionó un horario que nadie ofreció (sin bloque para reemplazar).' } };\n      }\n    }\n    return { accion: 'pasar', texto, motivo: null, avisar: null };\n  }\n  // Una propuesta de ESTA ejecucion cuyo read-back es el texto: el mensaje \"Le confirmo: ... ¿Procedo con la reserva?\" no es una afirmacion de haber hecho nada.\n  function propuestaVigente(e) { return !!(e.propuesta_readback && normTexto(e.texto).includes(normTexto(e.propuesta_readback))); }\n  return { revisar, parejas, honesto };\n})();\nif (typeof module !== 'undefined') module.exports = ChequeoSalida;\n// banlist_usted.js — v7 · banlist de la salida de Asiri, en VOSEO y en USTED, con límites de palabra Unicode. Fuente de verdad en el repo (se inlinea en un nodo Code de n8n).\n// El banlist vivo del v6 (Banlist Validator) esta escrito en voseo: \"venite\", \"guarda\", \"traigan\". Asiri habla de usted (\"acérquese\", \"tome\", \"guárdela\"),\n// que hoy no dispara nada. Regla del proyecto: las reglas del incidente del 09/05 (invitar a venir, instrucciones clínicas, diagnóstico, dirección como invitación)\n// tienen que estar en dos capas; esta es la última línea. Devuelve { bloquea:boolean, why }.\n//   contexto: { pacientePidioDireccion:boolean }\nconst BanlistUsted = (() => {\n  const W = (src) => new RegExp(String.raw`(?<![\\p{L}])(?:` + src + String.raw`)(?![\\p{L}])`, 'iu');\n  // Un turno YA AGENDADO nombrado con fecha (\"su turno del viernes 16/10\") vuelve legítimo recordar \"puede venir acompañada\": la invitación sin turno es el riesgo.\n  const TURNO_CON_FECHA = /\\bturno\\s+(?:del|de|para\\s+el|para\\s+la|el)\\s+(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|\\d)/i;\n  const REGLAS = [\n    // --- Instrucciones clínicas / operativas\n    { why: 'guarde/guarda (instrucción)', rx: W('guárd(?:ela|elo|ese|ense|alo|ala)|guard(?:á|a|e|en)\\\\s+(?:la|el|las|los|esa|ese|bien)'), skip_si_turno: false },\n    { why: 'traiga/traé (instrucción)', rx: W('tra(?:iga|igan|igalo|igala|é|e|ele|igase)\\\\s+(?:el|la|los|las|su|sus|tu|tus|dni|documento|estudios?|radiograf[ií]as?)'), skip_si_turno: true },\n    { why: 'tome/tomá medicación', rx: W('(?:tome|tomen|tomá|tómese|tomate)\\\\s+(?:\\\\d|un|una|el|la|los|las|cada|ibuprofeno|paracetamol|analg[eé]sico|antiinflamatorio|antibi[oó]tico|algo)'), skip_si_turno: false },\n    { why: 'saque/sacá (instrucción)', rx: W('(?:saque|saquen|sacá|sáquese)\\\\s+(?:la|el|los|las)\\\\b'), skip_si_turno: false },\n    { why: 'aplique/aplicá (instrucción médica)', rx: W('aplí(?:quese|quen)|aplique(?:n)?\\\\s+(?:hielo|fr[ií]o|calor|cera|gel|pasta|crema)|aplic(?:á|ate)\\\\s+(?:hielo|fr[ií]o|calor|cera|gel|pasta|crema)'), skip_si_turno: false },\n    { why: 'enjuague/enjuagá', rx: W('enjuáguese|enjuaguese|enjuague(?:n)?(?:se)?\\\\s+(?:con|la\\\\s+boca)|enjuag(?:á|ate)'), skip_si_turno: false },\n    { why: 'coloque/colocá', rx: W('colóque(?:se|nse)|coloque(?:n)?\\\\s+(?:cera|algod[oó]n|hielo|el|la)|coloc(?:á|ate)\\\\s+(?:cera|algod[oó]n|hielo)'), skip_si_turno: false },\n    { why: 'ponga/poné cera, hielo, algodón', rx: W('(?:ponga|pongan|póngase|poné|ponete)\\\\s+(?:cera|hielo|algod[oó]n|fr[ií]o|calor)'), skip_si_turno: false },\n    { why: 'evite/deje de comer', rx: W('evit(?:e|en)\\\\s+(?:comer|masticar|tocar|mover)|no\\\\s+(?:coma|mastique|toque)\\\\b'), skip_si_turno: false },\n    // --- Diagnóstico / opinión\n    { why: 'no se preocupe / no te preocupes', rx: W('no\\\\s+(?:se\\\\s+)?preocup(?:e|es|és|ese)|no\\\\s+te\\\\s+preocup(?:es|és)'), skip_si_turno: false },\n    { why: 'no es grave / es normal (diagnóstico)', rx: W('no\\\\s+es\\\\s+(?:nada\\\\s+)?grave|es\\\\s+(?:algo\\\\s+)?(?:normal|habitual|com[uú]n)\\\\s+(?:que|en)|es\\\\s+normal\\\\b|no\\\\s+es\\\\s+nada\\\\b'), skip_si_turno: false },\n    { why: 'opinión emocional', rx: W('qu[eé]\\\\s+(?:macana|embromado|l[aá]stima|feo)'), skip_si_turno: false },\n    // --- Promesas que la clínica no puede cumplir\n    { why: 'le aviso si se libera', rx: W('(?:le|te)\\\\s+avis(?:o|aremos|amos)\\\\s+si\\\\s+se\\\\s+(?:libera|desocupa|cancela)'), skip_si_turno: false },\n  ];\n\n  // INVITACIÓN: decir \"los esperamos\", \"venga\", \"acérquese\" NO está mal por sí solo: es el negocio (\"lo esperamos el día de su turno\"). Lo que fue peligroso el 09/05\n  // fue invitar a ir AHORA y SIN turno a una clínica cerrada. Entonces: se bloquea si invita a ir de inmediato (siempre), o si invita sin ninguna referencia a un turno concreto.\n  const INVITA = W(String.raw`ven[ií]te?|veng(?:a|an|amos)|acérque(?:se|nse)|acercarse|acérca(?:te|se)|pase(?:n)?\\s+por|pasar\\s+por\\s+(?:la\\s+)?(?:cl[ií]nica|consultorio)|(?:los|las|lo|la|te|le|les)\\s+esperamos|pued(?:e|en)\\s+(?:venir|pasar|acercarse)|(?:lo|la|los|las)\\s+(?:atendemos|vemos|recibimos)\\s+(?:hoy|ahora|ya)|salg(?:a|an)\\s+(?:ya|ahora|para)|dirí(?:ja|jase|jan)se`);\n  const INMEDIATO = /\\b(?:ahora\\s+mismo|ya\\s+mismo|de\\s+inmediato|enseguida|cuanto\\s+antes|lo\\s+antes\\s+posible)\\b/i;\n  const TURNO_CONCRETO = /\\bturno\\b.{0,70}(?:\\d{1,2}[:.]\\d{2}|\\d{1,2}\\/\\d{1,2}|\\b(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)\\b)|\\bd[ií]a\\s+(?:de|del)\\s+(?:su|la|el)\\s+(?:turno|consulta|cita)\\b|\\ba\\s+las\\s+\\d{1,2}[:.]\\d{2}/i;\n  const DIRECCION = /balcarce\\s*(?:n[º°.]?\\s*)?37/i;\n\n  function revisar(texto, contexto) {\n    const t = String(texto || '');\n    const conTurno = TURNO_CON_FECHA.test(t);\n    if (INVITA.test(t)) {\n      if (INMEDIATO.test(t)) return { bloquea: true, why: 'invita a ir de inmediato' };\n      if (!TURNO_CONCRETO.test(t)) return { bloquea: true, why: 'invita a ir sin referirse a un turno' };\n    }\n    for (const r of REGLAS) {\n      if (r.skip_si_turno && conTurno) continue;\n      if (r.rx.test(t)) return { bloquea: true, why: r.why };\n    }\n    if (DIRECCION.test(t) && !(contexto && contexto.pacientePidioDireccion)) return { bloquea: true, why: 'dirección sin que la pidan' };\n    return { bloquea: false, why: null };\n  }\n  return { revisar, REGLAS };\n})();\nif (typeof module !== 'undefined') module.exports = BanlistUsted;\nconst e = $('Entrada').first().json;\nconst execId = String($execution.id);\nconst pj = (n, c, d) => { try { const v = JSON.parse($(n).first().json[c] || 'null'); return v === null ? d : v; } catch (x) { return d; } };\nconst libros = [].concat(pj('Redis GET libro', 'libro_raw', []));\nconst prop = pj('Redis GET propuesta', 'propuesta_raw', null);\nconst ofertas = pj('Redis GET ofertas', 'ofertas_raw', []);\nconst vistos = pj('Redis GET turnos_vistos', 'vistos_raw', []);\nconst bloque = String($('Redis GET bloque').first().json.bloque_raw || '');\nconst bloqueExec = String($('Redis GET bloque_exec').first().json.bloque_exec_raw || '');\nconst ag = $('Asiri').first().json || {};\nconst triaje = pj('Redis GET triaje', 'triaje_raw', null);   // la dejó derivar_triaje en ESTA ejecución: el triaje del v6 le contesta al paciente\nlet texto = typeof ag.output === 'string' ? ag.output.trim() : '';\n// Frases internas que el modelo a veces antepone al texto de una herramienta (\"Le copio el mensaje para que lo confirme:\", \"Pegá este bloque TEXTUAL al paciente:\"):\n// se quitan por código, línea por línea, solo cuando terminan en ':' y preceden al texto real (examen 06/10: 3 de 8 conversaciones las mostraron).\nconst RE_META = /^\\s*(?:(?:le|te) (?:copio|paso|comparto|transmito|dejo|env[ií]o) (?:el |la |este |esta )?(?:mensaje|bloque|texto|confirmaci[oó]n)[^\\n:]{0,60}:|peg[aá](?:lo|le|selo)? [^\\n:]{0,80}:|ac[aá] (?:va|tiene|le va)[^\\n:]{0,60}:|mensaje (?:para|de) confirmaci[oó]n:)\\s*/i;\nlet metaQuitada = false; while (RE_META.test(texto)) { texto = texto.replace(RE_META, '').trim(); metaQuitada = true; }\nconst hayOk = libros.some((l) => l && l.ok === true);\nconst avisos = []; let fallo_agente = false;\nif (!texto || ag.error) {\n  fallo_agente = true;\n  if (hayOk) texto = '';   // el chequeo lo reemplaza por el resultado real de la agenda\n  else { texto = 'Disculpe, tuve un inconveniente para responderle en este momento. Le aviso a la clínica para que se comunique con usted.'; avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no pudo responder (error del agente o tiempo agotado): revisar y contestar a mano.' }); }\n}\nlet silencio = false;\nif (texto === '[NO_REPLY]' && !hayOk) silencio = true;\n// Urgencia derivada: Asiri no contesta (el triaje manda el video, la pregunta o el aviso de que la doctora se comunica) y la memoria la guarda el triaje.\n// Si en la MISMA respuesta hubo una escritura en la agenda, gana contarle lo que se hizo y la urgencia va al grupo como [ACCIÓN] (no se pierde ninguna de las dos).\nlet derivar_triaje = false;\nif (triaje && !hayOk) { derivar_triaje = true; silencio = true; texto = null; }\nelse if (triaje && hayOk) avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] La paciente mencionó una urgencia en el mismo mensaje en que se hizo un cambio en la agenda: revisar y contestarle. «' + String(triaje.cita || '').slice(0, 160) + '»' });\nlet motivo_chequeo = null, motivo_banlist = null;\nif (!silencio) {\n  const propReadback = (prop && String(prop.exec_id) === execId) ? prop.readback_text : null;\n  const c = ChequeoSalida.revisar({ texto, libros, ofertas, turnos_vistos: vistos, propuesta_readback: propReadback, bloque_ofertas: bloque || null, bloque_exec: bloqueExec || null });\n  if (c.accion === 'reemplazar') { texto = c.texto; motivo_chequeo = c.motivo; if (c.avisar && c.avisar.nivel === 'ACCION') avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] ' + c.avisar.texto }); }\n  const pidioDir = /direcci[oó]n|d[oó]nde (queda|est[aá]n|es)|ubicaci[oó]n|c[oó]mo (llego|llegar)/i.test(e.texto || '');\n  const b = BanlistUsted.revisar(texto, { pacientePidioDireccion: pidioDir });\n  if (b.bloquea) { motivo_banlist = b.why; texto = 'Disculpe, déjeme consultarlo con la clínica para darle la información correcta. Ya les aviso.'; avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] El filtro de seguridad bloqueó una respuesta de Asiri (' + b.why + '): revisar la conversación.' }); }\n}\n// La propuesta de ESTA ejecución queda \"enviada\" solo si su read-back realmente va en el mensaje (así ejecutar_propuesta sabe que el paciente lo vio).\nlet propuesta_json = null;\nif (!silencio && prop && String(prop.exec_id) === execId && prop.enviada !== true && prop.readback_text) {\n  const norm = (x) => String(x || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9:\\/ ]+/g, ' ').replace(/\\s+/g, ' ').trim();\n  if (norm(texto).includes(norm(prop.readback_text))) propuesta_json = JSON.stringify({ ...prop, enviada: true });\n}\nconst vivo = e.modo !== 'sombra';\nconst humano = { type: 'human', content: String(e.texto || ''), additional_kwargs: { source: 'wa_inbound' }, response_metadata: {} };\nconst ai = { type: 'ai', content: texto, additional_kwargs: { source: 'wa_outbound' }, response_metadata: {}, tool_calls: [], invalid_tool_calls: [] };\nif (vivo) for (const a of avisos) { try { await this.helpers.httpRequest({ method: 'POST', url: 'https://n8n.raquelrodriguez.com.ar/webhook/notify-grupo', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }\nconst tools = (Array.isArray(ag.intermediateSteps) ? ag.intermediateSteps : []).map((s) => ({ tool: s && s.action && s.action.tool, input: s && s.action && s.action.toolInput, obs: String((s && s.observation) || '').slice(0, 400) }));\nreturn [{ json: { phone: e.phone, modo: e.modo || 'vivo', texto, enviar: !silencio, silencio, derivar_triaje, meta_quitada: metaQuitada, triaje: derivar_triaje ? triaje : null, motivo_chequeo, motivo_banlist, fallo_agente, propuesta_json, tools, avisos, guardar: vivo && !silencio,\n  msg_human: JSON.stringify(humano), msg_ai: JSON.stringify(ai) } }];"
    },
-   "id": "ebb50613-1ab3-4f3d-8f74-d9489ed6483c",
+   "id": "f39bec3d-5093-48c1-aa90-974af42708bb",
    "name": "Salida",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -1311,7 +1311,7 @@
      },
      "conditions": [
       {
-       "id": "933bd8ba-0588-4c08-9e0f-992604056712",
+       "id": "d23c9baa-f0d9-45a0-93ea-fd8462cdd234",
        "leftValue": "={{ !!$json.propuesta_json }}",
        "rightValue": "",
        "operator": {
@@ -1325,7 +1325,7 @@
     },
     "options": {}
    },
-   "id": "3f1aa3ff-b41f-4193-9c90-8c06c316f184",
+   "id": "93dedbff-2a52-4de5-bae1-9151acd45853",
    "name": "¿Marcar propuesta enviada?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -1343,7 +1343,7 @@
     "expire": true,
     "ttl": 1800
    },
-   "id": "0b816747-7bfc-407d-9fbf-a287a52fa4bb",
+   "id": "b9cbc380-543d-4fb3-a4c4-81daff02dd12",
    "name": "Redis SET propuesta enviada",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -1369,7 +1369,7 @@
      },
      "conditions": [
       {
-       "id": "fced1a6b-05bf-44cd-803d-d148fa09c0b8",
+       "id": "ca1145fa-94a2-4e40-8f63-7de8b8d44811",
        "leftValue": "={{ $('Salida').first().json.guardar === true }}",
        "rightValue": "",
        "operator": {
@@ -1383,7 +1383,7 @@
     },
     "options": {}
    },
-   "id": "cb8bf9a1-9851-4ab8-aae7-1a7bc6bcfde5",
+   "id": "992f0a8a-a193-424b-be8e-6f6d4d84c0fe",
    "name": "¿Guardar en memoria?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -1400,7 +1400,7 @@
      "queryReplacement": "={{ [$('Salida').first().json.phone, $('Salida').first().json.msg_human, $('Salida').first().json.msg_ai] }}"
     }
    },
-   "id": "c922a5d3-1edf-4968-930f-ee9c4d363472",
+   "id": "43dbfe82-f634-4ac8-b1c0-19566cb72604",
    "name": "Guardar en memoria",
    "type": "n8n-nodes-base.postgres",
    "typeVersion": 2.5,
@@ -1421,7 +1421,7 @@
    "parameters": {
     "jsCode": "const s = $('Salida').first().json;\nreturn [{ json: { texto: s.texto, enviar: s.enviar, silencio: s.silencio, derivar_triaje: s.derivar_triaje === true, triaje: s.triaje || null, modo: s.modo, motivo_chequeo: s.motivo_chequeo, motivo_banlist: s.motivo_banlist, fallo_agente: s.fallo_agente, tools: s.tools, avisos: s.avisos } }];"
    },
-   "id": "8ce93fae-7734-45b6-99c9-c4801f874223",
+   "id": "d4e8413f-3a24-420f-9e05-91d04445ed65",
    "name": "Devolver",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
