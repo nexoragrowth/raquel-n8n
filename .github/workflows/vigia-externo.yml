@@ -1,0 +1,32 @@
+# Vigía EXTERNO del bot de la Dra. Raquel (19/10/2026, tras la caída del 16 al 19/10).
+# Corre en los servidores de GitHub, FUERA del VPS: si el VPS o su proxy se caen, esta ejecución falla
+# y GitHub le manda un mail al dueño de la cuenta (avisos de "workflow run failed").
+# El Health Check de n8n sigue haciendo lo suyo adentro; este cubre el caso en que el servidor entero no responde.
+name: vigia-externo
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+jobs:
+  chequeo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: n8n (bot) responde por HTTPS
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://n8n.raquelrodriguez.com.ar/healthz || true)
+            if [ "$code" = "200" ]; then echo "OK: n8n responde"; exit 0; fi
+            echo "intento $i: código $code"; sleep 40
+          done
+          echo "::error::El bot de la Dra. Raquel NO responde (n8n /healthz, último código: $code). Revisar el VPS 187.127.0.110: docker ps, n8n-traefik-1 y el puerto 443."
+          exit 1
+      - name: panel responde
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://panel.raquelrodriguez.com.ar/login || true)
+            if [ "$code" = "200" ]; then echo "OK: panel responde"; exit 0; fi
+            echo "intento $i: código $code"; sleep 40
+          done
+          echo "::error::El panel NO responde (último código: $code)."
+          exit 1
