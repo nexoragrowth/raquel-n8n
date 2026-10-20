@@ -26,6 +26,9 @@ KB_EXTRA = ["45", "41", "29", "30", "37", "42", "44", "3", "22", "23", "1", "26"
 # (20/10, BOT-06) KB 40 = presentación para los leads de anuncio (la que mandaba el v6 con "¡Hola! Quiero más información"): la pega el CÓDIGO tal cual.
 SQL_DATOS = ("SELECT id::text AS id, contenido FROM knowledge_base WHERE id IN (20, 21, 24, 25, 36, 39, 40, " + ", ".join(KB_EXTRA) + ") UNION ALL "
              "SELECT 'dir:' || clave AS id, valor AS contenido FROM agente_directrices WHERE clave IN ('notas_para_asiri', 'menu_bienvenida') ORDER BY 1")
+# (20/10, D3 del plan del 13/10; escalaciones reales 380–386) ¿Quién escribió PRIMERO en este chat? Si fue la clínica y el contacto no tiene ficha,
+# es una charla de la clínica (plomero, proveedor, técnico): Asiri no se mete. Es estructura (fuente del mensaje), no lectura del texto del paciente.
+SQL_PRIMERO = "SELECT message->'additional_kwargs'->>'source' AS fuente, message->>'type' AS tipo FROM n8n_chat_histories WHERE session_id = $1 ORDER BY id ASC LIMIT 1"
 SUBAGENTES = [("turnos", "Agente Turnos"), ("pagos", "Agente Pagos"), ("informacion", "Agente Información"), ("urgencias", "Agente Urgencias")]
 
 E = "$('Entrada').first().json"
@@ -73,15 +76,19 @@ const datos_pago = (() => {
 let propE = null; try { propE = JSON.parse($('Redis GET propuesta (entrada)').first().json.prop_entrada_raw || 'null'); } catch (x) { propE = null; }
 const prop_pendiente = !!(propE && propE.enviada === true && AgendaCore.pendienteVista(propE, ultimo_asiri, new Date(ahoraMs).toISOString()));
 let ident = {}; try { ident = $('Identificar paciente').first().json || {}; } catch (x) { ident = { ok: false, motivo: 'sin_respuesta' }; }
+// (20/10, D3) Charla que inició la CLÍNICA con un contacto SIN ficha (plomero, proveedor, técnico): Asiri no responde ni deriva. Solo con
+// los dos datos seguros: el primer mensaje guardado es del staff y Dentalink dijo "no hay ficha con este celular" (no un error de consulta).
+let primero = null; try { primero = $('Primer mensaje').first().json || null; } catch (x) { primero = null; }
+const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && ident.ok !== true && ident.motivo === 'sin_ficha';
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', ultimo_asiri, conversacion_nueva, prop_pendiente,
+return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', charla_de_la_clinica, ultimo_asiri, conversacion_nueva, prop_pendiente,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
 JS_DESPACHO = """const ctx = $('Armar contexto').first().json;
 let o = {}; try { o = $('Orquestador').first().json || {}; } catch (x) { o = { error: 'sin salida' }; }
-return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true }) }];"""
+return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true }) }];"""
 
 JS_RES = """const r = (n) => { try { const x = $(n); return x.isExecuted ? (x.first().json || null) : null; } catch (y) { return null; } };
 const res = { turnos: r('Agente Turnos'), pagos: r('Agente Pagos'), informacion: r('Agente Información'), urgencias: r('Agente Urgencias') };
@@ -157,6 +164,7 @@ def wf_cerebro(esfuerzo=ESFUERZO_PRODUCCION):
     g.trigger({"phone": "5490000000651", "texto": "Hola", "pushName": "", "modo": "vivo", "historial_json": ""}, 0, 300)
     g.postgres("Historial", SQL_HISTORIAL, "$json.phone", 220, 300)
     g.postgres("Recordatorios", SQL_RECORDATORIOS, f"{E}.phone", 440, 300)
+    g.postgres("Primer mensaje", SQL_PRIMERO, f"{E}.phone", 550, 420)
     g.postgres("Datos del consultorio", SQL_DATOS, "''", 660, 300)
     g.subworkflow("Identificar paciente", "@@ID:ver_turnos@@", {"tel": f"{E}.phone", "exec_id_actual": "$execution.id"}, 770, 300)
     g.redis_get("Redis GET propuesta (entrada)", f"'propuesta:' + {E}.phone", "prop_entrada_raw", 825, 420)
@@ -205,7 +213,7 @@ def wf_cerebro(esfuerzo=ESFUERZO_PRODUCCION):
     g.postgres("Guardar en memoria", "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb), ($1, $3::jsonb)", "[$('Salida').first().json.phone, $('Salida').first().json.msg_human, $('Salida').first().json.msg_ai]", x + 880, 240)
     g.code("Devolver", "const s = $('Salida').first().json;\nreturn [{ json: { texto: s.texto, enviar: s.enviar, silencio: s.silencio, derivar_triaje: s.derivar_triaje === true, triaje: s.triaje || null, texto_original: s.texto_original || null, modo: s.modo, motivo_chequeo: s.motivo_chequeo, motivo_banlist: s.motivo_banlist, fallo_agente: s.fallo_agente, modo_humano: s.modo_humano, descartar_propuesta: s.descartar_propuesta === true, tools: s.tools, agentes: s.agentes, plan: s.plan, avisos: s.avisos } }];", x + 1100, 300)
 
-    for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Datos del consultorio", 0), ("Datos del consultorio", "Identificar paciente", 0),
+    for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Datos del consultorio", 0), ("Datos del consultorio", "Identificar paciente", 0),
                      ("Identificar paciente", "Redis GET propuesta (entrada)", 0), ("Redis GET propuesta (entrada)", "Armar contexto", 0), ("Armar contexto", "Orquestador", 0),
                      ("Orquestador", "Despacho", 0), ("Despacho", "¿No entendí?", 0), ("¿No entendí?", "Redis INCR noentendi", 0), ("¿No entendí?", "¿Turnos?", 1), ("Redis INCR noentendi", "¿Turnos?", 0)]:
         g.conectar(a, b, s_)

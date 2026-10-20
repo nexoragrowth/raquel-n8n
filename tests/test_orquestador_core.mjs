@@ -207,6 +207,18 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const r2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { etapa: 'ejecutado', ok: false, motivo: 'ya_ejecutada' }, { confirma: 'true' })] }, {});
   t('T10b "ya_ejecutada" sola (un "sí" repetido) sigue diciendo que ya quedó registrado', r2.texto === 'Ese pedido ya quedó registrado.', r2); }
 
+// (20/10, D3; escalaciones reales 380–386) charla que inició la clínica con un contacto sin ficha: Asiri no se mete
+{ const p = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'Yo por la tarde puedo pasar únicamente', motivo: 'proveedor: arreglar grifo' }]), { charla_de_la_clinica: true });
+  t('CL1 charla de la clínica + el orquestador quería derivar: NO deriva, NO responde (sin aviso al grupo)', p.fija === 'no_reply' && !p.hay_agentes && p.charla_de_la_clinica === true, p);
+  const c = O.componer(base({ plan: p, res: {}, reunion: O.reunir(p, {}, {}) }));
+  t('CL1b el mensaje final es silencio', c.silencio === true && !c.texto && O.reunir(p, {}, {}).derivar === false, c);
+  const p2 = O.despachar(orq([{ a: 'turnos', pedido: 'pide turno' }, { a: 'informacion', pedido: 'precio' }]), { charla_de_la_clinica: true });
+  t('CL2 tampoco llama a Turnos ni a Información', !p2.turnos && !p2.informacion && p2.fija === 'no_reply', p2);
+  const p3 = O.despachar(orq([{ a: 'urgencias', pedido: 'le sangra la encía' }]), { charla_de_la_clinica: true });
+  t('CL3 una urgencia que ve el orquestador SÍ sigue su camino', p3.urgencias === 'le sangra la encía' && p3.hay_agentes, p3);
+  const p4 = O.despachar(orq([{ a: 'turnos', pedido: 'pide turno' }]), {});
+  t('CL4 sin la marca, todo igual que siempre', p4.turnos === 'pide turno' && !p4.charla_de_la_clinica, p4); }
+
 // (20/10, BOT-06) lead de anuncio: la presentación de la clínica (KB 40), no el menú
 { const KB40 = 'Hola! Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗 gracias por comunicarte con nosotros ✨\n\nLa Dra. Raquel Rodríguez es especialista en ortodoncia…';
   const p = O.despachar(orq([{ a: 'presentacion_anuncio' }]), {});

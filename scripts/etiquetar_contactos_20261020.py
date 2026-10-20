@@ -28,7 +28,9 @@ AUTOR = "claude"
 NOTA_LUCAS = " Cargado por Claude a pedido de Lucas (20/10)."
 DUDOSOS_PROVEEDOR = {"2986": "Dudoso de la lista 14/10: sus mensajes son de un fabricante de ambos/indumentaria ofreciendo productos."}
 ESCALACIONES = {380: ("interno", "Escalaciones 380/381 del 20/10: manda nombres de insumos y fotos de cajas de Odontoland; en la lista 14/10 figura «Irina» (celular de la secretaria)."),
-                383: ("proveedor", "Escalación 383 del 20/10: proveedor de insumos (la clínica le pide hilos elásticos, papel de articular, yeso).")}
+                383: ("proveedor", "Escalación 383 del 20/10: proveedor de insumos (la clínica le pide hilos elásticos, papel de articular, yeso)."),
+                384: ("proveedor", "Escalaciones 384/385 del 20/10: plomero (arreglo de un grifo que pierde agua en el consultorio); la charla la empezó la clínica."),
+                386: ("proveedor", "Escalación 386 del 20/10: técnico/proveedor que manda fotos de un componente para verificar medidas; la charla la empezó la clínica el 29/09.")}
 
 
 def plan(cur):

@@ -6,7 +6,7 @@
     "inputSource": "jsonExample",
     "jsonExample": "{\"tel\": \"5490000000651\", \"exec_id_actual\": \"1234\", \"desde\": \"\", \"hasta\": \"\"}"
    },
-   "id": "1d8d6f66-a665-4820-bb60-9ccc4b3f1d56",
+   "id": "60f7403a-3708-4ff0-a57a-dcb3adfab962",
    "name": "Entrada",
    "type": "n8n-nodes-base.executeWorkflowTrigger",
    "typeVersion": 1.1,
@@ -23,7 +23,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "91012384-00da-4d2c-ad28-8d3aef31b934",
+   "id": "ca37bfdf-f710-4cd3-b419-30b1ece16f55",
    "name": "Redis GET ofertas",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -48,7 +48,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "efadefa0-49be-4ee0-adba-b74b34597ff0",
+   "id": "27a61a3a-0a64-4753-a0c6-cacae76954f2",
    "name": "Redis GET bloque",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -73,7 +73,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "9998a558-de5a-40c4-a72b-bc8a1c0dec2e",
+   "id": "cfeee947-711d-41a0-b6ea-9e2cba3dcefa",
    "name": "Redis GET bloque_req",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -94,7 +94,7 @@
    "parameters": {
     "jsCode": "const e = $('Entrada').first().json;\nconst req = String(e.desde || '') + '|' + String(e.hasta || '');\nconst cache = String($('Redis GET bloque').first().json.bloque_raw || '');\nconst ultimo = String($('Redis GET bloque_req').first().json.req_raw || '');\nconst hit = !!cache && ultimo === req;\nlet prev = []; try { prev = JSON.parse($('Redis GET ofertas').first().json.ofertas_raw || '[]') || []; } catch (x) { prev = []; }\nreturn [{ json: { hit, req, prev, resultado: hit ? { ok: true, repetido: true, bloque: cache, para_asiri: 'Este es el MISMO bloque que ya le ofreciste (no cuenta como uno nuevo). Si el paciente ya eligió un horario, NO lo pegues de nuevo: llamá proponer.' } : null } }];"
    },
-   "id": "3d6cd66f-2139-4da1-b3a3-e0e5b5fb46bf",
+   "id": "c7fe8b81-1c52-4eb4-95e5-f2f3ca91d3af",
    "name": "¿Es el mismo pedido?",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -113,7 +113,7 @@
      },
      "conditions": [
       {
-       "id": "9c809b53-c0a0-4183-944d-4be88575feba",
+       "id": "ce223cd0-63f8-467a-a8f8-7d855981ef22",
        "leftValue": "={{ $json.hit === true }}",
        "rightValue": "",
        "operator": {
@@ -127,7 +127,7 @@
     },
     "options": {}
    },
-   "id": "52fd3b90-144b-476a-9589-3bf8f8e4107d",
+   "id": "b470b0bb-cd04-4c2a-95c1-7451c02c5ae8",
    "name": "¿Repetido?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -144,7 +144,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "7ded28b7-3855-450b-bfcd-e5226e4448dd",
+   "id": "6b1f49e1-edf7-4768-8763-1ca00ee5ce80",
    "name": "Redis GET lotes",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -165,7 +165,7 @@
    "parameters": {
     "jsCode": "// horarios_core.js — v7 · qué horarios se le OFRECIERON al paciente. Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// buscar_horarios devuelve el bloque de texto que armó \"Sub-WF - Buscar Horarios Validado\" (formato pedido por la Dra. el 07/09). De ese mismo texto sale la lista\n// de horarios ofrecidos que después valida agenda_core.proponer (\"solo se puede reservar lo que se ofreció\") y chequeo_salida (nada inventado).\nconst HorariosCore = (() => {\n  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const hh = (h, m) => String(Number(h)).padStart(2, '0') + ':' + m;\n\n  // \"* Jueves 22 de octubre 8:00 , 9:20\" → [{fecha:'2026-10-22', hora:'08:00'}, {fecha:'2026-10-22', hora:'09:20'}]. El bloque no lleva año: el actual, o el que viene si ya pasó.\n  function parseBloque(bloque, hoyISO) {\n    const out = [];\n    for (const linea of String(bloque || '').split('\\n')) {\n      const l = sinT(linea.trim());\n      const m = /^\\*\\s*[^\\d]*?(\\d{1,2})\\s+de\\s+([a-z]+)\\s+(.*)$/.exec(l);\n      if (!m) continue;\n      const mes = MESES.indexOf(m[2] === 'setiembre' ? 'septiembre' : m[2]) + 1;\n      if (!mes) continue;\n      const mm = String(mes).padStart(2, '0'), dd = String(Number(m[1])).padStart(2, '0');\n      const anio = Number(hoyISO.slice(0, 4));\n      const cand = `${anio}-${mm}-${dd}`;\n      const fecha = cand >= hoyISO ? cand : `${anio + 1}-${mm}-${dd}`;\n      for (const t of m[3].matchAll(/(\\d{1,2}):(\\d{2})/g)) out.push({ fecha, hora: hh(t[1], t[2]) });\n    }\n    return out;\n  }\n  // Une lo ya ofrecido con lo nuevo (el paciente puede elegir de un bloque anterior), sin duplicados y solo futuro.\n  function unir(previas, nuevas, hoyISO) {\n    const vistos = new Set(); const out = [];\n    for (const o of [...(previas || []), ...(nuevas || [])]) {\n      const k = `${o.fecha} ${o.hora}`;\n      if (o.fecha < hoyISO || vistos.has(k)) continue;\n      vistos.add(k); out.push({ fecha: o.fecha, hora: o.hora });\n    }\n    return out;\n  }\n  // Regla de la Dra. (07/09): como máximo 2 bloques por conversación. A la tercera consulta no se busca otro: se anota para la clínica.\n  const MAX_LOTES = 2;\n  const limiteLotes = (n) => Number(n) > MAX_LOTES;\n  // (07/10) Horarios del bloque que todavía NO se le habían ofrecido. Un bloque sin ninguno no es \"un bloque nuevo\": no cuenta para el límite y no se vuelve a pegar\n  // (examen completo 07/10: \"solo puedo a las 17\" → buscó desde mañana, volvió el MISMO bloque, se gastó el segundo y la charla terminó en lista de espera).\n  const clave = (o) => `${o.fecha} ${String(o.hora).replace(/^(\\d):/, '0$1:')}`;\n  function nuevas(previas, delBloque) { const ya = new Set((previas || []).map(clave)); return (delBloque || []).filter((o) => !ya.has(clave(o))); }\n  // Día siguiente al último horario ofrecido: el `desde` correcto para buscar MÁS ADELANTE (el modelo a veces mandaba \"mañana\" y traía lo mismo).\n  function siguienteDesde(ofertas) {\n    const f = (ofertas || []).map((o) => o.fecha).sort().pop(); if (!f) return '';\n    const d = new Date(f + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10);\n  }\n  return { parseBloque, unir, limiteLotes, nuevas, siguienteDesde, MAX_LOTES };\n})();\nif (typeof module !== 'undefined') module.exports = HorariosCore;\nconst prev = $('¿Es el mismo pedido?').first().json.prev || [];\nconst n = Number($input.first().json.lotes_raw || 0) + 1;\nif (HorariosCore.limiteLotes(n)) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'limite_de_bloques', para_asiri: 'Ya se le ofrecieron dos bloques de horarios y no hay un tercero. No ofrezcas otro: decile con amabilidad que se lo dejás anotado a la clínica para que lo ayuden con otra fecha, y llamá avisar_grupo con nivel FYI.' } } }];\nreturn [{ json: { terminado: false, prev } }];"
    },
-   "id": "6594dec4-1cb5-4ef6-91c2-a01932c17fb4",
+   "id": "69becf3b-7071-4b32-be09-11ea8c601aa6",
    "name": "Límite",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -184,7 +184,7 @@
      },
      "conditions": [
       {
-       "id": "1ecd83d1-c95e-436b-9c19-d3abed5e79eb",
+       "id": "fbebe17f-61bb-4505-85de-2d6f8ea76c24",
        "leftValue": "={{ $json.terminado === true }}",
        "rightValue": "",
        "operator": {
@@ -198,7 +198,7 @@
     },
     "options": {}
    },
-   "id": "57cc9f47-a611-484d-9e27-ccb2c7c73e70",
+   "id": "33612e38-cfa5-4aaf-a623-ee9562377374",
    "name": "¿Termina? (límite)",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -226,7 +226,7 @@
     },
     "options": {}
    },
-   "id": "2025d053-41bc-4ca8-9b81-e67ffe3ab88a",
+   "id": "37c0acb0-2aac-43c1-86a8-f53157a694d7",
    "name": "Buscar horarios (sub-WF)",
    "type": "n8n-nodes-base.executeWorkflow",
    "typeVersion": 1.2,
@@ -241,7 +241,7 @@
    "parameters": {
     "jsCode": "// horarios_core.js — v7 · qué horarios se le OFRECIERON al paciente. Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// buscar_horarios devuelve el bloque de texto que armó \"Sub-WF - Buscar Horarios Validado\" (formato pedido por la Dra. el 07/09). De ese mismo texto sale la lista\n// de horarios ofrecidos que después valida agenda_core.proponer (\"solo se puede reservar lo que se ofreció\") y chequeo_salida (nada inventado).\nconst HorariosCore = (() => {\n  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const hh = (h, m) => String(Number(h)).padStart(2, '0') + ':' + m;\n\n  // \"* Jueves 22 de octubre 8:00 , 9:20\" → [{fecha:'2026-10-22', hora:'08:00'}, {fecha:'2026-10-22', hora:'09:20'}]. El bloque no lleva año: el actual, o el que viene si ya pasó.\n  function parseBloque(bloque, hoyISO) {\n    const out = [];\n    for (const linea of String(bloque || '').split('\\n')) {\n      const l = sinT(linea.trim());\n      const m = /^\\*\\s*[^\\d]*?(\\d{1,2})\\s+de\\s+([a-z]+)\\s+(.*)$/.exec(l);\n      if (!m) continue;\n      const mes = MESES.indexOf(m[2] === 'setiembre' ? 'septiembre' : m[2]) + 1;\n      if (!mes) continue;\n      const mm = String(mes).padStart(2, '0'), dd = String(Number(m[1])).padStart(2, '0');\n      const anio = Number(hoyISO.slice(0, 4));\n      const cand = `${anio}-${mm}-${dd}`;\n      const fecha = cand >= hoyISO ? cand : `${anio + 1}-${mm}-${dd}`;\n      for (const t of m[3].matchAll(/(\\d{1,2}):(\\d{2})/g)) out.push({ fecha, hora: hh(t[1], t[2]) });\n    }\n    return out;\n  }\n  // Une lo ya ofrecido con lo nuevo (el paciente puede elegir de un bloque anterior), sin duplicados y solo futuro.\n  function unir(previas, nuevas, hoyISO) {\n    const vistos = new Set(); const out = [];\n    for (const o of [...(previas || []), ...(nuevas || [])]) {\n      const k = `${o.fecha} ${o.hora}`;\n      if (o.fecha < hoyISO || vistos.has(k)) continue;\n      vistos.add(k); out.push({ fecha: o.fecha, hora: o.hora });\n    }\n    return out;\n  }\n  // Regla de la Dra. (07/09): como máximo 2 bloques por conversación. A la tercera consulta no se busca otro: se anota para la clínica.\n  const MAX_LOTES = 2;\n  const limiteLotes = (n) => Number(n) > MAX_LOTES;\n  // (07/10) Horarios del bloque que todavía NO se le habían ofrecido. Un bloque sin ninguno no es \"un bloque nuevo\": no cuenta para el límite y no se vuelve a pegar\n  // (examen completo 07/10: \"solo puedo a las 17\" → buscó desde mañana, volvió el MISMO bloque, se gastó el segundo y la charla terminó en lista de espera).\n  const clave = (o) => `${o.fecha} ${String(o.hora).replace(/^(\\d):/, '0$1:')}`;\n  function nuevas(previas, delBloque) { const ya = new Set((previas || []).map(clave)); return (delBloque || []).filter((o) => !ya.has(clave(o))); }\n  // Día siguiente al último horario ofrecido: el `desde` correcto para buscar MÁS ADELANTE (el modelo a veces mandaba \"mañana\" y traía lo mismo).\n  function siguienteDesde(ofertas) {\n    const f = (ofertas || []).map((o) => o.fecha).sort().pop(); if (!f) return '';\n    const d = new Date(f + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10);\n  }\n  return { parseBloque, unir, limiteLotes, nuevas, siguienteDesde, MAX_LOTES };\n})();\nif (typeof module !== 'undefined') module.exports = HorariosCore;\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Jujuy' }).format(new Date());\nconst prev = $('Límite').first().json.prev || [];\nconst resp = $input.first().json || {};\nconst bloque = typeof resp.bloque === 'string' ? resp.bloque.trim() : '';\nif (!bloque) return [{ json: { terminado: true, resultado: { ok: false, motivo: (resp.error || resp.error_tecnico) ? 'error_tecnico' : 'sin_turnos', para_asiri: (resp.error || resp.error_tecnico) ? 'No pude consultar la agenda en este momento. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).' : 'No hay turnos en ese rango. Decíselo en una frase y nombrá lo más cercano de lo que ya le ofreciste, o buscá sin hasta para ver los próximos. Si quiere esperar, lista_espera. No inventes horarios y NO avises a la clínica por esto.' } } }];\nconst delBloque = HorariosCore.parseBloque(bloque, hoy);\nconst ofertas = HorariosCore.unir(prev, delBloque, hoy);\nconst desde = HorariosCore.siguienteDesde(ofertas);\nif (prev.length && !HorariosCore.nuevas(prev, delBloque).length) {\n  // Nada que no se le haya ofrecido ya: no se pega otro bloque ni cuenta para el límite de 2.\n  return [{ json: { terminado: false, nuevo: false, resultado: { ok: true, sin_horarios_nuevos: true, siguiente_desde: desde, para_asiri: '[Nota interna para vos, NO la repitas al paciente] En lo que pidió no hay horarios distintos de los que YA le ofreciste (esta búsqueda no cuenta como bloque nuevo). NO pegues otro bloque: decile en una frase que en eso no hay y nombrale lo más cercano a lo que pidió entre los horarios que ya le ofreciste (por ejemplo, la primera tarde). Si quiere fechas más adelante, llamá buscar_horarios con desde = ' + desde + '.' } } }];\n}\nreturn [{ json: { terminado: false, nuevo: true, ofertas_json: JSON.stringify(ofertas), bloque, req: $('¿Es el mismo pedido?').first().json.req, resultado: { ok: true, bloque, siguiente_desde: desde, para_asiri: '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es `bloque`: mandáselo tal cual, sin frases como \"le paso el bloque\". Si pidió una hora o franja que no está, decíselo en una frase antes y nombrá lo más cercano. Si dice que ninguno le sirve, llamá buscar_horarios con desde = ' + desde + '.' } } }];"
    },
-   "id": "851270f3-5b4d-44e0-a79b-581afafe0a76",
+   "id": "46c0f034-11b9-475f-8965-433012dbd911",
    "name": "Ofertas",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -260,7 +260,7 @@
      },
      "conditions": [
       {
-       "id": "fc86f683-1732-435e-80f3-703ef9054faf",
+       "id": "b944a9ac-d94e-49f7-9452-2d089b984800",
        "leftValue": "={{ $json.nuevo === true }}",
        "rightValue": "",
        "operator": {
@@ -274,7 +274,7 @@
     },
     "options": {}
    },
-   "id": "2f3abfb6-d27f-42c1-be62-aa49298dcf50",
+   "id": "d99b4b60-0d88-482b-b781-79a554e17e82",
    "name": "¿Bloque nuevo?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -293,7 +293,7 @@
      },
      "conditions": [
       {
-       "id": "3b5ed2ab-a0ba-4e9f-ba0f-ac68d22df7dd",
+       "id": "974bf6b7-0c89-4b70-b8cf-094abdc948b2",
        "leftValue": "={{ $json.terminado === true }}",
        "rightValue": "",
        "operator": {
@@ -307,7 +307,7 @@
     },
     "options": {}
    },
-   "id": "f1d73d66-2a44-448d-80b1-884f2f76e5e8",
+   "id": "f0ff4ea8-47dd-42d0-9aed-4fdbee6ba864",
    "name": "¿Termina? (ofertas)",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -325,7 +325,7 @@
     "expire": true,
     "ttl": 7200
    },
-   "id": "6cc48bb8-cdb7-4640-b23f-e6a077d13726",
+   "id": "3a55bbc2-7f8b-4d49-aa77-da5e15ebf3a1",
    "name": "Redis SET ofertas",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -350,7 +350,7 @@
     "expire": true,
     "ttl": 7200
    },
-   "id": "f9ba4e37-bd6a-4767-853f-85ac9ac80257",
+   "id": "48f335d8-740d-4475-8672-b6a5c3a4cab2",
    "name": "Redis SET bloque",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -375,7 +375,7 @@
     "expire": true,
     "ttl": 7200
    },
-   "id": "11250f1a-eb01-4066-a562-2314e4757f30",
+   "id": "d33eb180-d841-4cdc-8471-a059c8da458a",
    "name": "Redis SET bloque_req",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -400,7 +400,7 @@
     "expire": true,
     "ttl": 600
    },
-   "id": "2aca0cc1-bf4a-40a3-947a-b402277bd694",
+   "id": "9397e7aa-af4c-44fe-b450-f83a5bcb9a99",
    "name": "Redis SET bloque_exec",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -423,7 +423,7 @@
     "expire": true,
     "ttl": 7200
    },
-   "id": "3866445d-c9ab-4ef1-9286-8544e55a089b",
+   "id": "c537916b-e04e-44c3-86b5-24c253df3f52",
    "name": "Redis INCR lotes",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -444,7 +444,7 @@
    "parameters": {
     "jsCode": "// El resultado sale del último nodo de decisión que corrió: Ofertas (bloque nuevo / sin turnos / error), si no Límite (tercer bloque), si no el pedido repetido (caché).\nconst corrio = (n) => { try { return $(n).isExecuted === true; } catch (x) { return false; } };\nconst r = corrio('Ofertas') ? $('Ofertas').first().json.resultado : (corrio('Límite') ? $('Límite').first().json.resultado : $('¿Es el mismo pedido?').first().json.resultado);\nreturn [{ json: r || { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude buscar horarios; avisá a la clínica con avisar_grupo (ACCION).' } }];"
    },
-   "id": "c761a68a-72f9-4252-b3db-bfabb12c3266",
+   "id": "b5476643-8ffd-4107-ac6d-33d31bc70fe7",
    "name": "Devolver",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,

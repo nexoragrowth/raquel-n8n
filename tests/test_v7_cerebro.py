@@ -75,7 +75,7 @@ def esc(id_, orquestador, texto="Hola", redis=None, pg=None, modo="vivo", subwf=
     trig = {"phone": TEL, "texto": texto, "pushName": "CELE", "modo": modo, "historial_json": "", **(extra.pop("trigger", {}))}
     sw = {"Identificar paciente": IDENT, "Derivar a secretaria": {"ok": True, "derivado": True, "texto_para_el_paciente": DERIVA},
           "Pasar a humano": {"ok": True, "humano": True, "texto_para_el_paciente": DERIVA}, **(subwf or {})}
-    pg_ = {"Historial": [{}], "Recordatorios": [{}], "Datos del consultorio": KB, "Guardar en memoria": {}, **(pg or {})}
+    pg_ = {"Historial": [{}], "Recordatorios": [{}], "Primer mensaje": [{}], "Datos del consultorio": KB, "Guardar en memoria": {}, **(pg or {})}
     return {"id": id_, "trigger": trig, "ahora": AHORA, "exec_id": EXEC, "redis": redis or {}, "pg": pg_, "subwf": sw, "llm": {"Orquestador": orquestador}, **extra}
 
 
@@ -168,6 +168,13 @@ def main():
             redis={f"ofertas:{TEL}": OFERTAS, f"turnos_vistos:{TEL}": VISTOS}),
         esc("Z24 urgencia que no se pudo derivar", orq({"a": "urgencias", "pedido": "dolor"}), texto="me duele mucho la muela", subwf={"Agente Urgencias": sub("urgencias", "", "derivar_fallo", codigo=None)}),
         esc("Z25 audio", orq({"a": "pedir_texto"}), texto="[audio]"),
+        # (20/10, D3) charla que inició la clínica con un contacto SIN ficha (plomero de las escalaciones 384/385)
+        esc("Z26 charla de la clínica, sin ficha", orq({"a": "derivar_secretaria", "cita": "Yo por la tarde puedo pasar", "motivo": "proveedor: grifo"}), texto="Yo por la tarde puedo pasar",
+            subwf={"Identificar paciente": {"ok": False, "motivo": "sin_ficha"}}, pg={"Primer mensaje": [{"fuente": "wa_outbound", "tipo": "ai"}]}),
+        esc("Z26b sin ficha pero escribió él primero", orq({"a": "derivar_secretaria", "cita": "Yo por la tarde puedo pasar", "motivo": "proveedor: grifo"}), texto="Yo por la tarde puedo pasar",
+            subwf={"Identificar paciente": {"ok": False, "motivo": "sin_ficha"}}, pg={"Primer mensaje": [{"fuente": "wa_inbound", "tipo": "human"}]}),
+        esc("Z26c la clínica escribió primero pero el contacto TIENE ficha", orq({"a": "derivar_secretaria", "cita": "x", "motivo": "x"}), texto="x",
+            pg={"Primer mensaje": [{"fuente": "wa_outbound", "tipo": "ai"}]}),
     ])
 
     print("\nSALUDO, MENÚ y SOMBRA")
@@ -264,6 +271,13 @@ def main():
     chequear("Z22 reserva de PRIMERA CONSULTA → pedido de pago + datos (como el v6), una sola vez", a["salida"]["texto"].startswith("Listo, le reservé") and "Para confirmarlo definitivamente" in a["salida"]["texto"] and a["salida"]["texto"].count("Alias:") == 1, a["salida"]["texto"])
     a = R["Z23 Turnos (por error) afirma algo sin escritura"]["reps"][0]
     chequear("Z23 el chequeo de salida corre sobre la parte de Turnos: una afirmación sin escritura se reemplaza por el texto honesto", a["salida"]["motivo_chequeo"] == "afirma_reprogramar_sin_ok" and "no quedó hecho" in a["salida"]["texto"], a["salida"])
+    a = R["Z26 charla de la clínica, sin ficha"]["reps"][0]
+    chequear("Z26 charla que inició la clínica con un contacto sin ficha: silencio, NO llama a Derivar a secretaria (sin aviso al grupo)",
+             a["salida"]["silencio"] is True and not a["salida"]["texto"] and not llamados(a, "Derivar a secretaria"), (a["salida"], llamados(a, "Derivar a secretaria")))
+    a = R["Z26b sin ficha pero escribió él primero"]["reps"][0]
+    chequear("Z26b si el contacto escribió primero (lead nuevo), se atiende como siempre: deriva", bool(llamados(a, "Derivar a secretaria")) and a["salida"]["texto"], a["salida"])
+    a = R["Z26c la clínica escribió primero pero el contacto TIENE ficha"]["reps"][0]
+    chequear("Z26c paciente con ficha: aunque la clínica haya escrito primero, se atiende como siempre", bool(llamados(a, "Derivar a secretaria")), a["salida"])
 
     print(f"\n{total - fallas}/{total} {'TODO OK' if not fallas else str(fallas) + ' FALLAS'}")
     sys.exit(1 if fallas else 0)

@@ -96,6 +96,12 @@ const OrquestadorCore = (() => {
     // (B3) Ruteo por ESTADO, no por texto: con una confirmación pendiente que el paciente vio, Turnos SIEMPRE ve este mensaje y decide `confirma`
     // con el MENSAJE ACTUAL. Así un "👍" que el orquestador tomó por cierre no deja morir la propuesta.
     if (c.prop_pendiente && plan.fija !== 'humano' && !plan.turnos) { plan.turnos = 'responde a la confirmación pendiente'; plan.turnos_por_estado = true; }
+    // (20/10, D3; escalaciones reales 380–386: plomero, proveedor, técnico) Charla que inició la CLÍNICA con un contacto SIN ficha: Asiri no
+    // responde, no deriva y no avisa al grupo (la secretaria ya está en esa charla). Solo una urgencia que vea el orquestador sigue su camino.
+    if (c.charla_de_la_clinica) {
+      plan.turnos = plan.pagos = plan.informacion = null; plan.turnos_por_estado = false;
+      plan.fija = 'no_reply'; plan.cita = ''; plan.motivo = 'charla_de_la_clinica'; plan.charla_de_la_clinica = true;
+    }
     plan.hay_agentes = AGENTES.some((a) => plan[a]);
     plan.contar_no_entendi = plan.fija === 'no_entendi' && !plan.hay_agentes;
     return plan;

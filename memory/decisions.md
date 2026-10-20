@@ -934,3 +934,9 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Medido:** 54 ms de mediana y 190 ms en el peor caso sobre 10.499 filas (escaneo secuencial). Con `pg_trgm` disponible pero no instalado.
 - **Regla del patrón:** la búsqueda no cuenta lo que dice el marcador "[ATENCION HUMANA - … doctora/secretaria … WhatsApp del consultorio]" (3 de cada 4 filas lo llevan) y deja afuera notas internas, [NO_REPLY] y avisos de adjunto sin texto.
 - **Revisable:** sí, al acercarse a ~50.000 filas (índice trigram).
+
+## 2026-10-20 — D3 en vivo: charla iniciada por la clínica con un contacto sin ficha = Asiri no se mete
+- **Regla:** si el primer mensaje guardado del chat es del staff y Dentalink no tiene ficha para ese celular, el v7 no responde, no deriva y no avisa al grupo (la secretaria ya está en esa charla). Urgencias: siguen (pre-triaje del v6 + Urgencias del orquestador).
+- **Por qué ya y sin sombra:** en un solo día cayeron 7 escalaciones al grupo de contactos así (plomero, proveedores, técnico); medido sobre 114 contactos, los que parecían pacientes tenían ficha.
+- **Riesgo aceptado:** un prospecto al que la secretaria escribió primero no recibe respuesta de Asiri (la atiende la secretaria).
+- **Revisable:** sí; vuelta atrás = sacar el bloque `charla_de_la_clinica` de `despachar` y redeploy.
