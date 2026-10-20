@@ -924,3 +924,8 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Ojo:** el flag `--ok-dra` se pasó por orden de Lucas del 20/10 ("todo lo de segmentación"), NO porque la Dra. haya respondido: su OK nunca quedó registrado. Contárselo a la Dra. con la lista; si objeta a alguno, se lo vuelve a paciente desde el panel o `cargar_lista_semilla.py --deshacer --apply` cierra los 11.
 - **Red:** proveedores y colegas tienen la red de seguridad (urgencia → aviso al grupo); los 2 internos no.
 - **Revisable:** sí (Dra.).
+
+## 2026-10-20 — Contactos no pacientes etiquetados por Claude (pedido de Lucas)
+- **Qué:** 17 contactos con tipo que silencia, autor "claude", evidencia en la nota (comercio por nombre, o mensajes de proveedor/insumos). Ninguno con ficha. Lista y criterio en current-state del 20/10.
+- **Criterio:** silenciar solo con evidencia clara de no-paciente; ante nombre de persona sin evidencia, NO (el bot sigue atendiendo). Caso que lo justifica: …3000 figuraba como "publicidad" y manda comprobantes de pago.
+- **Revisable:** sí — cualquiera se vuelve a paciente desde el panel.

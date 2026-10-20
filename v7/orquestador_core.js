@@ -221,7 +221,8 @@ const OrquestadorCore = (() => {
     else {
       // (08/10) Si en la misma respuesta va un bloque de horarios, el "no hay" queda corto (la salida ya está a la vista); si no, ofrece otra fecha o lista de espera.
       const hayBloque = bloques.some((b) => b.estado === 'bloque_ofrecido');
-      if (!(g && g.texto && g.estado === 'escrito_ok')) for (const b of bloques) {
+      // (20/10) Con "menos de 48 h" no van horarios en el mismo mensaje: no se pueden reservar como cambio de ESE turno.
+      if (!(g && g.texto && (g.estado === 'escrito_ok' || g.estado === 'menos_48h'))) for (const b of bloques) {
         if (!hayBloque || b.estado === 'bloque_ofrecido') partes.push(b.texto);
         else if (diaPuntual(b.input)) partes.push('Para ese día no hay turnos disponibles.');
       }

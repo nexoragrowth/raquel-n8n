@@ -216,6 +216,8 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const p2 = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'presupuesto', motivo: 'presupuesto' }, { a: 'turnos', pedido: 'sacar turno' }]), {});
   const T_B = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: true, bloque: BLOQUE })] }, {});
   const c2 = O.componer(base({ plan: p2, res: { turnos: T_B }, reunion: O.reunir(p2, { turnos: T_B }, {}), derivar_res: { ok: true, texto_para_el_paciente: Clin.TEXTOS.DERIVA }, bloque: BLOQUE, bloque_exec: BLOQUE, ofertas: [{ fecha: '2026-10-22', hora: '08:00' }, { fecha: '2026-10-22', hora: '09:20' }] }));
+  const T48b = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: true, bloque: BLOQUE }), paso('gestionar_turno', { ok: false, motivo: 'menos_48h' })] }, {});
+  t('D48c buscó horarios y después gestionar_turno dijo "menos de 48 h": NO van los horarios (no se pueden reservar)', !T48b.texto.includes('Tenemos los próximos') && T48b.texto.includes('menos de 48 horas'), T48b.texto);
   t('D48b derivación por OTRO motivo + bloque de Turnos: el orden de siempre (derivación y después los horarios)', c2.texto.indexOf('Le paso con la secretaria') < c2.texto.indexOf('Tenemos los próximos'), c2.texto); }
 
 // (20/10, prueba en vivo 318950) "cuánto sale la consulta y pasame el alias" → el orquestador mandó todo a Información, sin Pagos.

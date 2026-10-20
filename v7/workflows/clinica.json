@@ -6,7 +6,7 @@
     "inputSource": "jsonExample",
     "jsonExample": "{\"tel\": \"5490000000651\", \"exec_id_actual\": \"1234\", \"modo\": \"vivo\", \"accion\": \"aviso\", \"nivel\": \"FYI\", \"texto\": \"\", \"motivo\": \"\", \"cita_textual\": \"\", \"texto_paciente\": \"\", \"moneda\": \"\"}"
    },
-   "id": "5c0fb845-e038-47b0-a422-98b4ad03d29d",
+   "id": "833f9cb8-c222-4fe7-a5be-4bfc48053631",
    "name": "Entrada",
    "type": "n8n-nodes-base.executeWorkflowTrigger",
    "typeVersion": 1.1,
@@ -23,7 +23,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "5d3275a4-a811-4e6d-8bd8-d086aa1810db",
+   "id": "d2aa9f76-516f-4855-af26-020e952a7d85",
    "name": "Redis GET pago",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -48,7 +48,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "9db1250a-7c57-40ff-96a1-379631af0c79",
+   "id": "196b214e-6767-494f-afe6-83fb077556b2",
    "name": "Redis GET avisos",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -73,7 +73,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "d0b0dd41-aeca-4b2c-b897-01b19df180f4",
+   "id": "a5b57f48-0626-4eca-8106-8fa82a2c4c27",
    "name": "Redis GET deriva",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -94,7 +94,7 @@
    "parameters": {
     "jsCode": "// clinica_core.js — v7 · herramientas de CLÍNICA: derivar a la secretaria, pasar a una persona, recepción de pagos, datos para transferir, lista de espera,\n// triaje de urgencias y avisos al grupo. Fuente de verdad en el repo (se inlinea en un nodo Code de n8n y se prueba offline).\n// (08/10, orquestador + sub-agentes) QUIÉN decide qué quiso decir el paciente es la IA (el orquestador o un sub-agente eligen la acción). Este código\n// EJECUTA la acción y arma el texto para el paciente; no lee el mensaje del paciente para juzgar su intención. Se borraron las regex de verificación\n// por motivo (pedido de persona, quejas, bajas, urgencias) y esos motivos: lo que está fuera de las 8 tareas va a `derivar` (decisión de Lucas del 08/10).\n// Lo único que el código compara con el texto del paciente es un DATO: que la frase que el modelo dice citar en `humano` esté de verdad en el mensaje\n// (anti-alucinación). Si no coincide, se deriva igual (aviso ACCIÓN, sin silenciar): falla del lado seguro, nunca deja al paciente hablando solo con el bot.\n// Todo lo que sale afuera (avisos, silencio) exige modo === 'vivo' EXPLÍCITO (decisión del 08/10).\nconst ClinicaCore = (() => {\n  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const tokens = (x) => sinT(x).replace(/[^a-z0-9ñ ]+/g, ' ').split(/\\s+/).filter((t) => t.length >= 2);\n  const NIVELES = ['FYI', 'ACCION'];\n  const lim = (s, n) => String(s || '').trim().slice(0, n);\n  // Textos fijos para el paciente (los arma el código; ningún modelo los redacta).\n  const TEXTOS = {\n    DERIVA: 'Le paso con la secretaria para que lo atienda.',\n    DERIVA_INSISTE: 'Ya le pasé su consulta a la secretaria; le responde por este chat.',\n    PAGO: 'Recibido. Dejé anotado su aviso de pago; la secretaria lo verifica en su horario de atención.',\n    PAGO_YA: 'Recibido, gracias.',\n    DATOS_PAGO: 'Le paso los datos para transferir:',\n    ESPERA: 'Le dejo anotado a la clínica que quiere adelantar su turno si se libera uno.',\n  };\n  // ¿La cita está en lo que escribió el paciente? Mayoría (≥ 50 %) de sus palabras presentes en el texto crudo normalizado. Dato, no intención.\n  function citaEnTexto(cita, texto) {\n    const tc = tokens(cita), tp = new Set(tokens(texto));\n    if (!tc.length) return false;\n    return tc.filter((t) => tp.has(t)).length / tc.length >= 0.5;\n  }\n\n  // entrada: { accion:'aviso'|'derivar'|'humano'|'pago'|'datos_pago'|'espera'|'triaje', nivel, texto, motivo, cita_textual, texto_paciente, moneda, modo,\n  //            pago_reciente:boolean, avisos_recientes:number, deriva_recientes:number, tel }\n  // devuelve { avisar:null|{resumen,tomar}, marcar_pago, limpiar, contar_deriva, triaje:null|{motivo,cita}, resultado:{ ok, texto_para_el_paciente?, ... } }\n  function decidir(e) {\n    const sombra = e.modo !== 'vivo';\n    const res = (resultado, extra) => ({ avisar: null, marcar_pago: false, limpiar: false, contar_deriva: false, triaje: null, resultado, ...(extra || {}) });\n    const textual = () => { const tp = lim(e.cita_textual || e.texto_paciente, 200); return tp ? `«${tp}»` : '(mandó un archivo sin texto)'; };\n\n    // Urgencias: el mensaje vuelve al triaje del v6 (videos aprobados por la Dra., pregunta guiada o la doctora). La cita la pone el CÓDIGO con el mensaje\n    // completo del paciente (no una paráfrasis del modelo). La marca se deja también en sombra (solo la lee el cerebro de esta ejecución).\n    if (e.accion === 'triaje') {\n      return res({ ok: true, derivado_a_triaje: true, simulado: sombra || undefined }, { triaje: { motivo: 'derivar_triaje', cita: lim(e.texto_paciente || e.cita_textual, 300) } });\n    }\n    if (e.accion === 'derivar') {\n      // Fuera de las 8 tareas. 1.ª vez: texto fijo + aviso ACCIÓN con la frase textual. Si ya se derivó en los últimos 30 min (contador PROPIO `deriva:`,\n      // separado de los avisos técnicos), el paciente insiste: una persona toma el chat y el bot se calla (anti-bucle REAL-09).\n      const motivo = lim(e.motivo, 120);\n      if (Number(e.deriva_recientes || 0) >= 1) {\n        return res({ ok: true, modo_humano: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.DERIVA_INSISTE },\n          { contar_deriva: true, ...(sombra ? {} : { avisar: { resumen: `[ACCIÓN] El paciente insiste con algo que Asiri no atiende${motivo ? ' (' + motivo + ')' : ''}: ${textual()}. El bot queda en silencio en este chat hasta que lo reactiven.`, tomar: true }, limpiar: true }) });\n      }\n      return res({ ok: true, derivado: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.DERIVA },\n        { contar_deriva: true, ...(sombra ? {} : { avisar: { resumen: `[ACCIÓN] Fuera de lo que atiende Asiri${motivo ? ' (' + motivo + ')' : ''}: ${textual()}. Contestarle por este chat.`, tomar: false } }) });\n    }\n    if (e.accion === 'humano') {\n      // Pidió hablar con una persona: lo decidió el orquestador. El código solo verifica que la frase citada esté en el mensaje (anti-alucinación).\n      if (!citaEnTexto(e.cita_textual, e.texto_paciente)) {\n        const d = decidir({ ...e, accion: 'derivar', motivo: 'pidió una persona; la frase no se pudo verificar' });\n        d.resultado = { ...d.resultado, degradado: true, motivo: 'no_verificado' };\n        return d;\n      }\n      return res({ ok: true, humano: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.DERIVA },\n        sombra ? {} : { avisar: { resumen: `El paciente pidió hablar con una persona: «${lim(e.cita_textual, 160)}»`, tomar: true }, limpiar: true });\n    }\n    if (e.accion === 'aviso') {\n      const nivel = NIVELES.includes(String(e.nivel || '').toUpperCase()) ? String(e.nivel).toUpperCase() : null;\n      const texto = lim(e.texto, 400);\n      if (Number(e.avisos_recientes || 0) >= 2) return res({ ok: true, ya_avisado: true });\n      if (!nivel || texto.length < 5) return res({ ok: false, motivo: 'aviso_invalido' });\n      return res({ ok: true, simulado: sombra || undefined }, sombra ? {} : { avisar: { resumen: `[${nivel === 'ACCION' ? 'ACCIÓN' : 'FYI'}] ${texto}`, tomar: false } });\n    }\n    if (e.accion === 'espera') {\n      const texto = lim(e.texto, 300);\n      return res({ ok: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.ESPERA },\n        sombra ? {} : { avisar: { resumen: `[FYI] Lista de espera: la paciente quiere adelantar su turno si se libera uno.${texto ? ' ' + texto : ''}`, tomar: false } });\n    }\n    if (e.accion === 'pago') {\n      // Qué es un pago lo decide el modelo (Pagos). El aviso NO afirma \"transfirió\": muestra las palabras textuales y la secretaria juzga (REAL-05).\n      // Ya anotado en los últimos 15 min (REAL-02): no se avisa de nuevo y el texto es corto.\n      if (e.pago_reciente) return res({ ok: true, ya_anotado: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.PAGO_YA });\n      const base = { ok: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.PAGO };\n      if (sombra) return res(base, { marcar_pago: true });   // la marca va a la clave de sombra (v7s:pago:), no avisa a nadie\n      return res(base, { avisar: { resumen: `[ACCIÓN] Asiri lo tomó como aviso de pago o comprobante: ${textual()}. Verificar en el chat e imputarlo al turno.`, tomar: false }, marcar_pago: true });\n    }\n    if (e.accion === 'datos_pago') {\n      // La moneda la decide Pagos (la IA). Solo hay datos en pesos: otra moneda queda fuera de alcance y la deriva el cerebro. Los datos los pega el código.\n      if (String(e.moneda || 'pesos').toLowerCase() === 'otra') return res({ ok: false, fuera_de_alcance: true, motivo: 'otra_moneda' });\n      return res({ ok: true, datos_pago: true, texto_para_el_paciente: TEXTOS.DATOS_PAGO });\n    }\n    return res({ ok: false, motivo: 'accion_invalida' });\n  }\n  return { decidir, citaEnTexto, TEXTOS };\n})();\nif (typeof module !== 'undefined') module.exports = ClinicaCore;\nconst e = $('Entrada').first().json;\nconst r = ClinicaCore.decidir({ accion: e.accion, nivel: e.nivel, texto: e.texto, motivo: e.motivo, cita_textual: e.cita_textual, texto_paciente: e.texto_paciente, moneda: e.moneda, modo: e.modo, tel: e.tel,\n  pago_reciente: !!$('Redis GET pago').first().json.pago_raw, avisos_recientes: Number($('Redis GET avisos').first().json.avisos_raw || 0), deriva_recientes: Number($('Redis GET deriva').first().json.deriva_raw || 0) });\nreturn [{ json: { avisar: r.avisar, marcar_pago: r.marcar_pago, limpiar: r.limpiar, contar_deriva: r.contar_deriva === true, triaje: r.triaje, resultado: r.resultado } }];"
    },
-   "id": "46d882af-972c-4a16-b6e4-5a16acbbc1b9",
+   "id": "1c8f2686-6c6f-4363-8719-62f38b995226",
    "name": "Decidir",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -113,7 +113,7 @@
      },
      "conditions": [
       {
-       "id": "d3b9f3e1-03ad-455a-9655-f679e09f89f3",
+       "id": "da679234-7703-4e77-b99e-40f41c79408f",
        "leftValue": "={{ !!$json.triaje }}",
        "rightValue": "",
        "operator": {
@@ -127,7 +127,7 @@
     },
     "options": {}
    },
-   "id": "033f115a-d666-4271-a778-d0b31a23f407",
+   "id": "85e8e614-87b8-46ae-a893-ed6b2542be11",
    "name": "¿Derivar a triaje?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -145,7 +145,7 @@
     "expire": true,
     "ttl": 300
    },
-   "id": "282f71a4-96ad-4cc0-899a-7b7c87a48fc0",
+   "id": "f3de7bcd-3afc-4832-84d4-5047d28489b8",
    "name": "Redis SET triaje",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -171,7 +171,7 @@
      },
      "conditions": [
       {
-       "id": "dfceca30-c739-4be3-9d8c-afae839db0bf",
+       "id": "2b3468f6-fce3-4edd-9ca3-ea4e8921130c",
        "leftValue": "={{ !!$('Decidir').first().json.avisar && $('Entrada').first().json.modo === 'vivo' }}",
        "rightValue": "",
        "operator": {
@@ -185,7 +185,7 @@
     },
     "options": {}
    },
-   "id": "d79fbf6e-f767-4118-a516-b50d74749568",
+   "id": "a6625f9c-a028-4b3a-aecc-a85a2d299983",
    "name": "¿Avisar?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -198,7 +198,7 @@
    "parameters": {
     "jsCode": "const e = $('Entrada').first().json; const a = $('Decidir').first().json.avisar;\nlet enviado = false;\ntry { await this.helpers.httpRequest({ method: 'POST', url: 'https://n8n.raquelrodriguez.com.ar/webhook/notify-grupo', qs: Object.assign({ phone: e.tel, resumen: a.resumen }, a.tomar ? { tomar: 'true' } : {}), json: true }); enviado = true; } catch (x) { enviado = false; }\nreturn [{ json: { enviado } }];"
    },
-   "id": "1a65a3c7-b3ac-4104-9cc6-0a1bdb537d2f",
+   "id": "0d7d4cab-5b49-4659-bd31-561f407f97d0",
    "name": "Avisar al grupo",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -217,7 +217,7 @@
      },
      "conditions": [
       {
-       "id": "bc5e7e78-eb38-4cee-b35f-bbca13711a04",
+       "id": "d12721b3-0dd3-4db1-9124-44144e1f29bc",
        "leftValue": "={{ $('Entrada').first().json.accion === 'aviso' && $('Decidir').first().json.resultado.ok === true && !$('Decidir').first().json.resultado.ya_avisado }}",
        "rightValue": "",
        "operator": {
@@ -231,7 +231,7 @@
     },
     "options": {}
    },
-   "id": "895a7ea2-af2b-43b6-8f62-a5f14566a40b",
+   "id": "e5fa45d5-acdb-4158-a4b2-7a8f34fa22d5",
    "name": "¿Es aviso común?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -247,7 +247,7 @@
     "expire": true,
     "ttl": 1800
    },
-   "id": "e94bfd31-6fc7-457a-91a0-e388281430fa",
+   "id": "2e47fb42-2b8a-4e47-b576-318c628f653f",
    "name": "Redis INCR avisos",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -274,7 +274,7 @@
      },
      "conditions": [
       {
-       "id": "23d21549-7698-4d4f-980e-f6d9304d3e5b",
+       "id": "bc1a2103-592e-4c9f-bae0-d3bb959b0c14",
        "leftValue": "={{ $('Decidir').first().json.contar_deriva === true }}",
        "rightValue": "",
        "operator": {
@@ -288,7 +288,7 @@
     },
     "options": {}
    },
-   "id": "68599627-734d-4271-82e9-519fcb4470da",
+   "id": "36e53f5c-f32c-4556-b563-24a91a424db1",
    "name": "¿Contar derivación?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -304,7 +304,7 @@
     "expire": true,
     "ttl": 1800
    },
-   "id": "4f0b5f4f-d6a2-4229-9b7c-33d1e90ea9ee",
+   "id": "04cf1e66-b5a6-4607-9391-c476ef0c607b",
    "name": "Redis INCR deriva",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -331,7 +331,7 @@
      },
      "conditions": [
       {
-       "id": "2de6d132-3829-4489-abfb-cb45fdac6516",
+       "id": "3dfe0c20-d24d-402d-b9a5-e051ba7d117d",
        "leftValue": "={{ $('Decidir').first().json.marcar_pago === true }}",
        "rightValue": "",
        "operator": {
@@ -345,7 +345,7 @@
     },
     "options": {}
    },
-   "id": "79594cf7-298d-4488-b933-7fc5009655d5",
+   "id": "9ffd1f1a-27f6-483e-9589-8ea11b29701f",
    "name": "¿Marcar pago?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -363,7 +363,7 @@
     "expire": true,
     "ttl": 900
    },
-   "id": "c368e899-e75f-485b-ad8a-97796b1c148c",
+   "id": "88f5ab79-a3dd-4708-adb0-2cb2a56de70b",
    "name": "Redis SET pago",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -389,7 +389,7 @@
      },
      "conditions": [
       {
-       "id": "81fda4e1-de51-4b8b-a9f0-b6293490118a",
+       "id": "55c6659e-3177-49b4-94d1-c0e10b0025db",
        "leftValue": "={{ $('Decidir').first().json.limpiar === true && $('Entrada').first().json.modo === 'vivo' }}",
        "rightValue": "",
        "operator": {
@@ -403,7 +403,7 @@
     },
     "options": {}
    },
-   "id": "54efd59f-1ce0-4919-b423-9187e4da2f38",
+   "id": "168672ec-aa2c-47c8-9041-9b309a16be6b",
    "name": "¿Limpiar estado?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -417,7 +417,7 @@
     "operation": "delete",
     "key": "={{ 'propuesta:' + $('Entrada').first().json.tel }}"
    },
-   "id": "82d0cc30-4415-4315-9ff8-01efa4936fef",
+   "id": "8fb8ebd4-1685-46d1-9afb-b1b15a0d1646",
    "name": "Redis DEL propuesta",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -438,7 +438,7 @@
     "operation": "delete",
     "key": "={{ 'ofertas:' + $('Entrada').first().json.tel }}"
    },
-   "id": "8ce67daf-14e4-421b-8e61-e5b8f8cebfd1",
+   "id": "00d8310b-3d8a-4e10-b22b-14c849d4313f",
    "name": "Redis DEL ofertas",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -459,7 +459,7 @@
     "operation": "delete",
     "key": "={{ 'lotes:' + $('Entrada').first().json.tel }}"
    },
-   "id": "a02548ef-bac7-477c-9bd1-b0d3d55af09b",
+   "id": "60ff30d2-7b22-4404-a8ca-151d2a11e123",
    "name": "Redis DEL lotes",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -480,7 +480,7 @@
     "operation": "delete",
     "key": "={{ 'turnos_vistos:' + $('Entrada').first().json.tel }}"
    },
-   "id": "620caf5b-5440-4b0f-9095-133c9eabc605",
+   "id": "d63923eb-8b2a-4f22-b722-16113df3d728",
    "name": "Redis DEL turnos_vistos",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -501,7 +501,7 @@
     "operation": "delete",
     "key": "={{ 'bloque:' + $('Entrada').first().json.tel }}"
    },
-   "id": "c7ceed7f-5866-4682-a5b7-47f3ee216459",
+   "id": "7dacbb8d-4842-4b13-935e-cbb2b2166b49",
    "name": "Redis DEL bloque",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -521,7 +521,7 @@
    "parameters": {
     "jsCode": "const r = $('Decidir').first().json.resultado;\nconst f = $('Avisar al grupo');\nconst fallo = (f.isExecuted === true) && $('Avisar al grupo').first().json.enviado === false;\nreturn [{ json: fallo ? { ...r, aviso_no_enviado: true } : r }];"
    },
-   "id": "f9c4c5c8-521e-428c-ad3b-0e6c11163860",
+   "id": "78c4c219-7fa3-4528-8d48-0c01b20eb3a6",
    "name": "Devolver",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,

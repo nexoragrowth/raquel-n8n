@@ -33,7 +33,10 @@ const HistorialCore = (() => {
   function identidad(ident) {
     const i = ident || {};
     if (i.ok === true) {
-      const t = (i.turnos && i.turnos.length) ? 'Turnos vigentes: ' + i.turnos.join('; ') + '.' : 'No tiene turnos vigentes.';
+      // (20/10, conversación real 319167) Los que están a menos de 48 h se marcan: cambiarlos o cancelarlos lo hace la clínica, no se ofrecen horarios.
+      const m48 = Array.isArray(i.turnos_menos_48h) && i.turnos_menos_48h.length
+        ? ' A MENOS DE 48 H (no se cambian ni se cancelan por acá): ' + i.turnos_menos_48h.join('; ') + '. Si pide cambiar o cancelar uno de esos, gestionar_turno con ese turno y nada más (sin buscar horarios): el código le responde.' : '';
+      const t = ((i.turnos && i.turnos.length) ? 'Turnos vigentes: ' + i.turnos.join('; ') + '.' : 'No tiene turnos vigentes.') + m48;
       if (i.varias_fichas) {
         // (06/10) Si TODOS los turnos vigentes son de una sola ficha, para cambiar/cancelar/sumar a ESE turno no hace falta preguntar para quién es
         // (gestionar_turno deduce la ficha por el turno). Solo un turno NUEVO puede ser para cualquiera de la familia. Examen 06/10, DANA-08: preguntaba "¿para quién?" de más.

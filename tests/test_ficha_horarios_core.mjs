@@ -41,5 +41,12 @@ t('H4 unir sin duplicados y descarta pasado', H.unir([{ fecha: '2026-10-22', hor
 t('H5 texto sin horarios → lista vacía', H.parseBloque('Disculpe, no tengo turnos', '2026-10-05').length === 0);
 t('H6 límite de 2 bloques por código (regla de la Dra. 07/09)', !H.limiteLotes(2) && H.limiteLotes(3));
 
+// (20/10, real 319167) turnos a menos de 48 h, en hora de Argentina
+{ const ahora = Date.parse('2026-10-20T08:08:00-03:00');
+  const ts = [{ fecha: '2026-10-21', hora_inicio: '15:40' }, { fecha: '2026-10-22', hora_inicio: '08:00' }, { fecha: '2026-10-22', hora_inicio: '08:20' }, { fecha: '2026-10-29', hora_inicio: '09:30' }];
+  const m = F.menos48h(ts, ahora).map((x) => x.fecha + ' ' + x.hora_inicio);
+  t('M48 miércoles 15:40 (31 h) y jueves 08:00 (47 h 52 min) quedan; jueves 08:20 (48 h 12 min) y el 29/10 no', JSON.stringify(m) === JSON.stringify(['2026-10-21 15:40', '2026-10-22 08:00']), m);
+  t('M48b lista vacía o sin hora no rompe', F.menos48h([], ahora).length === 0 && F.menos48h(null, ahora).length === 0); }
+
 console.log(`\n${total - fallas}/${total} ${fallas ? 'FALLAS: ' + fallas : 'TODO OK'}`);
 process.exit(fallas ? 1 : 0);

@@ -61,6 +61,12 @@ const FichaCore = (() => {
     const nombre = (id) => (fichas.find((f) => f.id === id) || {}).nombre || '';
     return turnos.map((t) => `${DIAS[new Date(t.fecha + 'T12:00:00Z').getUTCDay()]} ${Number(t.fecha.slice(8))}/${Number(t.fecha.slice(5, 7))} a las ${t.hora_inicio}` + (fichas.length > 1 ? ` (${nombre(t.id_paciente)})` : ''));
   }
-  return { fichasDeRespuesta, estadoInicial, elegir, turnosVistos, resumenTurnos };
+  // (20/10, conversación real 319167) Turnos que empiezan en menos de 48 h (hora de Argentina, -03:00): no se cambian ni se cancelan por acá
+  // (política de la clínica; la guarda está en AgendaCore.proponer). Se le marcan al agente para que no ofrezca horarios que después no puede reservar.
+  function menos48h(turnos, ahoraMs) {
+    const lim = 48 * 60 * 60 * 1000;
+    return (turnos || []).filter((t) => { const ms = Date.parse(`${t.fecha}T${t.hora_inicio || '00:00'}:00-03:00`); return Number.isFinite(ms) && ms - ahoraMs < lim; });
+  }
+  return { fichasDeRespuesta, estadoInicial, elegir, turnosVistos, resumenTurnos, menos48h };
 })();
 if (typeof module !== 'undefined') module.exports = FichaCore;

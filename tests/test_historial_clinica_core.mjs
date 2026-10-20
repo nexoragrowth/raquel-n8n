@@ -103,5 +103,13 @@ console.log('\nIDENTIDAD con familias (06/10)');
 
 // (08/10) SALUDO y ANUNCIO por regex (S01-S03) se borraron: el saludo lo reconoce el ORQUESTADOR (menu_bienvenida). Ver tests/test_orquestador_core.mjs.
 
+// (20/10, real 319167) el contexto marca los turnos a menos de 48 h y la detección del dueño (familias) sigue andando
+{ const u = H.identidad({ ok: true, varias_fichas: false, paciente_elegido: 'Ana', turnos: ['miércoles 21/10 a las 15:40', 'jueves 29/10 a las 09:30'], turnos_menos_48h: ['miércoles 21/10 a las 15:40'] });
+  t('I48 marca A MENOS DE 48 H con el turno y la instrucción de no buscar horarios', /A MENOS DE 48 H[^]*miércoles 21\/10 a las 15:40[^]*sin buscar horarios/.test(u), u);
+  const f = H.identidad({ ok: true, varias_fichas: true, ficha_elegida: false, pacientes: ['Ana', 'Beto'], turnos: ['miércoles 21/10 a las 15:40 (Ana)'], turnos_menos_48h: ['miércoles 21/10 a las 15:40 (Ana)'] });
+  t('I48b con familia: el dueño del turno se sigue detectando (no pregunta para quién)', /El paciente con turno es Ana/.test(f) && /A MENOS DE 48 H/.test(f), f);
+  const s = H.identidad({ ok: true, varias_fichas: false, paciente_elegido: 'Ana', turnos: ['jueves 29/10 a las 09:30'], turnos_menos_48h: [] });
+  t('I48c sin turnos a menos de 48 h: no agrega nada', !/48 H/.test(s), s); }
+
 console.log(`\n${total - fallas}/${total} ${fallas ? 'FALLAS: ' + fallas : 'TODO OK'}`);
 process.exit(fallas ? 1 : 0);
