@@ -14,7 +14,9 @@ QUÉ HACE
 MODOS
   python scripts/migrar_dentalink.py                         SIMULACIÓN (default): lee Dentalink y reporta EN AGREGADOS qué cargaría
                                                              y qué curaría. No escribe en ninguna base.
-  python scripts/migrar_dentalink.py --usar-cache            ídem sobre la última extracción guardada (0 pedidos a Dentalink)
+  python scripts/migrar_dentalink.py --usar-cache            ídem sobre la última extracción guardada con --guardar-cache (0 pedidos a Dentalink)
+  (20/10) Por defecto NO se guarda nada en disco, y sin --contrato-firmado no se piden pagos, cajas, evoluciones, recetas ni
+  detalles, y de fichas y planes solo queda el id (SIN_CONTRATO_NO_PEDIR / SIN_CONTRATO_SOLO_ID).
   python scripts/migrar_dentalink.py --descubrir             además prueba ~55 rutas candidatas y muestrea las rutas por paciente
   python scripts/migrar_dentalink.py --con-archivos          además metadatos de archivos adjuntos y campos adicionales (por ficha)
   python scripts/migrar_dentalink.py --apply                 CARGA REAL de la fase ocupacion (ver FASES) en agenda.* — exige el SQL.
@@ -241,6 +243,9 @@ ANIDADAS = [  # entidad, padre, ruta
     ("tratamiento_detalles", "tratamientos", "/tratamientos/{id}/detalles"), ("devoluciones", "cajas", "/cajas/{id}/devoluciones"),
 ]
 POR_PACIENTE = ["archivos", "apoderados", "cargas", "adicionales", "convenios", "devoluciones", "tareas", "notificacionesGes"]
+# (20/10) Antes del contrato (D12/C12, SEG-17): qué NO se pide a Dentalink y de qué se guarda solo el id.
+SIN_CONTRATO_NO_PEDIR = {"cajas", "pagos", "evoluciones", "recetas", "convenios", "tratamiento_detalles", "devoluciones"}
+SIN_CONTRATO_SOLO_ID = {"pacientes", "tratamientos"}
 CANDIDATAS = [  # --descubrir: rutas probadas (las que responden 200 entran en LISTAS/ANIDADAS)
     "/sucursales", "/dentistas", "/citas", "/citas/estados", "/pacientes", "/tratamientos", "/pagos", "/evoluciones", "/prestaciones",
     "/aranceles", "/cajas", "/usuarios", "/especialidades", "/sillones", "/convenios", "/recetas", "/laboratorios", "/bancos",
@@ -273,21 +278,36 @@ def redactar(entidad, item, incluir_clinico):
     return item
 
 
+def minimizar(ent, item):
+    """(20/10) Sin contrato firmado (D12/C12) de una ficha o un plan solo queda el id: alcanza para vincular las citas de la fase
+    ocupación sin marcarlas huérfanas. El resto se descarta acá, en memoria, antes de curar o de guardar nada."""
+    return {"id": item.get("id")} if isinstance(item, dict) else item
+
+
 def extraer(cli, args, log=print):
-    """Extracción completa (o incremental). Devuelve dict entidad -> {'items': [...], 'completo': bool, 'status': int}."""
+    """Extracción completa (o incremental). Devuelve dict entidad -> {'items': [...], 'completo': bool, 'status': int}.
+    (20/10) Sin --contrato-firmado NO se piden las entidades con datos personales/clínicos (SIN_CONTRATO_NO_PEDIR) y de
+    fichas y planes solo se conserva el id (SIN_CONTRATO_SOLO_ID): la primera corrida real los bajó completos sin necesitarlos."""
     datos, desde = {}, args.desde
     hacer = set(args.solo.split(",")) if args.solo else None
+    sin_contrato = not getattr(args, "contrato_firmado", False)
     for ent, ruta, campo_inc in LISTAS:
         if hacer and ent not in hacer:
+            continue
+        if sin_contrato and ent in SIN_CONTRATO_NO_PEDIR:
             continue
         q = {campo_inc: {"gte": desde}} if (desde and campo_inc) else None
         t0 = time.time()
         items, completo, st = cli.paginar(ruta, q=q, max_paginas=args.max_paginas)
+        if sin_contrato and ent in SIN_CONTRATO_SOLO_ID:
+            items = [minimizar(ent, x) for x in items]
         datos[ent] = {"items": [redactar(ent, x, args.incluir_clinico) for x in items], "completo": completo and not q,
                       "incremental": bool(q), "status": st}
         log(f"  {ent:<24} {len(items):>6} filas  ({'completo' if completo else 'INCOMPLETO'}{', incremental' if q else ''}, {time.time() - t0:.0f} s)")
     for ent, padre, ruta in ANIDADAS:
         if hacer and ent not in hacer:
+            continue
+        if sin_contrato and ent in SIN_CONTRATO_NO_PEDIR:
             continue
         if ent == "tratamiento_detalles" and args.sin_detalles:
             continue
@@ -1280,6 +1300,7 @@ def main():
     ap.add_argument("--incremental", action="store_true", help="citas/evoluciones desde la última corrida OK (-1 día)")
     ap.add_argument("--desde", help="incremental manual: 'YYYY-MM-DD HH:MM:SS' para citas.fecha_actualizacion y evoluciones.fecha_registro")
     ap.add_argument("--usar-cache", action="store_true", help="no pide nada a Dentalink: usa la última extracción de --cache-dir")
+    ap.add_argument("--guardar-cache", action="store_true", help="(20/10) guarda la extracción cruda en --cache-dir. Por defecto NO se guarda nada en disco")
     ap.add_argument("--cache-dir", default=os.environ.get("DENTALINK_CACHE_DIR", str(Path(tempfile.gettempdir()) / "dentalink_espejo")))
     ap.add_argument("--reporte", help="escribe el reporte agregado (JSON, sin datos personales) en esta ruta")
     ap.add_argument("--descubrir", action="store_true", help="prueba rutas candidatas y muestrea las rutas por paciente")
@@ -1302,6 +1323,8 @@ def main():
         sys.exit("ERROR: --fase clinica (historia clínica) exige --incluir-clinico (decisión de la Dra., Ley 26.529)")
     if args.verificar and (args.desde or args.incremental or args.apply):
         sys.exit("ERROR: --verificar compara contra una extracción COMPLETA y no carga nada (sin --desde/--incremental/--apply)")
+    if args.con_archivos and not args.contrato_firmado and not args.fixture:
+        sys.exit("ERROR: --con-archivos pide los archivos de cada ficha (datos de pacientes): exige --contrato-firmado (SEG-17, D12/C12)")
     if args.apply and (args.solo or args.max_paginas or args.fixture):
         sys.exit("ERROR: --solo/--max-paginas/--fixture son para pruebas: con --apply dejarían FKs en NULL o marcarían desaparecidos")
     cache = Path(args.cache_dir).resolve()
@@ -1354,12 +1377,15 @@ def main():
         except DentalinkSaturado as e:
             sys.exit(f"CORTADO: {e}. Pedidos hechos: {cli.pedidos}")
         pedidos, stats = cli.pedidos, dict(cli.stats)
-        cache.mkdir(parents=True, exist_ok=True)
-        f = cache / f"extraccion_{dt.datetime.now():%Y%m%d_%H%M%S}.json"
-        f.write_text(json.dumps({**datos, "_meta": {"fecha": dt.datetime.now().isoformat(timespec="seconds"), "pedidos": pedidos, "stats": stats,
-                                                    "incluir_clinico": args.incluir_clinico, "desde": args.desde,
-                                                    "descubrimiento": descubrimiento}}, ensure_ascii=False), encoding="utf-8")
-        print(f"Extracción: {pedidos} pedidos en {time.time() - t0:.0f} s. Caché cruda (fuera del repo): {f}")
+        if args.guardar_cache:
+            cache.mkdir(parents=True, exist_ok=True)
+            f = cache / f"extraccion_{dt.datetime.now():%Y%m%d_%H%M%S}.json"
+            f.write_text(json.dumps({**datos, "_meta": {"fecha": dt.datetime.now().isoformat(timespec="seconds"), "pedidos": pedidos, "stats": stats,
+                                                        "incluir_clinico": args.incluir_clinico, "desde": args.desde,
+                                                        "descubrimiento": descubrimiento}}, ensure_ascii=False), encoding="utf-8")
+            print(f"Extracción: {pedidos} pedidos en {time.time() - t0:.0f} s. Caché cruda (fuera del repo; borrarla al terminar): {f}")
+        else:
+            print(f"Extracción: {pedidos} pedidos en {time.time() - t0:.0f} s (sin caché en disco; --guardar-cache para guardarla)")
 
     T = curar(datos, hoy)
     inv, cal = inventario(datos, T, hoy), calidad(T, datos, hoy)

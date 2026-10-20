@@ -68,3 +68,10 @@
 - ¿Aplicar igual los parches del 05/10 al v6 mientras se construye el v7 (protegen de falso "Listo" y cruce de fichas)? Lucas frenó el apply; pendiente.
 - Con la Dra. antes del piloto: regla de 2 lotes (¿tercer lote o pedir preferencia?), política de 48 h (¿no anular + aviso, o anular + aviso?), ¿Irina entra al grupo de avisos?, ¿quién trabaja la lista de espera?
 - ¿"Reprogramar"/"Nuevo turno" del panel funcionan? (0 citas creadas desde el panel; POST con "HH:MM:00" dio 400). Verificar con una cita de prueba y corregir a "HH:MM" si falla.
+
+## 2026-10-20 — Migración de Dentalink (docs/plan-migracion-dentalink-2026-10-20.md)
+- **C12 vs migración completa:** C12 dice "nunca DNI, dirección ni comentarios" en el espejo; dejar Dentalink exige copiarlos. `--fase pacientes` está lista pero necesita que Lucas amplíe C12 en decisions.md + el contrato de tratamiento de datos firmado por la Dra. (SEG-17/D12) + visto bueno legal.
+- **Historia clínica:** SÍ se usa (5.313 evoluciones en 485 fichas, hasta el 19/10; el plan del 13/10 decía "sin evidencia"). ¿Se migra (`--fase clinica --incluir-clinico`)? Decide la Dra.
+- **Fecha de corte:** el plan mantiene "no antes del 01/03/2027" (criterios §4.4 del plan del 13/10). ¿Se adelanta? Lucas/Dra.
+- **Sin API en Dentalink:** bloqueos/feriados/vacaciones (404 en 6 rutas), historial de estados, `/tareas` (401 con nuestro token), boletas (403), binarios de archivos (~70 adjuntos, solo ficha por ficha). Hay que cargarlos a mano o inferirlos.
+- **Estado 15:** 100 de 102 se ponen ≥ 8 días antes del turno, a cualquier hora: parece el aviso de reserva de Dentalink, no nuestros recordatorios (responde en parte AGE-02).

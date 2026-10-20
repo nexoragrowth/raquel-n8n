@@ -5,8 +5,14 @@
 - [x] BOT-01 (respuesta tras un "no", @lid sin celular falso, doble pregunta de Información) + ruteo de pedidos múltiples (Pagos por código, orquestador "medium").
 - [ ] Mirar las primeras ejecuciones reales con el v7 (mañana del 20/10, respuestas a recordatorios) y corregir lo que salga.
 - [ ] BOT-07: regresión con IA SOLO de lo tocado (pedidos múltiples, "no" a una confirmación, alta @lid) + cita de prueba lejos, anulada al terminar.
-- [ ] Migración Dentalink → esquema propio en Supabase v3: preparación en curso (agente), revisar y correr `--apply` del espejo; corte con OK de la Dra.
-- [ ] Commit del trabajo acumulado (hay mucho sin commitear desde el 13/10, p. ej. `scripts/flag_v7.py`, `check_triaje_grafo.py`, `sql/`, `segmentacion/`): ANTES revisar archivo por archivo que no haya datos de pacientes (repo PÚBLICO; ojo `docs/informe-dra-raquel-2026-10-13-datos.json`).
+- [x] Migración Dentalink preparada (commit befd433): esquema `agenda` APLICADO (27 tablas, RLS, solo service_role); `migrar_dentalink.py --apply` fase ocupación (sin datos personales) corrida el 20/10 de madrugada. Caché cruda con datos de fichas BORRADA del scratchpad.
+- [ ] Nocturno: `migrar_dentalink.py --apply --incremental` (programarlo en n8n o cron del VPS; hoy es manual).
+- [ ] Fases con datos de pacientes (`pacientes`, `clinica`): esperan contrato SEG-17 firmado + ampliar C12 (ver open-questions 20/10).
+- [ ] Cargar bloqueos/feriados/vacaciones a mano (Dentalink no los expone).
+- [x] SEG-04 (local): 3 commits (0cfef8d v7, e38a6b0 segmentación + v6, 8cc3bd1 docs/memoria), secret-scan 0, teléfonos no admin solo sintéticos. SIN push (va después de la purga).
+- [ ] **SEG-02 URGENTE:** `origin/main` (público) ya tiene 3 teléfonos de pacientes y un nombre + DNI en `memory/current-state.md` (enmascarados en el commit nuevo, siguen en el historial) además de la `sb_secret`. Repo privado = solo la cuenta nexoragrowth (Lucas). Después: `git filter-repo` de esos valores + force-push.
+- [x] CRM-02 parcial: 11 de la lista semilla cargados (los que clasificó Lucas). Faltan las 14 propuestas de Claude y los 12 dudosos → al panel (CRM-04).
+- [ ] En curso (agente): CRM-01 verificación en el navegador → ATE-02 tabla `casos` (SQL + PGlite, sin aplicar) → ATE-03 bandeja de Atención detrás de un flag (rama `atencion-crm01` del panel, sin deploy).
 
 ## ⇢ ORDEN DE TRABAJO (desde 2026-10-08) — una cosa a la vez, en este orden. Se tacha acá.
 Contexto: soporte a la Dra. hasta febrero 2027 (después queda sola); la clínica NO usa el panel; el panel tiene que servir para revenderlo.

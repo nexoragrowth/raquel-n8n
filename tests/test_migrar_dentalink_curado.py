@@ -175,7 +175,7 @@ class ClienteFalso:  # sin red: para probar qué pediría la extracción increme
 from types import SimpleNamespace  # noqa: E402
 cf = ClienteFalso()
 d = M.extraer(cf, SimpleNamespace(desde="2026-10-19 00:00:00", solo="citas,tratamientos,tratamiento_detalles", max_paginas=None, incluir_clinico=False,
-                                  sin_detalles=False, totales_planes={1: (100.0, 0.0, 0.0, 100.0, False), 2: (50.0, 0.0, 0.0, 50.0, False)}), log=lambda *a: None)
+                                  sin_detalles=False, totales_planes={1: (100.0, 0.0, 0.0, 100.0, False), 2: (50.0, 0.0, 0.0, 50.0, False)}, contrato_firmado=True), log=lambda *a: None)
 check("Incremental: citas filtradas por fecha_actualizacion", ("/citas", {"fecha_actualizacion": {"gte": "2026-10-19 00:00:00"}}) in cf.rutas, cf.rutas)
 check("Incremental: detalles solo del plan que cambió", [r for r, _ in cf.rutas if "detalles" in r] == ["/tratamientos/2/detalles"], cf.rutas)
 class ClienteCajas(ClienteFalso):
@@ -187,7 +187,7 @@ class ClienteCajas(ClienteFalso):
 
 
 cc = ClienteCajas()
-dc = M.extraer(cc, SimpleNamespace(desde="2026-10-19 00:00:00", solo="cajas,devoluciones", max_paginas=None, incluir_clinico=False, sin_detalles=True), log=lambda *a: None)
+dc = M.extraer(cc, SimpleNamespace(desde="2026-10-19 00:00:00", solo="cajas,devoluciones", max_paginas=None, incluir_clinico=False, sin_detalles=True, contrato_firmado=True), log=lambda *a: None)
 check("Incremental: devoluciones solo de cajas abiertas o cerradas desde la última corrida",
       [r for r, _ in cc.rutas if "devoluciones" in r] == ["/cajas/2/devoluciones", "/cajas/3/devoluciones"] and dc["devoluciones"]["completo"] is False, cc.rutas)
 check("Incremental: no marca desaparecidos", d["citas"]["completo"] is False and d["tratamiento_detalles"]["completo"] is False and d["tratamientos"]["completo"] is True)
@@ -206,7 +206,7 @@ class ClienteArchivos(ClienteFalso):
 
 
 ca = ClienteArchivos()
-d = M.extraer(ca, SimpleNamespace(desde=None, solo="pacientes", max_paginas=None, incluir_clinico=False, sin_detalles=True, con_archivos=True),
+d = M.extraer(ca, SimpleNamespace(desde=None, solo="pacientes", max_paginas=None, incluir_clinico=False, sin_detalles=True, con_archivos=True, contrato_firmado=True),
               log=lambda *a: None)
 arch, adic = d["paciente_archivos"]["items"], d["paciente_adicionales"]["items"]
 check("Archivos: 404 = la ficha no tiene (sigue completo)", d["paciente_archivos"]["completo"] is True and len(arch) == 1)
@@ -215,6 +215,27 @@ check("Adicionales: id estable ficha*1000+posición", sorted(x["id"] for x in ad
 T2 = M.curar({**d, "estados_cita": {"items": []}}, HOY)
 check("Archivos y adicionales van a dentalink_otros (fases d y c)", {(o["entidad"], o["fase"]) for o in T2["dentalink_otros"]} == {("paciente_archivos", "d"), ("paciente_adicionales", "c")}
       and len(T2["dentalink_otros"]) == 5, T2["dentalink_otros"])
+# (20/10) SIN contrato: no se piden pagos/cajas/evoluciones/recetas/detalles/devoluciones y de fichas y planes queda solo el id.
+class ClienteTodo(ClienteFalso):
+    def paginar(self, ruta, q=None, max_paginas=None):
+        self.rutas.append((ruta, q))
+        if ruta == "/pacientes":
+            return ([{"id": 1, "nombre": "Nombre Ficticio", "rut": "30000001", "celular": "5493880000101"}], True, 200)
+        if ruta == "/tratamientos":
+            return ([{"id": 9, "nombre": "Plan", "id_paciente": 1, "total": 1000}], True, 200)
+        return ([], True, 200)
+
+
+ct = ClienteTodo()
+dt_ = M.extraer(ct, SimpleNamespace(desde=None, solo=None, max_paginas=None, incluir_clinico=False, sin_detalles=False, contrato_firmado=False), log=lambda *a: None)
+pedidas = {r for r, _ in ct.rutas}
+check("Sin contrato: NO pide pagos, cajas, evoluciones, recetas, convenios, detalles ni devoluciones",
+      not ({"/pagos", "/cajas", "/evoluciones", "/recetas", "/convenios"} & pedidas) and not any("detalles" in r or "devoluciones" in r for r in pedidas), sorted(pedidas))
+check("Sin contrato: de fichas y planes queda SOLO el id", dt_["pacientes"]["items"] == [{"id": 1}] and dt_["tratamientos"]["items"] == [{"id": 9}], [dt_["pacientes"], dt_["tratamientos"]])
+check("Sin contrato: las citas igual se piden (fase ocupación)", "/citas" in pedidas)
+ct2 = ClienteTodo()
+dc2 = M.extraer(ct2, SimpleNamespace(desde=None, solo=None, max_paginas=None, incluir_clinico=False, sin_detalles=True, contrato_firmado=True), log=lambda *a: None)
+check("Con contrato: pide todo y conserva la ficha completa", "/pagos" in {r for r, _ in ct2.rutas} and dc2["pacientes"]["items"][0].get("rut") == "30000001")
 import os, subprocess  # noqa: E402  — las guardas cortan ANTES de pedir nada a Dentalink o conectarse a la base
 
 
@@ -244,6 +265,8 @@ rc, out = corre("--fase", "pacientes", cache=ROOT / "tmp_cache")
 check("Guarda: la caché no puede estar dentro del repo", rc != 0 and "dentro del repo" in out, out[-300:])
 rc, out = corre("--fase", "ocupacion")
 check("Sin caché: termina sin ir a la red", rc != 0 and "no hay extracciones" in out, out[-300:])
+rc, out = corre("--con-archivos")
+check("Guarda: --con-archivos sin contrato se niega (archivos de cada ficha)", rc != 0 and "--con-archivos" in out and "contrato" in out, out[-300:])
 check("lit escapa comillas y NUL", M.lit("O'Brien\x00", "t") == "'O''Brien'" and M.lit(["a'b"], "a") == "array['a''b']::text[]")
 check("lit tipos", M.lit(None, "i") == "null" and M.lit(True, "b") == "true" and M.lit("2026-10-20", "d") == "'2026-10-20'::date")
 
