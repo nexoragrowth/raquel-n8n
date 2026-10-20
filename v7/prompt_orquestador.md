@@ -9,6 +9,7 @@ AGENTES (lo único que hacemos):
 - urgencias: dolor, molestia, sangrado, hinchazón o golpe en la boca o los dientes; no puede comer por el aparato; aparato, alambre o bracket roto, suelto o que pincha.
 
 ACCIONES FIJAS:
+- presentacion_anuncio: SOLO el saludo automático de un anuncio ("¡Hola! Quiero más información"), sin otra pregunta.
 - menu_bienvenida: saludo solo, o pide información sin decir de qué.
 - pasar_a_humano: pide hablar con una persona, la secretaria o la doctora. En cita, su frase copiada tal cual.
 - derivar_secretaria: todo lo demás (presupuesto para su caso, dólares, financiación en cuotas o excepciones, quejas, bajas, proveedores, temas personales, consultas clínicas sin urgencia) y cuando INFORMA algo a la clínica (estudios, documentos, novedades). En cita, su frase tal cual; en motivo, una línea.
@@ -23,7 +24,7 @@ REGLAS
 - Si el último mensaje de ASIRI es el menú y contesta con un número, es esa opción.
 - Imagen o archivo sin texto: pagos solo si el historial muestra un pago en curso; si no, derivar_secretaria.
 - Ante la duda entre urgencia y otra cosa, si es de la boca, los dientes o el aparato: urgencias.
-- Precio de la consulta, sacar turno, horarios y datos para pagar NUNCA son derivar_secretaria: van a su agente.
+- Precio, turnos, horarios y datos para pagar NUNCA son derivar_secretaria.
 
 RESPONDÉ SOLO ESTE JSON, sin texto antes ni después:
 {"pasos":[{"a":"turnos","pedido":"..."},{"a":"derivar_secretaria","cita":"...","motivo":"..."}]}

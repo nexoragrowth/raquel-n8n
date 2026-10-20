@@ -12,7 +12,7 @@ const OrquestadorCore = (() => {
   // En n8n el chequeo va inlineado antes (nodo Salida); en los sub-agentes no hace falta (null). Offline (node) se carga del repo.
   const CS = (() => { if (typeof ChequeoSalida !== 'undefined') return ChequeoSalida; try { return (typeof module !== 'undefined' && typeof require !== 'undefined') ? require('./chequeo_salida.js') : null; } catch (x) { return null; } })();
   const AGENTES = ['turnos', 'pagos', 'informacion', 'urgencias'];
-  const FIJAS = ['menu_bienvenida', 'derivar_secretaria', 'pasar_a_humano', 'no_entendi', 'pedir_texto', 'no_reply'];
+  const FIJAS = ['menu_bienvenida', 'presentacion_anuncio', 'derivar_secretaria', 'pasar_a_humano', 'no_entendi', 'pedir_texto', 'no_reply'];
   const lim = (s, n) => String(s === undefined || s === null ? '' : s).trim().slice(0, n);
   const norm = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9:/? ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -88,7 +88,8 @@ const OrquestadorCore = (() => {
       else if (fijas.has('derivar_secretaria')) plan.fija = 'derivar';
       const hayAgente = AGENTES.some((a) => plan[a]);
       if (!plan.fija && !hayAgente) {
-        plan.fija = fijas.has('menu_bienvenida') ? 'menu' : fijas.has('pedir_texto') ? 'pedir_texto' : fijas.has('no_reply') ? 'no_reply' : 'no_entendi';
+        // (20/10, BOT-06) el saludo automático de un anuncio lleva la presentación de la clínica (KB 40), no el menú.
+        plan.fija = fijas.has('presentacion_anuncio') ? 'anuncio' : fijas.has('menu_bienvenida') ? 'menu' : fijas.has('pedir_texto') ? 'pedir_texto' : fijas.has('no_reply') ? 'no_reply' : 'no_entendi';
       }
     }
     // (B3) Ruteo por ESTADO, no por texto: con una confirmación pendiente que el paciente vio, Turnos SIEMPRE ve este mensaje y decide `confirma`
@@ -382,6 +383,7 @@ const OrquestadorCore = (() => {
     if (!partes.length && plan.fallo_orquestador) { partes = [TEXTOS.ERROR]; avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no pudo responder (falló el orquestador): revisar y contestar a mano. «' + cita + '»' }); }
     let esMenu = false;
     if (!partes.length && plan.fija === 'menu') { partes = [e.menu || MENU]; esMenu = true; }
+    if (!partes.length && plan.fija === 'anuncio') { partes = [String(e.anuncio || '').trim() || e.menu || MENU]; esMenu = true; }   // KB 40 ya trae la presentación
     if (!partes.length && plan.fija === 'pedir_texto') partes = [TEXTOS.PEDIR_TEXTO];
     if (!partes.length && e.prop_pendiente === true && !hayOk && e.prop && String(e.prop.exec_id) !== String(e.execId)) {
       partes = [SIN_CAMBIOS[e.prop.tipo] || 'Perfecto, no hice ningún cambio en la agenda.'];

@@ -207,6 +207,17 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const r2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { etapa: 'ejecutado', ok: false, motivo: 'ya_ejecutada' }, { confirma: 'true' })] }, {});
   t('T10b "ya_ejecutada" sola (un "sí" repetido) sigue diciendo que ya quedó registrado', r2.texto === 'Ese pedido ya quedó registrado.', r2); }
 
+// (20/10, BOT-06) lead de anuncio: la presentación de la clínica (KB 40), no el menú
+{ const KB40 = 'Hola! Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗 gracias por comunicarte con nosotros ✨\n\nLa Dra. Raquel Rodríguez es especialista en ortodoncia…';
+  const p = O.despachar(orq([{ a: 'presentacion_anuncio' }]), {});
+  t('AN1 "¡Hola! Quiero más información" → fija anuncio, sin agentes', p.fija === 'anuncio' && !p.hay_agentes, p);
+  const c = O.componer(base({ plan: p, res: {}, reunion: {}, anuncio: KB40, conversacion_nueva: true }));
+  t('AN2 se manda la KB 40 tal cual, sin anteponer otra presentación', c.texto === KB40 && (c.texto.match(/Soy Asiri/g) || []).length === 1, c.texto);
+  const c2 = O.componer(base({ plan: p, res: {}, reunion: {}, anuncio: '' }));
+  t('AN3 sin KB 40 cargada: el menú (nunca un mensaje vacío)', c2.texto === O.MENU, c2.texto);
+  const p4 = O.despachar(orq([{ a: 'presentacion_anuncio' }, { a: 'informacion', pedido: 'atiende niños' }]), {});
+  t('AN4 saludo de anuncio + una pregunta: responde la pregunta (Información), no la presentación sola', p4.informacion === 'atiende niños' && p4.fija !== 'anuncio', p4); }
+
 // (20/10, escalación real 382) "no voy a llegar" con turno a < 48 h: primero el porqué, después la derivación.
 { const plan = O.despachar(orq([{ a: 'turnos', pedido: 'cancelar el turno de hoy' }]), {});
   const T48 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { ok: false, motivo: 'menos_48h' })] }, {});
