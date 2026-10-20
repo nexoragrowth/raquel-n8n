@@ -3020,3 +3020,4 @@ antes del 15/8: VPS Hostinger vs quedarse en v3 free (con la carga nueva puede a
 - **Si se recrea la instancia de Evolution** (cambia el token → bot sordo): `python scripts/apply_v6_token_webhook.py --actualizar-token --apply`. Revertir: `--revertir --apply`.
 - Scripts viejos de prueba que postean sin token (probar_bot_e2e, simulate_v6_message, sim_and_wait, tests/test_e2e_bateria) ahora se descartan: usar simular_mensaje_lucas.py. Ojo: en Git Bash un texto que empieza con "/" se convierte en ruta ("/bot status" → "C:/Program Files/Git/bot status").
 - Pendiente SEG-06 parte 2: admins en tabla editable (sale Irina, entra la nueva secretaria) y revisar los ~30 webhooks del panel sin auth.
+- (20/10 ~19:00 ART) SEG-06 verificado con tráfico real: 2 mensajes reales de pacientes después del cambio pasaron el validador (0 cortados). Control programado cancelado.
