@@ -929,3 +929,8 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Qué:** 17 contactos con tipo que silencia, autor "claude", evidencia en la nota (comercio por nombre, o mensajes de proveedor/insumos). Ninguno con ficha. Lista y criterio en current-state del 20/10.
 - **Criterio:** silenciar solo con evidencia clara de no-paciente; ante nombre de persona sin evidencia, NO (el bot sigue atendiendo). Caso que lo justifica: …3000 figuraba como "publicidad" y manda comprobantes de pago.
 - **Revisable:** sí — cualquiera se vuelve a paciente desde el panel.
+
+## 2026-10-20 — Búsqueda de mensajes del panel sin índice (por ahora)
+- **Medido:** 54 ms de mediana y 190 ms en el peor caso sobre 10.499 filas (escaneo secuencial). Con `pg_trgm` disponible pero no instalado.
+- **Regla del patrón:** la búsqueda no cuenta lo que dice el marcador "[ATENCION HUMANA - … doctora/secretaria … WhatsApp del consultorio]" (3 de cada 4 filas lo llevan) y deja afuera notas internas, [NO_REPLY] y avisos de adjunto sin texto.
+- **Revisable:** sí, al acercarse a ~50.000 filas (índice trigram).
