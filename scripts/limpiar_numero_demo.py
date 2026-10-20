@@ -78,16 +78,30 @@ if args.borrar_logs:
     n = cur.fetchone()[0]; print(f"conversaciones: {n} filas de los últimos 7 días")
     if args.apply and n:
         cur.execute("DELETE FROM conversaciones WHERE telefono=%s AND \"timestamp\" > NOW() - INTERVAL '7 days'", (PHONE,)); print(f"  -> borradas {cur.rowcount}")
+    # Bandeja de Atención (ATE-02, sql/2026-10-20_casos_atencion.sql): los casos que crearon los avisos de la prueba (la bitácora se va en cascada).
+    cur.execute("SELECT to_regclass('public.casos') IS NOT NULL")
+    if cur.fetchone()[0]:
+        cur.execute("SELECT count(*) FROM public.casos WHERE telefono=public.contacto_tel_normalizar(%s) AND created_at > NOW() - INTERVAL '7 days'", (PHONE,))
+        n = cur.fetchone()[0]; print(f"casos (bandeja de Atención): {n} de los últimos 7 días")
+        if args.apply and n:
+            cur.execute("DELETE FROM public.casos WHERE telefono=public.contacto_tel_normalizar(%s) AND created_at > NOW() - INTERVAL '7 days'", (PHONE,)); print(f"  -> borrados {cur.rowcount}")
+    else:
+        print("casos (bandeja de Atención): la tabla no existe todavía")
 seg_sigue_silenciado = False
 if args.seg:
     cur.execute("SELECT to_regprocedure('public.contacto_ruta(text)') IS NOT NULL")
     if not cur.fetchone()[0]:
         print("segmentación: la migración no está aplicada (no hay tipos que cerrar)")
     else:
+        # De prueba = los de la prueba E2E (motivo prueba_e2e) Y los que se pusieron desde el PANEL en las últimas 12 h
+        # (CRM-01: el recorrido del selector de tipo en el navegador escribe motivo 'clasificacion_manual', origen 'panel';
+        # antes este cierre no los veía y un recorrido cortado a la mitad dejaba el número silenciado).
         cur.execute("""SELECT r.tipo FROM public.contacto_roles r JOIN public.pacientes p ON p.id = r.contacto_id
-                        WHERE p.telefono = public.contacto_tel_normalizar(%s) AND r.hasta IS NULL AND r.motivo = 'prueba_e2e' ORDER BY r.tipo""", (PHONE,))
+                        WHERE p.telefono = public.contacto_tel_normalizar(%s) AND r.hasta IS NULL
+                          AND (r.motivo = 'prueba_e2e' OR (r.origen = 'panel' AND r.desde > NOW() - INTERVAL '12 hours'))
+                        ORDER BY r.tipo""", (PHONE,))
         tipos = [x[0] for x in cur.fetchall()]
-        print(f"segmentación: tipos vigentes de prueba E2E: {tipos or 'ninguno'}")
+        print(f"segmentación: tipos vigentes de prueba (E2E o panel < 12 h): {tipos or 'ninguno'}")
         if args.apply:
             for t in tipos:
                 cur.execute("SELECT public.contacto_tipo_cerrar(%s, %s, 'fin_prueba', 'lucas')", (PHONE, t))
