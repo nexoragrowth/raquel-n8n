@@ -27,8 +27,10 @@ const CFG_ROW = (over = {}) => ({ triaje_activo: true, modo: "piloto", telefonos
   regex_nuevo_problema: null, regex_aparato: null, textos: { texto_escalada: "Escalada canned", texto_cierre: "Cierre canned" }, aviso_pasivo: false,
   ttl_video_seg: 7200, ttl_pregunta_seg: 1800, modelo: "gpt-5-mini", videos: VIDEOS, ...over });
 
-function mkDollar({ text, estado, parseExecuted, ctx = "", contactLabels = ["bot"] }) {
+function mkDollar({ text, estado, parseExecuted, ctx = "", contactLabels = ["bot"], v7Executed }) {
   return (nombre) => {
+    // 'V7: Derivar a Triaje' (conexión v7 → triaje, scripts/apply_v7_flag_lucas.py): sin v7Executed se comporta como un nodo que no existe (tira).
+    if (nombre === "V7: Derivar a Triaje" && v7Executed !== undefined) return { first: () => ({ json: { _flow: "v7" } }), isExecuted: !!v7Executed };
     const data = {
       "Preparar Mensaje Final": { text, phone: "5491161461034", remoteJid: "5491161461034@s.whatsapp.net" },
       "Build Router Context": { ctx },
@@ -183,6 +185,19 @@ const check = (nombre, cond, detalle) => { console.log(`${cond ? "OK  " : "FAIL"
   ev = await runEvaluar(c);
   check("ctx recortado al episodio actual", ev.ruta_pre === "clasificar" && !ev.llm_body.includes("se cayó") && ev.llm_body.includes("Hola! Soy Asiri"), ev.llm_body.slice(0, 200));
   check("  ...y el texto llega igual al LLM", ev.llm_body.includes("Me pincha un alambre"), "");
+
+  // --- Conexión v7 (apply_v7_flag_lucas.py): una derivación del v7 entra SIEMPRE como "nuevo" (sin bucle por ruta_pre 'normal') ---
+  c = { text: "mi hija está incómoda con el aparato y no come", estado: null, parseExecuted: false, v7Executed: true };
+  ev = await runEvaluar(c);
+  check("v7 derivó sin estado -> nuevo/clasificar", ev.modo_entrada === "nuevo" && ev.ruta_pre === "clasificar", ev.modo_entrada + " " + ev.ruta_pre);
+  d = await runDecidir(ev, c, llmResp("no_urgencia", "alta"));
+  check("  ...triaje dice no_urgencia -> escalar (el paciente recibe el texto de escalada)", d.ruta === "escalar", d.ruta);
+  c = { text: "me duele mucho", estado: { tipo: "alambre_pincha", opcion: 1, paso: "escalado" }, parseExecuted: false, v7Executed: true };
+  ev = await runEvaluar(c);
+  check("v7 derivó con estado escalado -> nuevo (no 'normal')", ev.modo_entrada === "nuevo" && ev.ruta_pre !== "normal", ev.modo_entrada + " " + ev.ruta_pre);
+  c = { text: "otra cosa, quiero saber el precio", estado: { tipo: "alambre_pincha", opcion: 1, paso: "video_enviado" }, parseExecuted: false, v7Executed: false };
+  ev = await runEvaluar(c);
+  check("seguimiento real con el nodo V7 sin correr -> seguimiento", ev.modo_entrada === "seguimiento", ev.modo_entrada);
 
   // --- Decidir defensivo: input sin evaluación ---
   d = await runDecidir({ choices: [] }, c, null);

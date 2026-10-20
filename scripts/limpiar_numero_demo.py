@@ -2,15 +2,18 @@
 """
 limpiar_numero_demo.py — deja un teléfono limpio para probar/demostrar el triaje desde un WhatsApp real.
 
-Qué frena al bot para un teléfono (relevado 4/9): (1) label `humano` en CUALQUIER conversación de
-Chatwoot del contacto (única traba determinística); (2) memoria en n8n_chat_histories (filas
+Qué frena al bot para un teléfono: (1) modo humano en Supabase (pacientes.human_takeover, ventana 1 h; Chatwoot
+se eliminó el 05/10); (2) memoria en n8n_chat_histories (filas
 [ATENCION HUMANA]/[TEST 72h] contaminan el contexto y piden silencio al LLM); (3) estado
 `triaje:{phone}` en Redis (no accesible desde acá: expira por TTL ≤2 h, o se pisa al escalar/cerrar).
 
-Solo con --apply borra. Sin --apply muestra qué haría. El token de Chatwoot se copia EN CALIENTE
-del nodo vivo "Re-check Humano" del v6 (nunca en este archivo).
+Solo con --apply borra. Sin --apply muestra qué haría.
 
-Uso: python scripts/limpiar_numero_demo.py --phone 5491161461034 [--apply] [--solo-label] [--borrar-logs]
+Segmentación (Día 1, --seg): cierra los tipos de contacto puestos para una prueba de punta a punta (motivo 'prueba_e2e', p. ej. con
+`apply_dia1_segmentacion.py --e2e-on`) con motivo_baja 'fin_prueba', y al final verifica con contacto_ruta que el teléfono NO quede
+silenciado (sale con error si sigue silenciado). Sin --apply solo muestra, en una sesión de solo lectura.
+
+Uso: python scripts/limpiar_numero_demo.py --phone 5491161461034 [--apply] [--solo-label] [--borrar-logs] [--seg]
 """
 import argparse, json, os, sys, urllib.request, psycopg2
 from pathlib import Path
@@ -24,6 +27,7 @@ ap.add_argument("--phone", required=True)
 ap.add_argument("--apply", action="store_true")
 ap.add_argument("--solo-label", action="store_true", help="solo quitar el label humano en Chatwoot")
 ap.add_argument("--borrar-logs", action="store_true", help="además borrar sus filas de escalaciones_log/triaje_urgencias_log/conversaciones de prueba (últimos 7 días)")
+ap.add_argument("--seg", action="store_true", help="cerrar los tipos de contacto de la prueba E2E (prueba_e2e → fin_prueba) y verificar que no silencia")
 args = ap.parse_args()
 PHONE = args.phone.strip()
 
@@ -32,31 +36,10 @@ def n8n(path):
     req = urllib.request.Request(f"{base}/api/v1{path}", headers={"X-N8N-API-KEY": require("N8N_API_KEY")})
     with urllib.request.urlopen(req, timeout=60) as r: return json.loads(r.read().decode())
 
-wf = n8n(f"/workflows/{env('N8N_WORKFLOW_V6_ID', 'O155MqHgOSaNZ9ye')}")
-cw_token = next(h["value"] for n in wf["nodes"] if n["name"] == "Re-check Humano"
-                for h in n["parameters"]["headerParameters"]["parameters"] if h["name"] == "api_access_token")
-
-def cw(path, method="GET", body=None):
-    req = urllib.request.Request("https://chat.raquelrodriguez.com.ar/api/v1/accounts/1" + path,
-                                 data=json.dumps(body).encode() if body else None, method=method,
-                                 headers={"api_access_token": cw_token, "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r: return json.loads(r.read().decode())
-
-# 1) Chatwoot
-search = cw(f"/contacts/search?q={PHONE}")
-contacts = [c for c in search.get("payload", []) if PHONE in str(c.get("phone_number", "")).replace("+", "")]
-print(f"Chatwoot: {len(contacts)} contacto(s) para {PHONE}")
-for c in contacts:
-    convs = cw(f"/contacts/{c['id']}/conversations").get("payload", [])
-    for conv in convs:
-        labels = conv.get("labels", [])
-        flag = "humano" in labels
-        print(f"  conv {conv['id']} status={conv.get('status')} labels={labels}{'  <-- BLOQUEA' if flag else ''}")
-        if flag and args.apply:
-            r = cw(f"/conversations/{conv['id']}/labels", "POST", {"labels": [l for l in labels if l != "humano"] or ["bot"]})
-            print(f"     -> label humano quitado, ahora {r.get('payload')}")
+# 1) Chatwoot: ELIMINADO del VPS el 05/10 (el nodo "Re-check Humano" ya no existe; antes este paso crasheaba con StopIteration).
+#    El "modo humano" hoy vive en Supabase: pacientes.human_takeover / human_takeover_at (lo leen Consultar Takeover, Gate Humano Final y el triaje).
 if args.solo_label:
-    sys.exit(0)
+    print("--solo-label ya no aplica (Chatwoot eliminado el 05/10): el modo humano se limpia en pacientes.human_takeover (paso 2).")
 
 # 2) memoria + logs
 def load_env(path, keys):
@@ -69,7 +52,16 @@ def load_env(path, keys):
     return out
 db = load_env(str(ROOT / ".env"), {"SUPABASE_DB_HOST","SUPABASE_DB_PORT","SUPABASE_DB_NAME","SUPABASE_DB_USER","SUPABASE_DB_PASSWORD"})
 conn = psycopg2.connect(host=db["SUPABASE_DB_HOST"], port=db["SUPABASE_DB_PORT"], dbname=db["SUPABASE_DB_NAME"], user=db["SUPABASE_DB_USER"], password=db["SUPABASE_DB_PASSWORD"], sslmode="require")
-conn.autocommit = True; cur = conn.cursor()
+conn.autocommit = True
+if not args.apply:
+    conn.set_session(readonly=True, autocommit=True)   # sin --apply: imposible escribir
+cur = conn.cursor()
+cur.execute("SELECT human_takeover, human_takeover_at FROM pacientes WHERE telefono=%s", (PHONE,))
+fila = cur.fetchone()
+print(f"pacientes.human_takeover: {fila[0] if fila else '(sin fila)'} (desde {fila[1] if fila else '-'})")
+if args.apply and fila and fila[0]:
+    cur.execute("UPDATE pacientes SET human_takeover=false, human_takeover_at=NULL WHERE telefono=%s", (PHONE,))
+    print(f"  -> modo humano apagado ({cur.rowcount} fila)")
 cur.execute("SELECT count(*) FROM n8n_chat_histories WHERE session_id=%s", (PHONE,))
 n_mem = cur.fetchone()[0]
 print(f"n8n_chat_histories: {n_mem} filas de la sesión {PHONE}")
@@ -86,6 +78,33 @@ if args.borrar_logs:
     n = cur.fetchone()[0]; print(f"conversaciones: {n} filas de los últimos 7 días")
     if args.apply and n:
         cur.execute("DELETE FROM conversaciones WHERE telefono=%s AND \"timestamp\" > NOW() - INTERVAL '7 days'", (PHONE,)); print(f"  -> borradas {cur.rowcount}")
+seg_sigue_silenciado = False
+if args.seg:
+    cur.execute("SELECT to_regprocedure('public.contacto_ruta(text)') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        print("segmentación: la migración no está aplicada (no hay tipos que cerrar)")
+    else:
+        cur.execute("""SELECT r.tipo FROM public.contacto_roles r JOIN public.pacientes p ON p.id = r.contacto_id
+                        WHERE p.telefono = public.contacto_tel_normalizar(%s) AND r.hasta IS NULL AND r.motivo = 'prueba_e2e' ORDER BY r.tipo""", (PHONE,))
+        tipos = [x[0] for x in cur.fetchall()]
+        print(f"segmentación: tipos vigentes de prueba E2E: {tipos or 'ninguno'}")
+        if args.apply:
+            for t in tipos:
+                cur.execute("SELECT public.contacto_tipo_cerrar(%s, %s, 'fin_prueba', 'lucas')", (PHONE, t))
+                print(f"  -> {t} cerrado: {cur.fetchone()[0].get('ok')}")
+        cur.execute("SELECT public.contacto_ruta(%s)", (PHONE,))
+        ruta = cur.fetchone()[0]
+        seg_sigue_silenciado = ruta.get("silencia") is True
+        print(f"  contacto_ruta: tipo={ruta.get('tipo')} silencia={ruta.get('silencia')} tipos={ruta.get('tipos')}")
+        if seg_sigue_silenciado:
+            print("  ❌ el teléfono SIGUE SILENCIADO" + (" (tiene otro tipo vigente que no es de la prueba: revisar a mano)" if args.apply else
+                                                      " (correr con --apply para cerrar los de la prueba)"))
 cur.close(); conn.close()
-print("Redis: el estado triaje:{phone} no se puede borrar desde acá (expira ≤2 h; se pisa al escalar/cerrar). ratelimit: 10 msgs/15 min.")
+print("Redis (no accesible desde acá; en el VPS por SSH):")
+print(f"  docker exec redis-rwlw-redis-1 redis-cli DEL triaje:{PHONE} v7:tel:{PHONE}")
+print(f"  claves del v7 (ficha/turnos_vistos/ofertas/lotes/bloque/propuesta/pago): python scripts/probar_v7.py --activar ; --destino reset --campo tel={PHONE} ; --desactivar")
+print("  ratelimit: 10 msgs/15 min.")
+if args.seg: print("  segmentación: no hay claves Redis por teléfono (el aviso al grupo no tiene tope); los avisos de la prueba quedan en"
+                  " escalaciones_log: usar --borrar-logs")
 if not args.apply: print("\n[DRY-RUN] nada borrado. Para aplicar: --apply")
+if seg_sigue_silenciado and args.apply: sys.exit(1)

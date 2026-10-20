@@ -13,6 +13,7 @@ import json, os, subprocess, sys, urllib.request, urllib.error
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib_env import env, require  # noqa: E402
+from check_triaje_grafo import chequear_grafo  # noqa: E402  (los chequeos de grafo, reusables sobre un workflow propuesto)
 import psycopg2
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,6 +49,11 @@ for tipo, op, url in vids:
 if not vids: bad("no hay videos activos")
 cur.execute("SELECT count(*) FROM triaje_urgencias_log WHERE created_at > NOW() - INTERVAL '24 hours' AND (razon ILIKE 'error_llm%' OR razon ILIKE 'envio_fallo%' OR razon ILIKE '%NOTIFY_FALLO%' OR razon ILIKE 'config_no_disponible%')")
 n = cur.fetchone()[0]; (ok if n == 0 else bad)(f"triaje degradado últimas 24h: {n} caso(s)")
+# segmentación (Día 1): si el v6 la usa, contacto_ruta tiene que existir y dar 1 fila (si no, la segmentación no rige: falla abierta)
+cur.execute("SELECT to_regprocedure('public.contacto_ruta(text)') IS NOT NULL"); hay_ruta = cur.fetchone()[0]
+ruta_filas = None
+if hay_ruta:
+    cur.execute("SELECT count(*) FROM (SELECT public.contacto_ruta('5490000000001') AS r) s"); ruta_filas = cur.fetchone()[0]
 cur.close(); conn.close()
 
 print("3) n8n")
@@ -60,9 +66,10 @@ for wid, nombre in (("O155MqHgOSaNZ9ye", "v6"), ("Gm7ofyGohOJ2bI44", "sombra tri
     except Exception as e: bad(f"{nombre}: {e}")
 v6 = n8n("/workflows/O155MqHgOSaNZ9ye")
 names = {n["name"] for n in v6["nodes"]}
-(ok if "Triaje: Evaluar" in names and "Triaje: Decidir" in names else bad)("nodos Triaje presentes en el v6")
-conns = v6["connections"]
-(ok if conns["Switch sobre Intent"]["main"][2][0]["node"] == "Triaje: Cargar Config" else bad)("Switch sobre Intent[2] -> Triaje: Cargar Config")
+for v, t in chequear_grafo(v6):
+    (ok if v else bad)(t)
+if "Seg: Consultar Tipo" in names:
+    (ok if hay_ruta and ruta_filas == 1 else bad)(f"segmentación: public.contacto_ruta existe y da 1 fila (existe={hay_ruta}, filas={ruta_filas})")
 errs = n8n("/executions?workflowId=O155MqHgOSaNZ9ye&status=error&limit=5").get("data", [])
 (ok if not errs else bad)(f"ejecuciones del v6 con error (últimas): {[(e['id'], e.get('startedAt','')[:16]) for e in errs] or 'ninguna'}")
 

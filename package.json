@@ -16,5 +16,8 @@
   "type": "commonjs",
   "dependencies": {
     "dagre": "^0.8.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17"
   }
 }

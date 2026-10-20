@@ -64,9 +64,13 @@ const ctx = recortarCtx(ctxCompleto);
 let estado = null; try { estado = parseJ($('Triaje: Redis GET estado').first().json.triaje_estado, null); } catch (e) { estado = null; }
 if (estado && typeof estado !== "object") estado = null;
 
-// Modo de entrada: si el Router/Parse Intent corrió en esta ejecución, venimos del Switch (nuevo).
-let modo_entrada = "seguimiento";
-try { if ($('Parse Intent').isExecuted) modo_entrada = "nuevo"; } catch (e) { modo_entrada = estado ? "seguimiento" : "nuevo"; }
+// Modo de entrada: "nuevo" si corrió el Router/Parse Intent (Switch sobre Intent[2]) o si el item vino del v7 por 'V7: Derivar a Triaje'
+// (regex antes del orquestador o derivar_triaje del orquestador). corrio() devuelve null si el nodo no existe en este workflow (p. ej. la sombra):
+// ahí se mantiene el criterio viejo (hay estado → seguimiento, si no → nuevo). Sin esto una derivación del v7 entraría como "seguimiento",
+// volvería como ruta_pre 'normal' y el v7 la recibiría otra vez (bucle) o el paciente se quedaría sin respuesta.
+const corrio = (n) => { try { return $(n).isExecuted === true; } catch (e) { return null; } };
+const corrioParse = corrio('Parse Intent');
+let modo_entrada = (corrioParse === true || corrio('V7: Derivar a Triaje') === true) ? "nuevo" : (corrioParse === null ? (estado ? "seguimiento" : "nuevo") : "seguimiento");
 
 const videosDe = (tipo) => cfg.videos.filter((v) => v.tipo === tipo).sort((a, b) => Number(a.opcion) - Number(b.opcion));
 const base = {
