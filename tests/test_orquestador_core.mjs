@@ -207,6 +207,17 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const r2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { etapa: 'ejecutado', ok: false, motivo: 'ya_ejecutada' }, { confirma: 'true' })] }, {});
   t('T10b "ya_ejecutada" sola (un "sí" repetido) sigue diciendo que ya quedó registrado', r2.texto === 'Ese pedido ya quedó registrado.', r2); }
 
+// (20/10, escalación real 382) "no voy a llegar" con turno a < 48 h: primero el porqué, después la derivación.
+{ const plan = O.despachar(orq([{ a: 'turnos', pedido: 'cancelar el turno de hoy' }]), {});
+  const T48 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { ok: false, motivo: 'menos_48h' })] }, {});
+  const reunion = O.reunir(plan, { turnos: T48 }, { texto_paciente: 'no voy a llegar' });
+  const c = O.componer(base({ plan, res: { turnos: T48 }, reunion, derivar_res: { ok: true, texto_para_el_paciente: Clin.TEXTOS.DERIVA } }));
+  t('D48 turno a < 48 h: "Su turno es en menos de 48 horas…" ANTES de "Le paso con la secretaria"', reunion.derivar === true && c.texto.indexOf('menos de 48 horas') >= 0 && c.texto.indexOf('menos de 48 horas') < c.texto.indexOf('Le paso con la secretaria'), c.texto);
+  const p2 = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'presupuesto', motivo: 'presupuesto' }, { a: 'turnos', pedido: 'sacar turno' }]), {});
+  const T_B = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: true, bloque: BLOQUE })] }, {});
+  const c2 = O.componer(base({ plan: p2, res: { turnos: T_B }, reunion: O.reunir(p2, { turnos: T_B }, {}), derivar_res: { ok: true, texto_para_el_paciente: Clin.TEXTOS.DERIVA }, bloque: BLOQUE, bloque_exec: BLOQUE, ofertas: [{ fecha: '2026-10-22', hora: '08:00' }, { fecha: '2026-10-22', hora: '09:20' }] }));
+  t('D48b derivación por OTRO motivo + bloque de Turnos: el orden de siempre (derivación y después los horarios)', c2.texto.indexOf('Le paso con la secretaria') < c2.texto.indexOf('Tenemos los próximos'), c2.texto); }
+
 // (20/10, prueba en vivo 318950) "cuánto sale la consulta y pasame el alias" → el orquestador mandó todo a Información, sin Pagos.
 { const p = O.despachar(orq([{ a: 'informacion', pedido: 'consulta cuánto sale la primera consulta; pregunta si se puede pagar por transferencia y pide el alias' }]), {});
   t('O12 el pedido a Información menciona el alias y no hubo paso de Pagos → Pagos entra por código', p.pagos === 'pide los datos para transferir' && p.pagos_por_codigo === true && !!p.informacion, p);

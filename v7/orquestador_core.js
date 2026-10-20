@@ -369,7 +369,10 @@ const OrquestadorCore = (() => {
       return fin(unir([hayOk ? tTexto : '', h]).join('\n\n'), { modo_humano: true, datos_pago_agregados: hayOk ? datos_pago_agregados : null });
     }
     // 6) Armado en orden fijo.
-    let partes = unir([iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', dTexto, tTexto]);
+    // (20/10, escalación real 382) Si la derivación la pidió TURNOS (p. ej. turno a < 48 h), primero va el porqué y al final "Le paso con la
+    // secretaria" (antes salía al revés: "Le paso con la secretaria… / Su turno es en menos de 48 horas…").
+    const turnosDeriva = !!(T && T.derivar) && reunion.derivar === true && !(T && T.readback);
+    let partes = unir(turnosDeriva ? [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', tTexto, dTexto] : [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', dTexto, tTexto]);
     const errores = agentes.filter((a) => res[a].error_tecnico);
     if (errores.length) {
       avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no pudo completar (' + errores.join(', ') + '): «' + cita + '». Revisar y contestarle.' });
