@@ -1,0 +1,675 @@
+{
+ "name": "v7 Agente Clinica",
+ "nodes": [
+  {
+   "parameters": {
+    "inputSource": "jsonExample",
+    "jsonExample": "{\"tel\": \"5490000000651\", \"exec_id_actual\": \"0\", \"modo\": \"sombra\", \"texto_paciente\": \"Hola\", \"ultimo_asiri\": \"\", \"contexto\": \"\", \"datos\": \"\", \"consulta\": \"\"}"
+   },
+   "id": "654a5c07-8ee3-4c65-bbfd-324ea99ff0a7",
+   "name": "Entrada",
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    0,
+    300
+   ]
+  },
+  {
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $('Entrada').first().json.contexto + '\\n\\nPEDIDO DEL ORQUESTADOR: ' + $('Entrada').first().json.consulta }}",
+    "options": {
+     "systemMessage": "={{ \"Sos el especialista de CLÍNICA de Asiri, la secretaria virtual de la Dra. Raquel Rodríguez (consultorio privado, San Salvador de Jujuy). Recibís el contexto de la conversación y un PEDIDO del orquestador, y devolvés SOLO el mensaje para el paciente: de \\\"usted\\\", frases cortas, una pregunta por vez (o la palabra URGENCIA_DERIVADA, ver abajo).\\n\\nQUÉ HACÉS\\n- URGENCIAS (dolor, molestia, sangrado, hinchazón, golpe, no puede comer, aparato, alambre o bracket roto, suelto o que pincha): llamá derivar_triaje con la frase del paciente y devolvé exactamente URGENCIA_DERIVADA. La clínica le contesta con su protocolo. Ante la duda, derivá.\\n- Comprobante de pago o \\\"ya transferí\\\": registrar_pago. No preguntes nada más (ni para quién ni el DNI: la secretaria lo imputa). Decí que dejaste anotado su aviso y que, cuando mande el comprobante por este chat, la secretaria lo verifica en su horario de atención. No digas que ya lo recibimos ni que el pago ingresó.\\n- Pide hablar con una persona (secretaria, doctora), se queja o pide la baja de sus datos: pasar_a_humano con el motivo (pidio_persona, queja, baja_de_datos) y la frase LITERAL del paciente. Si no pasa la verificación, seguí atendiéndolo vos.\\n- Si el paciente contesta una pregunta o propuesta del STAFF (\\\"sí, a las 17\\\"), no abras un trámite nuevo: avisar_grupo con nivel ACCION y su respuesta textual, y decile que ya se lo avisaste a la secretaria.\\n- Consulta clínica (síntomas, medicación, cuidados): no opines ni indiques nada. Decí que la doctora se lo responde y avisá a la clínica con avisar_grupo.\\n- Avisar a la clínica sin dejar de atender: avisar_grupo (FYI = novedad, ACCION = alguien tiene que hacer algo).\\n\\nLÍMITES\\n- Sin diagnósticos, sin medicación, sin cuidados. No des la dirección salvo que la pidan. No inventes datos: usá solo los DATOS DEL CONSULTORIO.\\n- Decí que algo quedó hecho SOLO si la herramienta lo confirmó.\" + '\\n\\n' + $('Entrada').first().json.datos }}",
+     "maxIterations": 8,
+     "returnIntermediateSteps": true
+    }
+   },
+   "id": "ae290c98-a7d9-481f-b549-db739530d6fc",
+   "name": "Agente",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": 2.2,
+   "position": [
+    300,
+    300
+   ],
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "model": {
+     "__rl": true,
+     "value": "gpt-5-mini",
+     "mode": "list",
+     "cachedResultName": "gpt-5-mini"
+    },
+    "options": {
+     "reasoningEffort": "low"
+    }
+   },
+   "id": "920df32d-028d-434a-b0fb-3a55437149df",
+   "name": "Modelo",
+   "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+   "typeVersion": 1.2,
+   "position": [
+    300,
+    560
+   ],
+   "credentials": {
+    "openAiApi": {
+     "id": "nYujqfon7GGDnJUO",
+     "name": "OpenAi account"
+    }
+   }
+  },
+  {
+   "parameters": {
+    "description": "Avisa a la clínica (grupo de WhatsApp) SIN dejar de atender al paciente. nivel FYI = novedad; ACCION = alguien tiene que hacer algo. Escribí un texto claro: qué pasó y qué hay que hacer.",
+    "workflowId": {
+     "__rl": true,
+     "value": "@@ID:clinica@@",
+     "mode": "id"
+    },
+    "workflowInputs": {
+     "mappingMode": "defineBelow",
+     "value": {
+      "tel": "={{ $('Entrada').first().json.tel }}",
+      "exec_id_actual": "={{ $('Entrada').first().json.exec_id_actual }}",
+      "modo": "={{ $('Entrada').first().json.modo }}",
+      "texto_paciente": "={{ $('Entrada').first().json.texto_paciente }}",
+      "accion": "={{ 'aviso' }}",
+      "nivel": "={{ $fromAI('nivel', \"FYI o ACCION\", 'string', '') }}",
+      "texto": "={{ $fromAI('texto', \"Qué pasó y qué hay que hacer, en una o dos oraciones.\", 'string', '') }}"
+     },
+     "matchingColumns": [],
+     "schema": [
+      {
+       "id": "tel",
+       "displayName": "tel",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "exec_id_actual",
+       "displayName": "exec_id_actual",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "modo",
+       "displayName": "modo",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "texto_paciente",
+       "displayName": "texto_paciente",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "accion",
+       "displayName": "accion",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "nivel",
+       "displayName": "nivel",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "texto",
+       "displayName": "texto",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      }
+     ],
+     "attemptToConvertTypes": false,
+     "convertFieldsToString": true
+    }
+   },
+   "id": "2d319d85-1167-4818-84e3-6ed7e630e2c2",
+   "name": "avisar_grupo",
+   "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+   "typeVersion": 2.2,
+   "position": [
+    640,
+    80
+   ]
+  },
+  {
+   "parameters": {
+    "description": "Pasa la conversación a una persona (silencia al bot hasta 1 h después del último mensaje de una persona) SOLO si el paciente pidió explícitamente hablar con la secretaria, la doctora o una persona (motivo pidio_persona). Una queja (queja) o un pedido de baja de datos (baja_de_datos) se avisan a la clínica y vos seguís atendiendo. Nunca por una duda o una ambigüedad: eso se pregunta. Tenés que pasar la frase LITERAL del paciente que lo justifica; el código la verifica y si no coincide NO lo pasa. Un error de otra herramienta no es motivo. Las urgencias NO van acá: van a derivar_triaje.",
+    "workflowId": {
+     "__rl": true,
+     "value": "@@ID:clinica@@",
+     "mode": "id"
+    },
+    "workflowInputs": {
+     "mappingMode": "defineBelow",
+     "value": {
+      "tel": "={{ $('Entrada').first().json.tel }}",
+      "exec_id_actual": "={{ $('Entrada').first().json.exec_id_actual }}",
+      "modo": "={{ $('Entrada').first().json.modo }}",
+      "texto_paciente": "={{ $('Entrada').first().json.texto_paciente }}",
+      "accion": "={{ 'humano' }}",
+      "motivo": "={{ $fromAI('motivo', \"pidio_persona | queja | baja_de_datos\", 'string', '') }}",
+      "cita_textual": "={{ $fromAI('cita_textual', \"Fragmento LITERAL, copiado tal cual, del mensaje actual del paciente que justifica el motivo.\", 'string', '') }}"
+     },
+     "matchingColumns": [],
+     "schema": [
+      {
+       "id": "tel",
+       "displayName": "tel",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "exec_id_actual",
+       "displayName": "exec_id_actual",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "modo",
+       "displayName": "modo",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "texto_paciente",
+       "displayName": "texto_paciente",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "accion",
+       "displayName": "accion",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "motivo",
+       "displayName": "motivo",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "cita_textual",
+       "displayName": "cita_textual",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      }
+     ],
+     "attemptToConvertTypes": false,
+     "convertFieldsToString": true
+    }
+   },
+   "id": "98f97d25-ebaa-412a-b43b-c81099ab6ec0",
+   "name": "pasar_a_humano",
+   "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+   "typeVersion": 2.2,
+   "position": [
+    640,
+    170
+   ]
+  },
+  {
+   "parameters": {
+    "description": "URGENCIAS: dolor o molestia, sangrado, hinchazón, golpe, no puede comer, aparato, alambre, bracket o ligadura roto, suelto, salido o que pincha. Pasa el mensaje al protocolo de urgencias de la clínica, que le responde al paciente por su cuenta (video de ayuda aprobado por la doctora, una pregunta, o la doctora). Después respondé exactamente [NO_REPLY]. Ante la duda entre urgencia y otra cosa, derivá.",
+    "workflowId": {
+     "__rl": true,
+     "value": "@@ID:clinica@@",
+     "mode": "id"
+    },
+    "workflowInputs": {
+     "mappingMode": "defineBelow",
+     "value": {
+      "tel": "={{ $('Entrada').first().json.tel }}",
+      "exec_id_actual": "={{ $('Entrada').first().json.exec_id_actual }}",
+      "modo": "={{ $('Entrada').first().json.modo }}",
+      "texto_paciente": "={{ $('Entrada').first().json.texto_paciente }}",
+      "accion": "={{ 'triaje' }}",
+      "cita_textual": "={{ $fromAI('cita_textual', \"Fragmento del mensaje actual del paciente que describe el problema, copiado tal cual.\", 'string', '') }}"
+     },
+     "matchingColumns": [],
+     "schema": [
+      {
+       "id": "tel",
+       "displayName": "tel",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "exec_id_actual",
+       "displayName": "exec_id_actual",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "modo",
+       "displayName": "modo",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "texto_paciente",
+       "displayName": "texto_paciente",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "accion",
+       "displayName": "accion",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "cita_textual",
+       "displayName": "cita_textual",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      }
+     ],
+     "attemptToConvertTypes": false,
+     "convertFieldsToString": true
+    }
+   },
+   "id": "d8065f07-1974-4138-a8a1-aba6e02f6748",
+   "name": "derivar_triaje",
+   "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+   "typeVersion": 2.2,
+   "position": [
+    640,
+    260
+   ]
+  },
+  {
+   "parameters": {
+    "description": "Avisa a la clínica que el paciente mandó un comprobante de pago o dice que ya transfirió. No valida montos ni dice que el pago ingresó. Después decile que la secretaria lo verifica en su horario de atención.",
+    "workflowId": {
+     "__rl": true,
+     "value": "@@ID:clinica@@",
+     "mode": "id"
+    },
+    "workflowInputs": {
+     "mappingMode": "defineBelow",
+     "value": {
+      "tel": "={{ $('Entrada').first().json.tel }}",
+      "exec_id_actual": "={{ $('Entrada').first().json.exec_id_actual }}",
+      "modo": "={{ $('Entrada').first().json.modo }}",
+      "texto_paciente": "={{ $('Entrada').first().json.texto_paciente }}",
+      "accion": "={{ 'pago' }}"
+     },
+     "matchingColumns": [],
+     "schema": [
+      {
+       "id": "tel",
+       "displayName": "tel",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "exec_id_actual",
+       "displayName": "exec_id_actual",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "modo",
+       "displayName": "modo",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "texto_paciente",
+       "displayName": "texto_paciente",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "accion",
+       "displayName": "accion",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      }
+     ],
+     "attemptToConvertTypes": false,
+     "convertFieldsToString": true
+    }
+   },
+   "id": "2dc02c5a-2f6e-4718-afaf-e0403df2a300",
+   "name": "registrar_pago",
+   "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+   "typeVersion": 2.2,
+   "position": [
+    640,
+    350
+   ]
+  },
+  {
+   "parameters": {
+    "description": "Cuando el paciente pide los datos para pagar o transferir (alias, CBU, la cuenta, cómo pagarle), con las palabras que sea. El sistema agrega los datos exactos debajo de tu respuesta: vos no los escribas. No la uses para pagos en dólares (eso lo responde la secretaria).",
+    "workflowId": {
+     "__rl": true,
+     "value": "@@ID:clinica@@",
+     "mode": "id"
+    },
+    "workflowInputs": {
+     "mappingMode": "defineBelow",
+     "value": {
+      "tel": "={{ $('Entrada').first().json.tel }}",
+      "exec_id_actual": "={{ $('Entrada').first().json.exec_id_actual }}",
+      "modo": "={{ $('Entrada').first().json.modo }}",
+      "texto_paciente": "={{ $('Entrada').first().json.texto_paciente }}",
+      "accion": "={{ 'datos_pago' }}"
+     },
+     "matchingColumns": [],
+     "schema": [
+      {
+       "id": "tel",
+       "displayName": "tel",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "exec_id_actual",
+       "displayName": "exec_id_actual",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "modo",
+       "displayName": "modo",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "texto_paciente",
+       "displayName": "texto_paciente",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      },
+      {
+       "id": "accion",
+       "displayName": "accion",
+       "required": false,
+       "defaultMatch": false,
+       "display": true,
+       "canBeUsedToMatch": true,
+       "type": "string"
+      }
+     ],
+     "attemptToConvertTypes": false,
+     "convertFieldsToString": true
+    }
+   },
+   "id": "92602e44-c311-4a3f-9ac1-f933a788413b",
+   "name": "datos_pago",
+   "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+   "typeVersion": 2.2,
+   "position": [
+    640,
+    440
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const ag = $('Agente').first().json || {};\nconst e = $('Entrada').first().json;\nconst steps = (Array.isArray(ag.intermediateSteps) ? ag.intermediateSteps : []).map((s) => ({ tool: s && s.action && s.action.tool, input: s && s.action && s.action.toolInput, obs: String((s && s.observation) || '').slice(0, 400) }));\nconst texto = typeof ag.output === 'string' ? ag.output.trim() : '';\nreturn [{ json: { respuesta: texto || 'No pude resolver esto en este momento: avisá a la clínica con avisar_grupo si hace falta.', traza: JSON.stringify(steps), lista: 'traza:' + e.tel + ':' + e.exec_id_actual } }];"
+   },
+   "id": "b7129c73-9105-402b-9e98-87ef6a69a291",
+   "name": "Armar salida",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    620,
+    300
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "push",
+    "list": "={{ $json.lista }}",
+    "messageData": "={{ $json.traza }}",
+    "tail": true
+   },
+   "id": "4170033b-64cb-4b92-9421-c51461dba40f",
+   "name": "Redis PUSH traza",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    840,
+    300
+   ],
+   "credentials": {
+    "redis": {
+     "id": "kdtSKwGbN1xAZeUh",
+     "name": "Redis account"
+    }
+   },
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "jsCode": "return [{ json: { respuesta: $('Armar salida').first().json.respuesta } }];"
+   },
+   "id": "d8ad3351-ec62-40f9-974b-88e559b0282a",
+   "name": "Devolver",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1060,
+    300
+   ]
+  }
+ ],
+ "connections": {
+  "Modelo": {
+   "ai_languageModel": [
+    [
+     {
+      "node": "Agente",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "avisar_grupo": {
+   "ai_tool": [
+    [
+     {
+      "node": "Agente",
+      "type": "ai_tool",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "pasar_a_humano": {
+   "ai_tool": [
+    [
+     {
+      "node": "Agente",
+      "type": "ai_tool",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "derivar_triaje": {
+   "ai_tool": [
+    [
+     {
+      "node": "Agente",
+      "type": "ai_tool",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "registrar_pago": {
+   "ai_tool": [
+    [
+     {
+      "node": "Agente",
+      "type": "ai_tool",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "datos_pago": {
+   "ai_tool": [
+    [
+     {
+      "node": "Agente",
+      "type": "ai_tool",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Entrada": {
+   "main": [
+    [
+     {
+      "node": "Agente",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Agente": {
+   "main": [
+    [
+     {
+      "node": "Armar salida",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Armar salida": {
+   "main": [
+    [
+     {
+      "node": "Redis PUSH traza",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis PUSH traza": {
+   "main": [
+    [
+     {
+      "node": "Devolver",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "callerPolicy": "workflowsFromSameOwner",
+  "availableInMCP": false,
+  "binaryMode": "separate",
+  "errorWorkflow": "yop6TIVoKiWUxfEn"
+ },
+ "staticData": null
+}

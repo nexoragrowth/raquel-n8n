@@ -21,7 +21,9 @@ def postgres(g, nombre, query, replacement_expr, x, y):
 def wf_confirmar_turno():
     """v7 Tool - confirmar_turno: confirma (id_estado 18) la cita de un recordatorio abierto o de un turno visto; verifica antes y marca el recordatorio."""
     g = Grafo("v7 Tool - confirmar_turno")
-    g.trigger({"tel": "5490000000651", "exec_id_actual": "1234", "fecha": ""}, 0, 300)
+    # (08/10) INCIDENTE: el trigger no declaraba `modo`, n8n lo descartaba y en "sombra" se confirmaron de verdad 11 citas reales (retrospectiva del 06/10).
+    # Ahora solo escribe con modo === 'vivo' explícito; cualquier otra cosa (o nada) es sombra: verifica pero no hace el PUT ni marca el recordatorio.
+    g.trigger({"tel": "5490000000651", "exec_id_actual": "1234", "modo": "vivo", "fecha": ""}, 0, 300)
     postgres(g, "Recordatorios abiertos",
              "SELECT id_cita_dentalink, id_paciente_dentalink, nombre_paciente, fecha_turno, hora_turno FROM recordatorios_enviados WHERE telefono = $1 AND confirmado_at IS NULL AND cancelado_at IS NULL AND fecha_turno >= (now() AT TIME ZONE 'America/Argentina/Jujuy')::date ORDER BY fecha_turno, hora_turno",
              "$json.tel", 220, 300)
@@ -38,6 +40,7 @@ return [{ json: r.fin ? { terminado: true, resultado: r.fin } : { terminado: fal
 const r = ConfirmarCore.verificar(cand, $input.first().json);
 return [{ json: r.fin ? { terminado: true, resultado: r.fin } : { terminado: false, cand, ya: r.ya } }];""", 1320, 360, usar=("confirmar_core",))
     g.si("¿Termina? (verificar)", "$json.terminado === true", 1540, 360)
+    g.si("¿Es sombra?", "$('Entrada').first().json.modo !== 'vivo'", 1650, 300)
     g.si("¿Ya estaba confirmada?", "$json.ya === true", 1760, 420)
     g.dentalink("PUT confirmar", "PUT", f"'{DENTALINK}/citas/' + $json.cand.cita_id", "JSON.stringify({ id_estado: 18 })", 1980, 480)
     g.code("Evaluar confirmación", """const cand = $('Verificar').first().json.cand;
@@ -51,9 +54,12 @@ return [{ json: r.fin ? { terminado: true, resultado: r.fin } : { terminado: fal
 const corrio = (n) => { try { return $(n).isExecuted === true; } catch (x) { return false; } };
 const j = corrio('Evaluar confirmación') ? $('Evaluar confirmación').first().json : (corrio('Verificar') ? $('Verificar').first().json : $('Elegir cita').first().json);
 const r = j.resultado ? j.resultado : (() => { const c = j.cand; const ya = j.ya === true; return { ok: true, ya, readback_text: ConfirmarCore.mensaje(c, ya), cita: c.cita_id }; })();
-const escribio = !!(r.ok === true && j.escribio === true);
-const libro = { ok: r.ok === true, parcial: false, tipo: 'confirmacion', readback_text: r.readback_text || null, nueva_cita: null, vieja_anulada: null };
-const salida = { ok: r.ok === true, motivo: r.motivo || null, ya_estaba_confirmada: r.ya === true, readback_text: r.readback_text || null, para_asiri: r.para_asiri || (r.ok === true ? '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es readback_text: mandáselo tal cual. Si hay otros recordatorios pendientes, confirmá cada uno con su fecha.' : null), fechas: r.fechas || null, fechas_iso: r.fechas_iso || null };
+// (07/10) También se deja en el libro un turno que la agenda ya tenía confirmado (verificado con el GET): el chequeo de salida necesita saber que
+// "su turno … está confirmado" es verdad; sin esto lo tomaba como afirmación falsa (examen CON-01 y MULTI-01).
+const sombra = e.modo !== 'vivo';
+const escribio = !!(r.ok === true && (j.escribio === true || j.ya === true || sombra));   // en sombra el libro queda marcado simulado (el chequeo de salida lo necesita)
+const libro = { ok: r.ok === true, simulado: sombra || undefined, parcial: false, tipo: 'confirmacion', readback_text: r.readback_text || null, nueva_cita: null, vieja_anulada: null };
+const salida = { ok: r.ok === true, simulado: sombra || undefined, motivo: r.motivo || null, ya_estaba_confirmada: r.ya === true, readback_text: r.readback_text || null, para_asiri: r.para_asiri || (r.ok === true ? '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es readback_text: mandáselo tal cual. Si en el mismo mensaje pidió otras cosas (precio, otro turno, datos), resolvelas en esa misma respuesta, después de este texto. Si hay otros recordatorios pendientes, confirmá cada uno con su fecha.' : null), fechas: r.fechas || null, fechas_iso: r.fechas_iso || null };
 return [{ json: { tel: e.tel, escribio, libro_key: 'escrituras:' + e.tel + ':' + e.exec_id_actual, libro_entry: libro, salida } }];""", 3080, 360, usar=("confirmar_core",))
     g.si("¿Escribió?", "$json.escribio === true", 3300, 360)
     g.redis_get("Redis GET libro", "$json.libro_key", "libro_raw", 3520, 300)
@@ -62,7 +68,7 @@ return [{ json: { tel: e.tel, escribio, libro_key: 'escrituras:' + e.tel + ':' +
     g.code("Devolver", "return [{ json: $('Final').first().json.salida }];", 4180, 360)
     for a, b, s_ in [("Entrada", "Recordatorios abiertos", 0), ("Recordatorios abiertos", "Redis GET turnos_vistos", 0), ("Redis GET turnos_vistos", "Elegir cita", 0), ("Elegir cita", "¿Termina? (elegir)", 0),
                      ("¿Termina? (elegir)", "Final", 0), ("¿Termina? (elegir)", "GET cita", 1), ("GET cita", "Verificar", 0), ("Verificar", "¿Termina? (verificar)", 0), ("¿Termina? (verificar)", "Final", 0),
-                     ("¿Termina? (verificar)", "¿Ya estaba confirmada?", 1), ("¿Ya estaba confirmada?", "¿Viene de un recordatorio?", 0), ("¿Ya estaba confirmada?", "PUT confirmar", 1),
+                     ("¿Termina? (verificar)", "¿Es sombra?", 1), ("¿Es sombra?", "Final", 0), ("¿Es sombra?", "¿Ya estaba confirmada?", 1), ("¿Ya estaba confirmada?", "¿Viene de un recordatorio?", 0), ("¿Ya estaba confirmada?", "PUT confirmar", 1),
                      ("PUT confirmar", "Evaluar confirmación", 0), ("Evaluar confirmación", "¿Termina? (confirmar)", 0), ("¿Termina? (confirmar)", "Final", 0), ("¿Termina? (confirmar)", "¿Viene de un recordatorio?", 1),
                      ("¿Viene de un recordatorio?", "Marcar recordatorio", 0), ("¿Viene de un recordatorio?", "Final", 1), ("Marcar recordatorio", "Final", 0),
                      ("Final", "¿Escribió?", 0), ("¿Escribió?", "Redis GET libro", 0), ("¿Escribió?", "Devolver", 1), ("Redis GET libro", "Sumar al libro", 0), ("Sumar al libro", "Redis SET libro", 0), ("Redis SET libro", "Devolver", 0)]:

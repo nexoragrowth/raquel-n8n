@@ -1,0 +1,140 @@
+# -*- coding: utf-8 -*-
+"""
+test_v7_ma.py — v7 con ORQUESTADOR (padre + 2 especialistas), sin red. Prueba:
+  A) la ESTRUCTURA: qué herramientas tiene cada agente y que lo que decide el modelo siga sin incluir identificadores (teléfono, ejecución, modo, ids de agenda);
+  B) que el padre le pase a los especialistas la ejecución del CEREBRO (de ella dependen las claves de Redis de las herramientas) y el contexto;
+  C) el especialista como GRAFO: agente simulado → deja la traza en Redis → devuelve {respuesta};
+  D) el cerebro del orquestador como GRAFO: la `Salida` suma la traza de los especialistas a `tools` (el examen evalúa con eso) y borra la lista.
+USO:  python tests/test_v7_ma.py
+"""
+import json, os, re, subprocess, sys, tempfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+sys.stdout.reconfigure(encoding="utf-8")
+import build_v7_workflows as B  # noqa: E402
+import v7_workflow_cerebro as C  # noqa: E402
+import v7_workflows_ma as M  # noqa: E402
+
+TEL = "5490000000651"
+EXEC = "ex-MA1"
+total = fallas = 0
+
+
+def chequear(nombre, cond, extra=None):
+    global total, fallas
+    total += 1
+    if not cond:
+        fallas += 1
+        print(f"  FALLA {nombre}" + (f" → {json.dumps(extra, ensure_ascii=False)[:500]}" if extra else ""))
+    else:
+        print(f"  ok    {nombre}")
+
+
+def correr(wf, escenarios):
+    with tempfile.TemporaryDirectory() as d:
+        w, e = os.path.join(d, "wf.json"), os.path.join(d, "e.json")
+        json.dump(wf, open(w, "w", encoding="utf-8"), ensure_ascii=True)
+        json.dump(escenarios, open(e, "w", encoding="utf-8"), ensure_ascii=True)
+        p = subprocess.run(["node", os.path.join(ROOT, "tests", "harness_grafo.mjs"), w, e], capture_output=True, text=True, encoding="utf-8")
+        if p.returncode != 0:
+            sys.exit("node fallo: " + p.stderr[-2500:])
+        return {r["id"]: r for r in json.loads(p.stdout)}
+
+
+def tools_de(wf):
+    return {n["name"]: n for n in wf["nodes"] if n["type"] == "@n8n/n8n-nodes-langchain.toolWorkflow"}
+
+
+def valores(n):
+    return n["parameters"]["workflowInputs"]["value"]
+
+
+PROHIBIDO = {"tel", "phone", "exec_id_actual", "modo", "id_paciente", "paciente_id", "cita_id", "id_cita", "texto_paciente", "accion", "contexto", "datos"}
+
+
+def main():
+    padre = B.wf_cerebro(ma=True)
+    turnos = M.wf_agente_turnos()
+    clinica = M.wf_agente_clinica()
+    unico = B.wf_cerebro()
+
+    print("A. Estructura")
+    tp, tt, tc = tools_de(padre), tools_de(turnos), tools_de(clinica)
+    chequear("A1 el padre tiene SOLO los 2 especialistas como herramientas (no toca la agenda ni la clínica)", set(tp) == {"agente_turnos", "agente_clinica"}, list(tp))
+    chequear("A2 turnos tiene sus 7 herramientas de agenda", set(tt) == set(M.TOOLS_TURNOS), list(tt))
+    chequear("A3 clínica tiene sus 4 herramientas", set(tc) == set(M.TOOLS_CLINICA), list(tc))
+    chequear("A4 entre los dos especialistas están las 12 herramientas del agente único (ninguna se perdió ni se duplicó)", sorted(list(tt) + list(tc)) == sorted(tools_de(unico)), (sorted(list(tt) + list(tc)), sorted(tools_de(unico))))
+    todas = {**tt, **tc}
+    mal = []
+    for nombre, n in todas.items():
+        v = valores(n)
+        for k, val in v.items():
+            if "$fromAI" in str(val) and k in PROHIBIDO:
+                mal.append((nombre, k))
+    chequear("A5 en los especialistas el modelo NO decide teléfono, ejecución, modo, ids ni acción (solo fecha/hora/tipo/nombre/texto)", not mal, mal)
+    for nombre, n in todas.items():
+        v = valores(n)
+        fijos_ok = all("$('Entrada').first().json." in str(v[k]) for k in ("tel", "exec_id_actual", "modo") if k in v)
+        chequear(f"A6 {nombre}: teléfono, ejecución y modo salen de la Entrada del especialista (no de $execution del sub-workflow)", fijos_ok and "$execution" not in json.dumps(v), v)
+    chequear("A7 los 2 especialistas usan modelo mini con razonamiento bajo y tope de iteraciones", all(any(x["type"].endswith("lmChatOpenAi") and x["parameters"]["options"]["reasoningEffort"] == "low" for x in w["nodes"]) and any(x["type"].endswith(".agent") and x["parameters"]["options"]["maxIterations"] <= 8 for x in w["nodes"]) for w in (turnos, clinica)))
+    chequear("A8 prompts: orquestador corto (< 3.200), especialistas < 4.200 sin datos", len(C.PROMPT_ORQ) < 3200 and len(M.PROMPT_TURNOS) < 4200 and len(M.PROMPT_CLINICA) < 4200, (len(C.PROMPT_ORQ), len(M.PROMPT_TURNOS), len(M.PROMPT_CLINICA)))
+    chequear("A9 el orquestador no tiene reglas de agenda ni nombres de herramientas de escritura (solo delega)", not re.search(r"proponer|ejecutar_propuesta|buscar_horarios|elegir_ficha|confirmar_turno", C.PROMPT_ORQ))
+    chequear("A10 ningún workflow del orquestador lleva claves ni tokens escritos", not re.search(r"sk-[A-Za-z0-9]{10}|sb_secret|Bearer [A-Za-z0-9]{12}|apikey", json.dumps([padre, turnos, clinica])))
+
+    print("B. Lo que el padre le pasa a los especialistas")
+    for nombre in ("agente_turnos", "agente_clinica"):
+        v = valores(tp[nombre])
+        chequear(f"B1 {nombre}: pasa la ejecución del CEREBRO ($execution.id), el teléfono, el modo, el mensaje literal, el contexto y los datos", all(k in v for k in ("tel", "exec_id_actual", "modo", "texto_paciente", "contexto", "datos", "consulta")) and "$execution.id" in v["exec_id_actual"] and "$fromAI" in v["consulta"], v)
+        entrada = next(n for n in (turnos if nombre == "agente_turnos" else clinica)["nodes"] if n["name"] == "Entrada")
+        campos = set(json.loads(entrada["parameters"]["jsonExample"]))
+        chequear(f"B2 {nombre}: el disparador define TODOS los campos que el padre manda (n8n descarta los que no están)", set(v) <= campos, (set(v) - campos))
+
+    print("C. El especialista como grafo (agente simulado)")
+    pasos = [{"action": {"tool": "proponer", "toolInput": {"tipo": "cancelacion", "fecha_turno_viejo": "2026-10-16"}}, "observation": "{\"ok\":true,\"readback_text\":\"¿Procedo con la cancelación…?\"}"}]
+    ent = {"tel": TEL, "exec_id_actual": EXEC, "modo": "sombra", "texto_paciente": "Lo cancelo", "contexto": "ctx", "datos": "datos", "consulta": "Quiere cancelar su turno"}
+    R = correr(turnos, [
+        {"id": "C1 el especialista responde", "trigger": ent, "ahora": "2026-10-05T12:36:00Z", "exec_id": "sub-1", "redis": {}, "pg": {}, "subwf": {}, "agente": {"output": "¿Procedo con la cancelación de su turno del viernes 16/10 a las 10:30?", "intermediateSteps": pasos}},
+        {"id": "C2 el especialista se cae", "trigger": ent, "ahora": "2026-10-05T12:36:00Z", "exec_id": "sub-2", "redis": {}, "pg": {}, "subwf": {}, "agente": {"error": "boom"}},
+    ])
+    a = R["C1 el especialista responde"]; r0 = a["reps"][0]
+    traza = a["redis_final"].get(f"traza:{TEL}:{EXEC}")
+    chequear("C1 devuelve {respuesta} con el texto del especialista", r0["error"] is None and r0["salida"]["respuesta"].startswith("¿Procedo con la cancelación"), (r0["error"], r0["salida"]))
+    chequear("C2 deja en Redis la traza de lo que hizo (lista traza:{tel}:{ejecución del CEREBRO})", isinstance(traza, list) and len(traza) == 1 and json.loads(traza[0])[0]["tool"] == "proponer", traza)
+    r0 = R["C2 el especialista se cae"]["reps"][0]
+    chequear("C3 si el especialista falla, devuelve un texto (nunca vacío) y no rompe al padre", r0["error"] is None and bool(r0["salida"]["respuesta"]), (r0["error"], r0["salida"]))
+
+    print("D. El cerebro con orquestador como grafo")
+    traza_sub = json.dumps([{"tool": "proponer", "input": {"tipo": "cancelacion"}, "obs": "ok"}, {"tool": "ejecutar_propuesta", "input": {}, "obs": "ok"}])
+    pg = {"Historial": [{}], "Recordatorios": [{}], "Datos del consultorio": [{"id": "21", "contenido": "La primera consulta tiene un valor de $50.000."}], "Guardar en memoria": {}}
+    base = {"trigger": {"phone": TEL, "texto": "Quiero cancelar", "pushName": "X", "modo": "sombra"}, "ahora": "2026-10-05T12:36:00Z", "exec_id": EXEC, "pg": pg,
+            "subwf": {"Identificar paciente": {"ok": True, "varias_fichas": False, "ficha_elegida": True, "paciente_elegido": "Dana", "turnos": [], "para_asiri": "."}}}
+    R = correr(padre, [
+        {"id": "D1 con traza", **base, "redis": {f"traza:{TEL}:{EXEC}": [traza_sub]}, "agente": {"output": "¿Procedo con la cancelación de su turno?", "intermediateSteps": [{"action": {"tool": "agente_turnos", "toolInput": {"consulta": "cancelar"}}, "observation": "…"}]}},
+        {"id": "D2 sin traza", **base, "redis": {}, "agente": {"output": "Hola, ¿en qué puedo ayudarle?"}},
+    ])
+    a = R["D1 con traza"]; r0 = a["reps"][0]
+    nombres = [t["tool"] for t in r0["salida"]["tools"]]
+    chequear("D1 las herramientas de los especialistas aparecen en `tools` (antes de la llamada del padre) para que el examen las evalúe", nombres == ["proponer", "ejecutar_propuesta", "agente_turnos"], nombres)
+    chequear("D2 la lista de traza se borra después de leerla (no queda basura en Redis)", f"traza:{TEL}:{EXEC}" not in a["redis_final"], list(a["redis_final"]))
+    r0 = R["D2 sin traza"]["reps"][0]
+    chequear("D3 sin traza (el padre contestó solo) todo sigue andando", r0["error"] is None and r0["salida"]["texto"].startswith("Hola") and r0["salida"]["tools"] == [], (r0["error"], r0["salida"]))
+    chequear("D4 el cerebro del agente único no cambia: su grafo no tiene nodos de traza y la Salida tolera que no existan", not any("traza" in n["name"] for n in unico["nodes"]))
+    nodos_ctx = [n for n in padre["nodes"] if n["name"] == "Armar contexto"][0]["parameters"]["jsCode"]
+    chequear("D5 el padre usa el prompt corto del orquestador (no el de agente único)", "delegás" in nodos_ctx or "TU TRABAJO" in nodos_ctx and "buscar_horarios" not in C.PROMPT_ORQ)
+
+    print("E. Variante mixta (turnos como especialista + acciones simples directas en el padre)")
+    mixto = B.wf_cerebro(ma="mixto")
+    tm = tools_de(mixto)
+    chequear("E1 el mixto tiene al especialista de turnos y las 5 acciones simples como herramientas directas", set(tm) == {"agente_turnos", "avisar_grupo", "pasar_a_humano", "derivar_triaje", "registrar_pago", "datos_pago"}, list(tm))
+    chequear("E2 las acciones directas conservan lo fijo del cerebro (teléfono, ejecución, modo) y el modelo no decide identificadores", all("$execution.id" in valores(tm[n])["exec_id_actual"] and not [k for k, v in valores(tm[n]).items() if "$fromAI" in str(v) and k in PROHIBIDO] for n in ("avisar_grupo", "pasar_a_humano", "derivar_triaje", "registrar_pago")))
+    chequear("E3 el mixto mantiene la traza (el especialista de turnos la deja) y su prompt es corto", any(n["name"] == "Redis GET traza" for n in mixto["nodes"]) and len(C.PROMPT_ORQ_MIXTO) < 4500, len(C.PROMPT_ORQ_MIXTO))
+    ids_mixto = set(re.findall(r"@@ID:([a-z_]+)@@", json.dumps(mixto)))
+    chequear("E4 los ids a resolver del mixto son solo ver_turnos (identificar paciente), buscar_horarios (bloque faltante, 07/10), gestionar_turno (sí directo, 07/10), clinica y agente_turnos", ids_mixto == {"ver_turnos", "buscar_horarios", "gestionar_turno", "clinica", "agente_turnos"}, sorted(ids_mixto))
+
+    print(f"\n{total - fallas}/{total} " + ("TODO OK" if not fallas else f"{fallas} FALLAS"))
+    sys.exit(1 if fallas else 0)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,64 +1,93 @@
-// clinica_core.js — v7 · herramientas de CLÍNICA de Asiri: avisar al grupo, pasar a una persona, comprobantes de pago, lista de espera. Fuente de verdad en el repo.
-// Regla central: Asiri solo pasa a una persona (y silencia al bot) por 3 motivos (pidio_persona, queja, baja_de_datos), y el código lo VERIFICA contra el texto literal del paciente.
-// Si no se puede verificar, se degrada a un aviso que NO silencia. Avisar nunca silencia. Un error de herramienta no es motivo para derivar.
-// URGENCIAS (derivar_triaje, o pasar_a_humano con motivo urgencia): NO silencian ni las responde Asiri. El mensaje vuelve al triaje del v6 (videos aprobados por la Dra.,
-// pregunta guiada o escalada a la doctora). Acá no se exige verificación: ante la duda, derivar una urgencia de más es lo seguro (el triaje la vuelve a clasificar).
+// clinica_core.js — v7 · herramientas de CLÍNICA: derivar a la secretaria, pasar a una persona, recepción de pagos, datos para transferir, lista de espera,
+// triaje de urgencias y avisos al grupo. Fuente de verdad en el repo (se inlinea en un nodo Code de n8n y se prueba offline).
+// (08/10, orquestador + sub-agentes) QUIÉN decide qué quiso decir el paciente es la IA (el orquestador o un sub-agente eligen la acción). Este código
+// EJECUTA la acción y arma el texto para el paciente; no lee el mensaje del paciente para juzgar su intención. Se borraron las regex de verificación
+// por motivo (pedido de persona, quejas, bajas, urgencias) y esos motivos: lo que está fuera de las 8 tareas va a `derivar` (decisión de Lucas del 08/10).
+// Lo único que el código compara con el texto del paciente es un DATO: que la frase que el modelo dice citar en `humano` esté de verdad en el mensaje
+// (anti-alucinación). Si no coincide, se deriva igual (aviso ACCIÓN, sin silenciar): falla del lado seguro, nunca deja al paciente hablando solo con el bot.
+// Todo lo que sale afuera (avisos, silencio) exige modo === 'vivo' EXPLÍCITO (decisión del 08/10).
 const ClinicaCore = (() => {
-  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const MOTIVOS = ['pidio_persona', 'queja', 'baja_de_datos', 'urgencia'];
-  // Palabras que tienen que aparecer en lo que el paciente escribió, según el motivo que invoca Asiri.
-  const VERIF = {
-    pidio_persona: /\b(persona|humano|humana|secretaria|doctora|dra|raquel|hablar con|que me llamen|llamenme|llamar|alguien)\b/,
-    queja: /\b(queja|reclamo|mal servicio|mala atencion|pesimo|horrible|indignad|molest|enojad|inaceptable|verguenza|nunca me|no puede ser|cansad)\w*/,
-    baja_de_datos: /\b(baja|mis datos|borren|eliminen|no me escriban|dejen de escribir|no quiero recibir|no me contacten|desuscrib)\w*/,
-    urgencia: /\b(dolor|duele|sangr|hinchaz|hinchad|fiebre|golpe|se (me )?(salio|solto|rompio|despego)|bracket|alambre|aparato|urgenc|infecci|pus|no puedo (comer|abrir))\w*/,
-  };
+  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const tokens = (x) => sinT(x).replace(/[^a-z0-9ñ ]+/g, ' ').split(/\s+/).filter((t) => t.length >= 2);
   const NIVELES = ['FYI', 'ACCION'];
   const lim = (s, n) => String(s || '').trim().slice(0, n);
+  // Textos fijos para el paciente (los arma el código; ningún modelo los redacta).
+  const TEXTOS = {
+    DERIVA: 'Le paso con la secretaria para que lo atienda.',
+    DERIVA_INSISTE: 'Ya le pasé su consulta a la secretaria; le responde por este chat.',
+    PAGO: 'Recibido. Dejé anotado su aviso de pago; la secretaria lo verifica en su horario de atención.',
+    PAGO_YA: 'Recibido, gracias.',
+    DATOS_PAGO: 'Le paso los datos para transferir:',
+    ESPERA: 'Le dejo anotado a la clínica que quiere adelantar su turno si se libera uno.',
+  };
+  // ¿La cita está en lo que escribió el paciente? Mayoría (≥ 50 %) de sus palabras presentes en el texto crudo normalizado. Dato, no intención.
+  function citaEnTexto(cita, texto) {
+    const tc = tokens(cita), tp = new Set(tokens(texto));
+    if (!tc.length) return false;
+    return tc.filter((t) => tp.has(t)).length / tc.length >= 0.5;
+  }
 
-  // entrada: { accion:'aviso'|'humano'|'pago'|'espera'|'triaje', nivel, texto, motivo, cita_textual, texto_paciente, modo, pago_reciente:boolean, tel }
-  // devuelve { avisar:null|{resumen,tomar}, marcar_pago:boolean, limpiar:boolean, triaje:null|{motivo,cita}, resultado:{...} }
+  // entrada: { accion:'aviso'|'derivar'|'humano'|'pago'|'datos_pago'|'espera'|'triaje', nivel, texto, motivo, cita_textual, texto_paciente, moneda, modo,
+  //            pago_reciente:boolean, avisos_recientes:number, deriva_recientes:number, tel }
+  // devuelve { avisar:null|{resumen,tomar}, marcar_pago, limpiar, contar_deriva, triaje:null|{motivo,cita}, resultado:{ ok, texto_para_el_paciente?, ... } }
   function decidir(e) {
-    const sombra = e.modo === 'sombra';
-    const res = (resultado, extra) => ({ avisar: null, marcar_pago: false, limpiar: false, triaje: null, resultado, ...(extra || {}) });
-    // La marca de triaje se deja TAMBIÉN en sombra: no tiene efecto afuera (solo la lee el cerebro de esta ejecución) y así la sombra muestra qué se habría derivado.
-    const aTriaje = (origen) => res({ ok: true, derivado_a_triaje: true, simulado: sombra || undefined,
-      para_asiri: '[Nota interna para vos, NO la repitas al paciente] El mensaje pasó al protocolo de urgencias de la clínica, que le responde al paciente por su cuenta (video de ayuda o la doctora). Respondé exactamente [NO_REPLY]: no agregues nada, no des indicaciones ni opines sobre el síntoma.' },
-    { triaje: { motivo: origen, cita: lim(e.cita_textual || e.texto_paciente, 200) } });
-    if (e.accion === 'triaje') return aTriaje('derivar_triaje');
+    const sombra = e.modo !== 'vivo';
+    const res = (resultado, extra) => ({ avisar: null, marcar_pago: false, limpiar: false, contar_deriva: false, triaje: null, resultado, ...(extra || {}) });
+    const textual = () => { const tp = lim(e.cita_textual || e.texto_paciente, 200); return tp ? `«${tp}»` : '(mandó un archivo sin texto)'; };
+
+    // Urgencias: el mensaje vuelve al triaje del v6 (videos aprobados por la Dra., pregunta guiada o la doctora). La cita la pone el CÓDIGO con el mensaje
+    // completo del paciente (no una paráfrasis del modelo). La marca se deja también en sombra (solo la lee el cerebro de esta ejecución).
+    if (e.accion === 'triaje') {
+      return res({ ok: true, derivado_a_triaje: true, simulado: sombra || undefined }, { triaje: { motivo: 'derivar_triaje', cita: lim(e.texto_paciente || e.cita_textual, 300) } });
+    }
+    if (e.accion === 'derivar') {
+      // Fuera de las 8 tareas. 1.ª vez: texto fijo + aviso ACCIÓN con la frase textual. Si ya se derivó en los últimos 30 min (contador PROPIO `deriva:`,
+      // separado de los avisos técnicos), el paciente insiste: una persona toma el chat y el bot se calla (anti-bucle REAL-09).
+      const motivo = lim(e.motivo, 120);
+      if (Number(e.deriva_recientes || 0) >= 1) {
+        return res({ ok: true, modo_humano: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.DERIVA_INSISTE },
+          { contar_deriva: true, ...(sombra ? {} : { avisar: { resumen: `[ACCIÓN] El paciente insiste con algo que Asiri no atiende${motivo ? ' (' + motivo + ')' : ''}: ${textual()}. El bot queda en silencio en este chat hasta que lo reactiven.`, tomar: true }, limpiar: true }) });
+      }
+      return res({ ok: true, derivado: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.DERIVA },
+        { contar_deriva: true, ...(sombra ? {} : { avisar: { resumen: `[ACCIÓN] Fuera de lo que atiende Asiri${motivo ? ' (' + motivo + ')' : ''}: ${textual()}. Contestarle por este chat.`, tomar: false } }) });
+    }
+    if (e.accion === 'humano') {
+      // Pidió hablar con una persona: lo decidió el orquestador. El código solo verifica que la frase citada esté en el mensaje (anti-alucinación).
+      if (!citaEnTexto(e.cita_textual, e.texto_paciente)) {
+        const d = decidir({ ...e, accion: 'derivar', motivo: 'pidió una persona; la frase no se pudo verificar' });
+        d.resultado = { ...d.resultado, degradado: true, motivo: 'no_verificado' };
+        return d;
+      }
+      return res({ ok: true, humano: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.DERIVA },
+        sombra ? {} : { avisar: { resumen: `El paciente pidió hablar con una persona: «${lim(e.cita_textual, 160)}»`, tomar: true }, limpiar: true });
+    }
     if (e.accion === 'aviso') {
       const nivel = NIVELES.includes(String(e.nivel || '').toUpperCase()) ? String(e.nivel).toUpperCase() : null;
       const texto = lim(e.texto, 400);
-      if (!nivel || texto.length < 5) return res({ ok: false, motivo: 'aviso_invalido', para_asiri: '[Nota interna para vos, NO la repitas al paciente] Necesito nivel (FYI o ACCION) y un texto claro de qué pasó y qué hay que hacer.' });
-      return res({ ok: true, simulado: sombra || undefined, para_asiri: '[Nota interna para vos, NO la repitas al paciente] Listo, la clínica fue avisada. Seguí atendiendo al paciente.' }, sombra ? {} : { avisar: { resumen: `[${nivel === 'ACCION' ? 'ACCIÓN' : 'FYI'}] ${texto}`, tomar: false } });
+      if (Number(e.avisos_recientes || 0) >= 2) return res({ ok: true, ya_avisado: true });
+      if (!nivel || texto.length < 5) return res({ ok: false, motivo: 'aviso_invalido' });
+      return res({ ok: true, simulado: sombra || undefined }, sombra ? {} : { avisar: { resumen: `[${nivel === 'ACCION' ? 'ACCIÓN' : 'FYI'}] ${texto}`, tomar: false } });
     }
     if (e.accion === 'espera') {
       const texto = lim(e.texto, 300);
-      return res({ ok: true, simulado: sombra || undefined, para_asiri: '[Nota interna para vos, NO la repitas al paciente] Quedó anotado para la clínica. Decile solo "se lo dejo anotado a la clínica": NO prometas que le van a avisar si se libera un turno.' },
+      return res({ ok: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.ESPERA },
         sombra ? {} : { avisar: { resumen: `[FYI] Lista de espera: la paciente quiere adelantar su turno si se libera uno.${texto ? ' ' + texto : ''}`, tomar: false } });
     }
     if (e.accion === 'pago') {
-      const base = { ok: true, simulado: sombra || undefined, para_asiri: '[Nota interna para vos, NO la repitas al paciente] Decile que dejaste anotado su aviso de pago y que, cuando mande el comprobante por este chat, la secretaria lo verifica en su horario de atención. NO digas que ya lo recibimos, NO valides el monto ni digas que el pago ingresó. NO le preguntes para quién es, a qué corresponde ni su DNI: la secretaria lo imputa. Una sola respuesta corta y no repitas la pregunta.' };
-      if (sombra || e.pago_reciente) return res(base);
-      return res(base, { avisar: { resumen: '[ACCIÓN] La paciente avisa que ya transfirió o que manda el comprobante: verificar que llegue por el chat e imputarlo al turno.', tomar: false }, marcar_pago: true });
+      // Qué es un pago lo decide el modelo (Pagos). El aviso NO afirma "transfirió": muestra las palabras textuales y la secretaria juzga (REAL-05).
+      // Ya anotado en los últimos 15 min (REAL-02): no se avisa de nuevo y el texto es corto.
+      if (e.pago_reciente) return res({ ok: true, ya_anotado: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.PAGO_YA });
+      const base = { ok: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.PAGO };
+      if (sombra) return res(base, { marcar_pago: true });   // la marca va a la clave de sombra (v7s:pago:), no avisa a nadie
+      return res(base, { avisar: { resumen: `[ACCIÓN] Asiri lo tomó como aviso de pago o comprobante: ${textual()}. Verificar en el chat e imputarlo al turno.`, tomar: false }, marcar_pago: true });
     }
-    if (e.accion === 'humano') {
-      const motivo = String(e.motivo || '');
-      if (motivo === 'urgencia') return aTriaje('pasar_a_humano_urgencia');   // una urgencia nunca silencia al bot: va al triaje
-      const cita = sinT(e.cita_textual);
-      const paciente = sinT(e.texto_paciente);
-      const valido = MOTIVOS.includes(motivo) && cita.length >= 3 && paciente.includes(cita) && VERIF[motivo].test(paciente);
-      if (!valido) {
-        // No se puede verificar: NO se silencia. Se avisa a la clínica y se sigue atendiendo.
-        return res({ ok: false, degradado: true, motivo: 'no_verificado', para_asiri: '[Nota interna para vos, NO la repitas al paciente] No pude verificar ese pedido con lo que escribió el paciente, así que NO lo pasé a una persona. Avisé a la clínica. Seguí atendiéndolo vos y resolvé lo que te pide.' },
-          sombra ? {} : { avisar: { resumen: `[ACCIÓN] Asiri quiso pasar a una persona (${motivo || 'sin motivo'}) pero no se pudo verificar con el mensaje. Revisar la conversación.`, tomar: false } });
-      }
-      const etiqueta = { pidio_persona: 'pidió hablar con una persona', queja: 'hizo una queja', baja_de_datos: 'pidió la baja de sus datos' }[motivo];
-      return res({ ok: true, simulado: sombra || undefined, para_asiri: '[Nota interna para vos, NO la repitas al paciente] Ya avisé a la clínica y una persona toma el chat. Decíselo con amabilidad y no sigas la conversación sobre turnos.' },
-        sombra ? {} : { avisar: { resumen: `El paciente ${etiqueta}: «${lim(e.cita_textual, 160)}»`, tomar: true }, limpiar: true });
+    if (e.accion === 'datos_pago') {
+      // La moneda la decide Pagos (la IA). Solo hay datos en pesos: otra moneda queda fuera de alcance y la deriva el cerebro. Los datos los pega el código.
+      if (String(e.moneda || 'pesos').toLowerCase() === 'otra') return res({ ok: false, fuera_de_alcance: true, motivo: 'otra_moneda' });
+      return res({ ok: true, datos_pago: true, texto_para_el_paciente: TEXTOS.DATOS_PAGO });
     }
-    return res({ ok: false, motivo: 'accion_invalida', para_asiri: '[Nota interna para vos, NO la repitas al paciente] Acción de clínica inválida.' });
+    return res({ ok: false, motivo: 'accion_invalida' });
   }
-  return { decidir, MOTIVOS };
+  return { decidir, citaEnTexto, TEXTOS };
 })();
 if (typeof module !== 'undefined') module.exports = ClinicaCore;

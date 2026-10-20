@@ -70,7 +70,32 @@ caso('D2 el bloque con un horario inventado (viernes 23 a las 10:00) → se reem
 caso('D3 una oferta suelta en una frase ("el jueves 22/10 a las 09:20") → pasa', { texto: 'Tenemos el jueves 22/10 a las 09:20, ¿le sirve?', libro: null }, pasa);
 caso('D4 una oferta suelta con hora inventada → reemplaza', { texto: 'Tenemos el jueves 22/10 a las 11:40, ¿le sirve?', libro: null }, reemplaza('horario_no_ofrecido', BLOQUE));
 caso('D5 un turno que el paciente YA tiene (16/10 09:10) no cuenta como horario inventado', { texto: 'Veo su turno del viernes 16/10 a las 09:10. ¿Lo quiere cancelar o cambiar?', libro: null }, pasa);
+// (07/10) decir que un horario NO está no es inventar uno (examen completo: AGE-02 y DANA-09 se alargaban porque esto se reemplazaba por el bloque entero)
+caso('D12 "El 4/11 a las 17:00 no figura entre los disponibles. ¿Para quién es?" → pasa', { texto: 'El 4/11 a las 17:00 no figura entre los horarios disponibles. ¿Para quién es el turno?', libro: null }, pasa);
+caso('D13 "No hay 17:00 el 04/11." → pasa', { texto: 'No hay 17:00 el 04/11. ¿Le sirve el lunes 2/11 a las 16:20?', libro: null }, pasa);
+caso('D14 "El martes 20/10 a las 15:00 no está disponible." + el bloque real → pasa', { texto: 'El martes 20/10 a las 15:00 no está disponible.\n\n' + BLOQUE, libro: null }, pasa);
+caso('D15 "No hay problema. Le ofrezco el jueves 22/10 a las 11:40." → sigue frenando (ofrece un horario inventado)', { texto: 'No hay problema. Le ofrezco el jueves 22/10 a las 11:40.', libro: null }, { accion: 'reemplazar', motivo: 'horario_no_ofrecido' });
+caso('D16 "Ese día no está la doctora, pero el 22/10 a las 11:40 sí hay lugar." → sigue frenando', { texto: 'Ese día no está la doctora, pero el 22/10 a las 11:40 sí hay lugar.', libro: null }, { accion: 'reemplazar', motivo: 'horario_no_ofrecido' });
+// (07/10) varias cosas en un mensaje (examen MULTI-01)
+caso('D17 el bloque con la última línea cambiada ("¿Cuál prefiere para Martina?") cuenta como pegado → pasa', { texto: 'La primera consulta cuesta $50.000.\n\n' + BLOQUE.replace('Le sirve alguno?', '¿Cuál prefiere para Martina?'), libro: null, bloque_exec: BLOQUE }, pasa);
+{ const r = C.revisar({ texto: 'Su turno del viernes 16/10 a las 09:10 ya estaba confirmado.\nLa primera consulta cuesta $50.000.\n¿Es para su hija? Me pasa nombre, apellido y DNI.', libros: [], ofertas: OFERTAS, turnos_vistos: [{ fecha: '2026-10-16', hora_inicio: '09:10:00' }], bloque_ofertas: BLOQUE, bloque_exec: BLOQUE });
+  total++; const ok = r.motivo === 'falta_bloque' && /16\/10 a las 09:10 ya estaba confirmado/.test(r.texto) && /\$50\.000/.test(r.texto) && r.texto.includes(BLOQUE) && /¿Es para su hija\?/.test(r.texto);
+  if (!ok) { fallas++; console.log('  FALLA D18 → ' + JSON.stringify(r).slice(0, 400)); } else console.log('  ok    D18 al reponer el bloque se conserva la confirmación de SU turno (fecha que ya tiene), el precio y la pregunta'); }
+{ const r = C.revisar({ texto: 'Le ofrezco el jueves 22/10 a las 11:40.\nLa consulta cuesta $50.000.', libros: [], ofertas: OFERTAS, turnos_vistos: [], bloque_ofertas: BLOQUE, bloque_exec: BLOQUE });
+  total++; const ok = r.motivo === 'falta_bloque' && !/11:40/.test(r.texto) && /\$50\.000/.test(r.texto);
+  if (!ok) { fallas++; console.log('  FALLA D19 → ' + JSON.stringify(r).slice(0, 400)); } else console.log('  ok    D19 al reponer el bloque se sigue sacando un horario inventado'); }
+// (07/10) examen completo 2.ª corrida
+caso('D20 "cambiar su turno del 16/10 09:10 por el jueves 22 a las 8:00" (jueves 22 sin mes, ofrecido) → pasa', { texto: '¿Quiere cambiar su turno del 16/10 09:10 por el jueves 22 a las 8:00?', libro: null }, pasa);
+caso('D21 "por el jueves 22 a las 11:40" (sin mes y NO ofrecido) → sigue frenando', { texto: 'Le cambio su turno del 16/10 09:10 por el jueves 22 a las 11:40.', libro: null }, { accion: 'reemplazar', motivo: 'horario_no_ofrecido' });
+caso('D22 repetir una confirmación de un mensaje ANTERIOR (está en los hechos de 12 h) → pasa', { texto: 'Su turno del viernes 16/10 a las 09:10 está confirmado. La primera consulta cuesta $50.000.', libros: [],
+  libros_previos: [{ ok: true, tipo: 'confirmacion', readback_text: 'Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado.' }] }, pasa);
+caso('D23 sin hechos previos, la misma frase → sigue frenando', { texto: 'Su turno del viernes 16/10 a las 09:10 está confirmado.', libros: [], libros_previos: [] }, { accion: 'reemplazar', motivo: 'afirma_confirmar_sin_ok' });
+caso('D24 "Confirmado. Le avisé a la secretaria." sin confirmar nada (REAL-15) → bloquea', { texto: 'Confirmado. Le avisé a la secretaria.', libros: [] }, { accion: 'reemplazar', motivo: 'afirma_confirmar_sin_ok' });
+caso('D25 "¿Confirmado entonces el viernes?" (pregunta) → pasa', { texto: '¿Confirmado entonces el viernes?', libros: [] }, pasa);
 caso('D6 horario inventado y sin bloque disponible → mensaje seguro', { texto: 'Tenemos el 22/10 a las 11:40.', libro: null, bloque_ofertas: null }, { accion: 'reemplazar', motivo: 'horario_no_ofrecido' });
+{ const r = C.revisar({ texto: 'Tenemos el 22/10 a las 11:40.', libros: [], ofertas: [], turnos_vistos: [], propuesta_readback: null, bloque_ofertas: null, bloque_exec: null });
+  total++; const ok = /secretaria/.test(r.texto) && !/déjeme confirmar/.test(r.texto) && r.avisar && r.avisar.nivel === 'ACCION';
+  if (!ok) { fallas++; console.log('  FALLA D6b → ' + JSON.stringify(r)); } else console.log('  ok    D6b sin bloque: texto honesto (la secretaria le ofrece turnos) y aviso ACCIÓN, no un "déjeme confirmar" que deja colgado al paciente'); }
 caso('D7 la hora del horario de atención ("de 15 a 20 hs") no es una pareja fecha+hora', { texto: 'Atendemos lunes y miércoles de 15 a 20 hs.', libro: null }, pasa);
 
 console.log('\nF. Varias escrituras en la misma respuesta (libro = lista)');
@@ -79,17 +104,39 @@ caso('F1 dos confirmaciones y el texto dice las dos → pasa', { texto: OK_CONF.
 caso('F2 dos confirmaciones y el texto dice solo la última → pasa (la clínica ve las dos en la agenda)', { texto: OK_CONF_B.readback_text, libros: [OK_CONF, OK_CONF_B] }, pasa);
 caso('F3 dos confirmaciones y el texto no dice ninguna → se reemplaza por lo hecho', { texto: 'Gracias por avisar.', libros: [OK_CONF, OK_CONF_B] }, { accion: 'reemplazar', motivo: 'falta_confirmacion_de_lo_hecho' });
 caso('F4 una confirmación ok y una que falló: el texto dice la ok y no afirma la otra → pasa', { texto: OK_CONF.readback_text, libros: [OK_CONF, { ok: false, tipo: 'confirmacion', readback_text: null }] }, pasa);
+caso('F6 "Su turno está confirmado." sin confirmar de verdad → bloquea (07/10)', { texto: 'Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado.', libros: [] }, { accion: 'reemplazar', motivo: 'afirma_confirmar_sin_ok' });
+caso('F7 el mismo texto con la confirmación real en el libro → pasa', { texto: 'Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado.\nLa primera consulta tiene un valor de $50.000.', libros: [{ ok: true, tipo: 'confirmacion', readback_text: 'Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado.' }] }, { accion: 'pasar' });
 caso('F5 libros vacío + afirma → bloquea', { texto: 'Listo, quedó confirmado.', libros: [] }, { accion: 'reemplazar', motivo: 'afirma_confirmar_sin_ok' });
+
+console.log('\nQ. Una pregunta u oferta no es una afirmación (retrospectiva 06/10)');
+caso('Q1 "¿Desea que le reserve un turno para la primera consulta?" sin escritura → pasa (es una oferta, no "le reservé")', { texto: 'La primera consulta tiene un valor de $50.000 y es con turno previo. ¿Desea que le reserve un turno para la primera consulta?', libro: null }, pasa);
+caso('Q2 oferta sin signo de apertura ("Quiere que le agende un turno?") → pasa', { texto: 'Atendemos con turno previo. Quiere que le agende un turno?', libro: null }, pasa);
+caso('Q3 la afirmación falsa sigue bloqueada aunque después venga una pregunta', { texto: 'Listo, le reservé el jueves 22/10 a las 08:00. ¿Algo más?', libro: null }, reemplaza('afirma_reprogramar_sin_ok', 'Disculpe, todavía no pude concretar eso en la agenda, así que no quedó hecho. Le aviso a la clínica para que lo resuelva y se comunique con usted.'));
 
 console.log('\nG. Lo que el código le da a Asiri para pegar TEXTUAL tiene que llegar al paciente');
 const RB_PROP = 'Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, reemplazando el turno del viernes 16/10 a las 09:10. ¿Procedo con la reserva?';
 caso('G1 propuesta de esta ejecución y el modelo la pega → pasa', { texto: 'Perfecto. ' + RB_PROP, libros: [], propuesta_readback: RB_PROP }, pasa);
 caso('G2 propuesta y el modelo se la saltea (habla de otra cosa) → se envía el read-back del código', { texto: 'Un momento, lo estoy viendo.', libros: [], propuesta_readback: RB_PROP }, reemplaza('falta_readback', RB_PROP));
 caso('G3 propuesta y el modelo responde con una afirmación falsa → gana el read-back (la salida correcta de la charla)', { texto: 'Listo, quedó reprogramado.', libros: [], propuesta_readback: RB_PROP }, reemplaza('falta_readback', RB_PROP));
+caso('G1b read-back pegado pero con otra pregunta antes ("¿Para quién cancela?") → se envía SOLO el read-back', { texto: '¿Para quién cancela, Lucas: Jana o Lucas? ' + RB_PROP, libros: [], propuesta_readback: RB_PROP }, reemplaza('pregunta_extra_con_readback', RB_PROP));
+caso('G1c read-back pegado con una frase de cortesía sin pregunta → pasa', { texto: 'Perfecto, Lucas. ' + RB_PROP, libros: [], propuesta_readback: RB_PROP }, pasa);
 caso('G4 bloque recién buscado y el modelo lo pega → pasa', { texto: BLOQUE, libros: [], bloque_exec: BLOQUE }, pasa);
-caso('G5 bloque recién buscado y el modelo pregunta otra cosa → se envía el bloque', { texto: 'Le quedan las fichas de Jana y Lucas. ¿Confirma?', libros: [], bloque_exec: BLOQUE }, reemplaza('falta_bloque', BLOQUE));
+caso('G5 bloque recién buscado y el modelo pregunta otra cosa → se envía el bloque y se CONSERVA su frase (06/10: antes se borraba)', { texto: 'Le quedan las fichas de Jana y Lucas. ¿Confirma?', libros: [], bloque_exec: BLOQUE }, reemplaza('falta_bloque', 'Le quedan las fichas de Jana y Lucas. ¿Confirma?\n\n' + BLOQUE));
+caso('G5b el modelo reformateó el bloque (guiones en vez de asteriscos) y preguntó para quién → bloque del código + la pregunta', { texto: 'Soy Asiri, la secretaria virtual de la Dra. Raquel.\n\nTenemos los próximos turnos disponibles:\nPor la mañana:\n- Jueves 22 de octubre 8:00 , 9:20\n\nLe sirve alguno?\n¿Para quién es el cambio (nombre o DNI)?', libros: [], bloque_exec: BLOQUE },
+  reemplaza('falta_bloque', 'Soy Asiri, la secretaria virtual de la Dra. Raquel.\n\n' + BLOQUE + '\n¿Para quién es el cambio (nombre o DNI)?'));
+caso('G5c decir que algo NO hay ("No hay turno el jueves a las 9:20") se conserva aunque nombre la hora', { texto: 'No hay turno el jueves a las 9:20.\n\nTenemos los próximos turnos disponibles:\n- Viernes 16 de octubre 9:10\n\n¿Para quién es?', libros: [], bloque_exec: BLOQUE },
+  reemplaza('falta_bloque', 'No hay turno el jueves a las 9:20.\n\n' + BLOQUE + '\n¿Para quién es?'));
+caso('G5d una frase del modelo que OFRECE una hora propia ("Le reservo el jueves a las 9:20") no se conserva', { texto: 'Le reservo el jueves a las 9:20 si quiere.\n\nTenemos los próximos turnos disponibles:\n- Viernes 16 de octubre 9:10', libros: [], bloque_exec: BLOQUE }, reemplaza('falta_bloque', BLOQUE));
 caso('G6 bloque pegado con una frase antes → pasa', { texto: 'Con gusto.\n\n' + BLOQUE, libros: [], bloque_exec: BLOQUE }, pasa);
 caso('G7 sin propuesta ni bloque de esta ejecución: no se fuerza nada', { texto: 'Hola, ¿en qué puedo ayudarle?', libros: [] }, pasa);
+
+console.log('\nI. (08/10, REAL-10) Turno propio con día y mes invertidos');
+const VISTO_1012 = [{ fecha: '2026-12-10', hora_inicio: '08:00:00' }];
+caso('I1 "su turno: jueves 12/10 a las 08:00" con turno el 10/12 → se corrige la fecha, NO se reemplaza el mensaje',
+  { texto: 'Avisé a la secretaria para que le envíen el presupuesto (su turno: jueves 12/10 a las 08:00). La secretaria le responde por este chat.', libros: [], turnos_vistos: VISTO_1012, bloque_ofertas: null },
+  reemplaza('fecha_invertida', 'Avisé a la secretaria para que le envíen el presupuesto (su turno: jueves 10/12 a las 08:00). La secretaria le responde por este chat.'));
+caso('I2 fecha invertida que NO es un turno suyo → sigue siendo horario no ofrecido', { texto: 'Le ofrezco el 12/10 a las 08:00.', libros: [], turnos_vistos: [] }, { accion: 'reemplazar', motivo: 'horario_no_ofrecido' });
+caso('I3 la fecha bien escrita de su turno → pasa', { texto: 'Su turno es el jueves 10/12 a las 08:00.', libros: [], turnos_vistos: VISTO_1012 }, pasa);
 
 console.log('\nE. Extracción de fechas y horas');
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);

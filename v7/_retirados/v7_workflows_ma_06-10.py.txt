@@ -1,0 +1,66 @@
+# -*- coding: utf-8 -*-
+"""v7_workflows_ma.py — versión del v7 con ORQUESTADOR (pedido de Lucas 06/10, modelo "parent agent + sub-agents" de n8n).
+
+El agente padre (v7 Cerebro (orquestador)) solo entiende la intención y delega. Cada especialista es un workflow con SU agente y SUS herramientas de código
+(las mismas 7 herramientas de siempre: ninguna escritura recibe identificadores del modelo). Contrato de entrada de un especialista (todo lo fijo lo pone el código):
+  tel, exec_id_actual (la ejecución del CEREBRO: las claves de Redis de las herramientas dependen de ella), modo, texto_paciente, contexto (el mismo texto que ve el padre:
+  fecha, fichas y turnos vigentes, recordatorios, charla reciente, mensaje actual), datos (DATOS DEL CONSULTORIO) + consulta (lo único que decide el padre).
+Salida: {respuesta}. Además deja en Redis (lista `traza:{tel}:{exec}`) las llamadas a herramientas que hizo, para que el cerebro las muestre y el examen las pueda evaluar."""
+import json
+
+from v7_lib import V7, Grafo
+from v7_workflow_cerebro import HERRAMIENTAS
+
+PROMPT_TURNOS = (V7 / "prompt_agente_turnos.md").read_text(encoding="utf-8").strip()
+PROMPT_CLINICA = (V7 / "prompt_agente_clinica.md").read_text(encoding="utf-8").strip()
+
+ENT = "$('Entrada').first().json"
+FIJOS_SUB = {"tel": ENT + ".tel", "exec_id_actual": ENT + ".exec_id_actual", "modo": ENT + ".modo", "texto_paciente": ENT + ".texto_paciente", "ultimo_asiri": ENT + ".ultimo_asiri"}
+EJEMPLO = {"tel": "5490000000651", "exec_id_actual": "0", "modo": "sombra", "texto_paciente": "Hola", "ultimo_asiri": "", "contexto": "", "datos": "", "consulta": ""}
+
+TOOLS_TURNOS = ["ver_turnos", "elegir_ficha", "buscar_horarios", "gestionar_turno", "confirmar_turno", "lista_espera"]
+TOOLS_CLINICA = ["avisar_grupo", "pasar_a_humano", "derivar_triaje", "registrar_pago", "datos_pago"]
+
+JS_SALIDA = """const ag = $('Agente').first().json || {};
+const e = $('Entrada').first().json;
+const steps = (Array.isArray(ag.intermediateSteps) ? ag.intermediateSteps : []).map((s) => ({ tool: s && s.action && s.action.tool, input: s && s.action && s.action.toolInput, obs: String((s && s.observation) || '').slice(0, 400) }));
+const texto = typeof ag.output === 'string' ? ag.output.trim() : '';
+return [{ json: { respuesta: texto || 'No pude resolver esto en este momento: avisá a la clínica con avisar_grupo si hace falta.', traza: JSON.stringify(steps), lista: 'traza:' + e.tel + ':' + e.exec_id_actual } }];"""
+
+
+def _fijos(fijos):
+    """Los campos fijos de las herramientas apuntan a la Entrada del especialista (no a la del cerebro); los literales ('aviso', 'humano'…) se conservan."""
+    sal = {}
+    for k, v in fijos.items():
+        sal[k] = FIJOS_SUB.get(k, v)
+    return sal
+
+
+def _wf_especialista(nombre, prompt, herramientas):
+    g = Grafo(nombre)
+    g.trigger(EJEMPLO, 0, 300)
+    g.agente("Agente", ENT + ".contexto + '\\n\\nPEDIDO DEL ORQUESTADOR: ' + " + ENT + ".consulta",
+             json.dumps(prompt, ensure_ascii=False) + " + '\\n\\n' + " + ENT + ".datos", 300, 300, max_iter=8)
+    g.modelo("Modelo", "gpt-5-mini", "low", 300, 560)
+    g.conectar_ai("Modelo", "Agente", "ai_languageModel")
+    y = 80
+    por_nombre = {h[0]: h for h in HERRAMIENTAS}
+    for t in herramientas:
+        n, clave, desc, fijos, del_modelo = por_nombre[t]
+        g.herramienta(n, desc, f"@@ID:{clave}@@", _fijos(fijos), del_modelo, 640, y)
+        g.conectar_ai(n, "Agente", "ai_tool")
+        y += 90
+    g.code("Armar salida", JS_SALIDA, 620, 300)
+    g.redis_push("Redis PUSH traza", "$json.lista", "$json.traza", 840, 300)
+    g.code("Devolver", "return [{ json: { respuesta: $('Armar salida').first().json.respuesta } }];", 1060, 300)
+    for a, b in [("Entrada", "Agente"), ("Agente", "Armar salida"), ("Armar salida", "Redis PUSH traza"), ("Redis PUSH traza", "Devolver")]:
+        g.conectar(a, b, 0)
+    return g.json()
+
+
+def wf_agente_turnos():
+    return _wf_especialista("v7 Agente Turnos", PROMPT_TURNOS, TOOLS_TURNOS)
+
+
+def wf_agente_clinica():
+    return _wf_especialista("v7 Agente Clinica", PROMPT_CLINICA, TOOLS_CLINICA)

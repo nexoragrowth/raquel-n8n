@@ -21,7 +21,7 @@ return [{ json: { tiene, estado: tiene ? est : null, last10: String(e.tel).slice
     g.code("Armar ficha", """const resp = $input.first().json || {};
 if (resp.error) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude consultar la agenda en este momento. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).' } } }];
 const fichas = FichaCore.fichasDeRespuesta(resp);
-if (!fichas.length) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'sin_ficha', para_asiri: 'No encuentro una ficha con este celular. Pedile nombre completo y DNI y avisá a la clínica con avisar_grupo (ACCION) para que la den de alta; no inventes turnos.' } } }];
+if (!fichas.length) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'sin_ficha', para_asiri: 'No hay ficha con este celular: es un paciente nuevo, no tiene turnos (no inventes ninguno). Si quiere un turno, ofrecé horarios y, cuando elija uno, pedile nombre, apellido y DNI y pasalos a gestionar_turno (el código lo da de alta).' } } }];
 return [{ json: { terminado: false, estado: FichaCore.estadoInicial(fichas) } }];""", 1100, 420, usar=("ficha_core",))
     g.si("¿Termina? (ficha)", "$json.terminado === true", 1320, 420)
     g.redis_set("Redis SET ficha", "'ficha:' + $('Entrada').first().json.tel", "JSON.stringify($('Armar ficha').first().json.estado)", 7200, 1540, 480)
@@ -92,6 +92,48 @@ return [{ json: { ok: false, resultado: r } }];""", 880, 200, usar=("agenda_core
     return g.json()
 
 
+def wf_gestionar_turno():
+    """v7 Tool - gestionar_turno (06/10; 08/10 orquestador): reemplaza a proponer + ejecutar_propuesta.
+    1.ª llamada: el código valida (ficha, cita vista, horario ofrecido, 48 h, DNI escrito por el paciente) y devuelve el read-back; guarda la propuesta.
+    2.ª llamada con confirma=true (lo decide el agente de TURNOS leyendo el mensaje actual; ninguna regex): si la propuesta guardada está pendiente, su
+    read-back es lo último que le dijo Asiri y no venció, se guarda confirmada (id estable = candado contra la doble escritura) y corre la ejecución.
+    El modelo aporta tipo/fecha/hora/turno viejo/datos del nuevo/confirma; teléfono, ejecución, modo, último mensaje de Asiri y mensajes del paciente los pone el código."""
+    g = Grafo("v7 Tool - gestionar_turno")
+    g.trigger({"tel": "5490000000651", "exec_id_actual": "1234", "modo": "vivo", "texto_paciente": "", "ultimo_asiri": "", "tipo": "cambio", "fecha": "", "hora": "", "fecha_turno_viejo": "",
+               "nuevo_nombre": "", "nuevo_apellido": "", "nuevo_dni": "", "confirma": "", "textos_paciente": "[]"}, 0, 200)
+    g.redis_get("Redis GET ficha", "'ficha:' + $json.tel", "ficha_raw", 220, 200)
+    g.redis_get("Redis GET turnos_vistos", "'turnos_vistos:' + $('Entrada').first().json.tel", "turnos_raw", 440, 200)
+    g.redis_get("Redis GET ofertas", "'ofertas:' + $('Entrada').first().json.tel", "ofertas_raw", 660, 200)
+    g.redis_get("Redis GET propuesta guardada", "'propuesta:' + $('Entrada').first().json.tel", "guardada_raw", 770, 120)
+    g.code("Decidir", """const e = $('Entrada').first().json;
+const j = (nodo, campo) => { try { return JSON.parse($(nodo).first().json[campo] || 'null'); } catch (x) { return null; } };
+const estado = { tel: e.tel, exec_id: String(e.exec_id_actual), ficha: j('Redis GET ficha', 'ficha_raw') || { fichas: [], elegida: null }, turnos_vistos: j('Redis GET turnos_vistos', 'turnos_raw'), ofertas: j('Redis GET ofertas', 'ofertas_raw') || [],
+  ultimo_asiri: String(e.ultimo_asiri || ''), texto_paciente: String(e.texto_paciente || ''), propuesta_guardada: j('Redis GET propuesta guardada', 'guardada_raw') };
+// (08/10) Mensajes del paciente de las últimas 12 h (los arma el cerebro, respetando historial_json): para verificar que el DNI que copió el modelo lo escribió el paciente.
+let tp = null; try { tp = JSON.parse(e.textos_paciente || 'null'); } catch (x) { tp = null; }
+if (Array.isArray(tp)) estado.textos_paciente = tp.map(String);
+const d = AgendaCore.decidir({ tipo: e.tipo, fecha: e.fecha, hora: e.hora, fecha_turno_viejo: e.fecha_turno_viejo || undefined,
+  nuevo_nombre: e.nuevo_nombre || '', nuevo_apellido: e.nuevo_apellido || '', nuevo_dni: e.nuevo_dni || '', confirma: e.confirma }, estado, new Date().toISOString());
+return [{ json: { etapa: d.etapa, propuesta_json: d.propuesta ? JSON.stringify(d.propuesta) : null, resultado: d.resultado || null } }];""", 880, 200, usar=("agenda_core",))
+    g.si("¿Ejecutar?", "$json.etapa === 'ejecutar'", 1100, 200)
+    g.redis_set("Redis SET propuesta confirmada", "'propuesta:' + $('Entrada').first().json.tel", "$('Decidir').first().json.propuesta_json", 1800, 1320, 80)
+    g.subworkflow("Ejecutar", "@@ID:ejecutar_propuesta@@", {"tel": "$('Entrada').first().json.tel", "exec_id_actual": "$('Entrada').first().json.exec_id_actual", "modo": "$('Entrada').first().json.modo"}, 1540, 80)
+    # (07/10) El mensaje final va como texto_para_el_paciente (igual que la confirmación) y con la instrucción de mandarlo solo: con `readback_text` y
+    # para_asiri vacío el modelo lo tomó por otra confirmación y escribió "Le confirmo… ¿Desea que le envíe los datos para abonar?" (examen AGE-01).
+    g.code("Devolver ejecución", """const { readback_text, para_asiri, ok, ...resto } = $input.first().json || {};
+const exito = ok === true;
+return [{ json: { etapa: 'ejecutado', ok: exito, texto_para_el_paciente: readback_text || null,
+  para_asiri: para_asiri || (exito ? '[Nota interna para vos, NO la repitas al paciente] Ya quedó hecho en la agenda. Tu respuesta es texto_para_el_paciente, tal cual y sola: no vuelvas a confirmar ni agregues preguntas u ofrecimientos.' : null), ...resto } }];""", 1760, 80)
+    g.si("¿Confirmación?", "$('Decidir').first().json.etapa === 'confirmacion'", 1320, 300)
+    g.redis_set("Redis SET propuesta", "'propuesta:' + $('Entrada').first().json.tel", "$('Decidir').first().json.propuesta_json", 1800, 1540, 260)
+    g.code("Devolver", "return [{ json: $('Decidir').first().json.resultado }];", 1760, 300)
+    for a, b, s_ in [("Entrada", "Redis GET ficha", 0), ("Redis GET ficha", "Redis GET turnos_vistos", 0), ("Redis GET turnos_vistos", "Redis GET ofertas", 0), ("Redis GET ofertas", "Redis GET propuesta guardada", 0), ("Redis GET propuesta guardada", "Decidir", 0), ("Decidir", "¿Ejecutar?", 0),
+                     ("¿Ejecutar?", "Redis SET propuesta confirmada", 0), ("Redis SET propuesta confirmada", "Ejecutar", 0), ("Ejecutar", "Devolver ejecución", 0),
+                     ("¿Ejecutar?", "¿Confirmación?", 1), ("¿Confirmación?", "Redis SET propuesta", 0), ("¿Confirmación?", "Devolver", 1), ("Redis SET propuesta", "Devolver", 0)]:
+        g.conectar(a, b, s_)
+    return g.json()
+
+
 def wf_buscar_horarios():
     """v7 Tool - buscar_horarios: usa el sub-WF de horarios del v6, registra lo ofrecido en Redis (lo único reservable), limita a 2 bloques por conversación y NO cuenta como bloque nuevo
     un pedido idéntico al anterior (el modelo a veces la llama dos veces): devuelve el bloque que ya tenía."""
@@ -108,9 +150,10 @@ const hit = !!cache && ultimo === req;
 let prev = []; try { prev = JSON.parse($('Redis GET ofertas').first().json.ofertas_raw || '[]') || []; } catch (x) { prev = []; }
 return [{ json: { hit, req, prev, resultado: hit ? { ok: true, repetido: true, bloque: cache, para_asiri: 'Este es el MISMO bloque que ya le ofreciste (no cuenta como uno nuevo). Si el paciente ya eligió un horario, NO lo pegues de nuevo: llamá proponer.' } : null } }];""", 880, 240)
     g.si("¿Repetido?", "$json.hit === true", 1100, 240)
-    g.redis_incr("Redis INCR lotes", "'lotes:' + $('Entrada').first().json.tel", 7200, 1320, 300)
+    # (07/10) El lote se cuenta DESPUÉS, solo si el bloque trae horarios nuevos (antes se contaba al pedirlo).
+    g.redis_get("Redis GET lotes", "'lotes:' + $('Entrada').first().json.tel", "lotes_raw", 1320, 300)
     g.code("Límite", """const prev = $('¿Es el mismo pedido?').first().json.prev || [];
-const n = Object.values($input.first().json || {})[0];
+const n = Number($input.first().json.lotes_raw || 0) + 1;
 if (HorariosCore.limiteLotes(n)) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'limite_de_bloques', para_asiri: 'Ya se le ofrecieron dos bloques de horarios y no hay un tercero. No ofrezcas otro: decile con amabilidad que se lo dejás anotado a la clínica para que lo ayuden con otra fecha, y llamá avisar_grupo con nivel FYI.' } } }];
 return [{ json: { terminado: false, prev } }];""", 1540, 300, usar=("horarios_core",))
     g.si("¿Termina? (límite)", "$json.terminado === true", 1760, 300)
@@ -119,22 +162,30 @@ return [{ json: { terminado: false, prev } }];""", 1540, 300, usar=("horarios_co
 const prev = $('Límite').first().json.prev || [];
 const resp = $input.first().json || {};
 const bloque = typeof resp.bloque === 'string' ? resp.bloque.trim() : '';
-if (!bloque) return [{ json: { terminado: true, resultado: { ok: false, motivo: (resp.error || resp.error_tecnico) ? 'error_tecnico' : 'sin_turnos', para_asiri: (resp.error || resp.error_tecnico) ? 'No pude consultar la agenda en este momento. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).' : 'No hay turnos para ofrecer en ese rango. No inventes horarios ni pidas fecha: avisá a la clínica con avisar_grupo (ACCION).' } } }];
-const ofertas = HorariosCore.unir(prev, HorariosCore.parseBloque(bloque, hoy), hoy);
-return [{ json: { terminado: false, ofertas_json: JSON.stringify(ofertas), bloque, req: $('¿Es el mismo pedido?').first().json.req, resultado: { ok: true, bloque, para_asiri: '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es `bloque`: mandáselo tal cual, sin frases como \"le paso el bloque\". Si dice que ninguno le sirve, llamá buscar_horarios con desde = el día siguiente al último horario ofrecido.' } } }];""", 2200, 360, usar=("horarios_core",))
+if (!bloque) return [{ json: { terminado: true, resultado: { ok: false, motivo: (resp.error || resp.error_tecnico) ? 'error_tecnico' : 'sin_turnos', para_asiri: (resp.error || resp.error_tecnico) ? 'No pude consultar la agenda en este momento. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).' : 'No hay turnos en ese rango. Decíselo en una frase y nombrá lo más cercano de lo que ya le ofreciste, o buscá sin hasta para ver los próximos. Si quiere esperar, lista_espera. No inventes horarios y NO avises a la clínica por esto.' } } }];
+const delBloque = HorariosCore.parseBloque(bloque, hoy);
+const ofertas = HorariosCore.unir(prev, delBloque, hoy);
+const desde = HorariosCore.siguienteDesde(ofertas);
+if (prev.length && !HorariosCore.nuevas(prev, delBloque).length) {
+  // Nada que no se le haya ofrecido ya: no se pega otro bloque ni cuenta para el límite de 2.
+  return [{ json: { terminado: false, nuevo: false, resultado: { ok: true, sin_horarios_nuevos: true, siguiente_desde: desde, para_asiri: '[Nota interna para vos, NO la repitas al paciente] En lo que pidió no hay horarios distintos de los que YA le ofreciste (esta búsqueda no cuenta como bloque nuevo). NO pegues otro bloque: decile en una frase que en eso no hay y nombrale lo más cercano a lo que pidió entre los horarios que ya le ofreciste (por ejemplo, la primera tarde). Si quiere fechas más adelante, llamá buscar_horarios con desde = ' + desde + '.' } } }];
+}
+return [{ json: { terminado: false, nuevo: true, ofertas_json: JSON.stringify(ofertas), bloque, req: $('¿Es el mismo pedido?').first().json.req, resultado: { ok: true, bloque, siguiente_desde: desde, para_asiri: '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es `bloque`: mandáselo tal cual, sin frases como \"le paso el bloque\". Si pidió una hora o franja que no está, decíselo en una frase antes y nombrá lo más cercano. Si dice que ninguno le sirve, llamá buscar_horarios con desde = ' + desde + '.' } } }];""", 2200, 360, usar=("horarios_core",))
+    g.si("¿Bloque nuevo?", "$json.nuevo === true", 2530, 360)
     g.si("¿Termina? (ofertas)", "$json.terminado === true", 2420, 360)
     g.redis_set("Redis SET ofertas", "'ofertas:' + $('Entrada').first().json.tel", "$('Ofertas').first().json.ofertas_json", 7200, 2640, 420)
     g.redis_set("Redis SET bloque", "'bloque:' + $('Entrada').first().json.tel", "$('Ofertas').first().json.bloque", 7200, 2860, 420)
     g.redis_set("Redis SET bloque_req", "'bloque_req:' + $('Entrada').first().json.tel", "$('Ofertas').first().json.req", 7200, 3080, 420)
     g.redis_set("Redis SET bloque_exec", "'bloque_exec:' + $('Entrada').first().json.tel + ':' + $('Entrada').first().json.exec_id_actual", "$('Ofertas').first().json.bloque", 600, 3300, 420)
+    g.redis_incr("Redis INCR lotes", "'lotes:' + $('Entrada').first().json.tel", 7200, 3410, 420)
     g.code("Devolver", """// El resultado sale del último nodo de decisión que corrió: Ofertas (bloque nuevo / sin turnos / error), si no Límite (tercer bloque), si no el pedido repetido (caché).
 const corrio = (n) => { try { return $(n).isExecuted === true; } catch (x) { return false; } };
 const r = corrio('Ofertas') ? $('Ofertas').first().json.resultado : (corrio('Límite') ? $('Límite').first().json.resultado : $('¿Es el mismo pedido?').first().json.resultado);
 return [{ json: r || { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude buscar horarios; avisá a la clínica con avisar_grupo (ACCION).' } }];""", 3520, 300)
     for a, b, s_ in [("Entrada", "Redis GET ofertas", 0), ("Redis GET ofertas", "Redis GET bloque", 0), ("Redis GET bloque", "Redis GET bloque_req", 0), ("Redis GET bloque_req", "¿Es el mismo pedido?", 0),
-                     ("¿Es el mismo pedido?", "¿Repetido?", 0), ("¿Repetido?", "Devolver", 0), ("¿Repetido?", "Redis INCR lotes", 1), ("Redis INCR lotes", "Límite", 0), ("Límite", "¿Termina? (límite)", 0),
+                     ("¿Es el mismo pedido?", "¿Repetido?", 0), ("¿Repetido?", "Devolver", 0), ("¿Repetido?", "Redis GET lotes", 1), ("Redis GET lotes", "Límite", 0), ("Límite", "¿Termina? (límite)", 0),
                      ("¿Termina? (límite)", "Devolver", 0), ("¿Termina? (límite)", "Buscar horarios (sub-WF)", 1), ("Buscar horarios (sub-WF)", "Ofertas", 0), ("Ofertas", "¿Termina? (ofertas)", 0),
-                     ("¿Termina? (ofertas)", "Devolver", 0), ("¿Termina? (ofertas)", "Redis SET ofertas", 1), ("Redis SET ofertas", "Redis SET bloque", 0), ("Redis SET bloque", "Redis SET bloque_req", 0),
-                     ("Redis SET bloque_req", "Redis SET bloque_exec", 0), ("Redis SET bloque_exec", "Devolver", 0)]:
+                     ("¿Termina? (ofertas)", "Devolver", 0), ("¿Termina? (ofertas)", "¿Bloque nuevo?", 1), ("¿Bloque nuevo?", "Redis SET ofertas", 0), ("¿Bloque nuevo?", "Devolver", 1), ("Redis SET ofertas", "Redis SET bloque", 0), ("Redis SET bloque", "Redis SET bloque_req", 0),
+                     ("Redis SET bloque_req", "Redis SET bloque_exec", 0), ("Redis SET bloque_exec", "Redis INCR lotes", 0), ("Redis INCR lotes", "Devolver", 0)]:
         g.conectar(a, b, s_)
     return g.json()

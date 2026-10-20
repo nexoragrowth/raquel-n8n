@@ -1,0 +1,103 @@
+# -*- coding: utf-8 -*-
+"""v7_workflows_ma.py — SUB-AGENTES del v7 con orquestador (08/10, orden de Lucas: "ponele bien los puntos y los límites a los sub agentes; 0 conversaciones").
+
+Cada sub-agente es un workflow: Entrada → su modelo (con SUS herramientas de código, o ninguna) → "Armar salida" (código: OrquestadorCore.salida*).
+  - Turnos      (AI Agent): ver_turnos, elegir_ficha, buscar_horarios, gestionar_turno (+confirma), confirmar_turno, lista_espera. Devuelve un CÓDIGO.
+  - Pagos       (AI Agent): registrar_pago, datos_pago (moneda). Devuelve un CÓDIGO. No ve los DATOS (ni el alias ni el CBU).
+  - Información (LLM sin herramientas): el único que redacta, 1 a 3 frases y solo con los DATOS (sin la KB 24 bancaria).
+  - Urgencias   (AI Agent): derivar_triaje (la cita la pone el código con el mensaje completo). Devuelve un CÓDIGO.
+El texto que ve el paciente lo arma el código con lo que devolvieron las herramientas (nunca el texto libre del modelo, salvo Información).
+Contrato de entrada (todo lo pone el cerebro; el modelo solo decide lo de $fromAI): tel, exec_id_actual (la ejecución del CEREBRO: de ella dependen las claves de
+Redis), modo, texto_paciente, ultimo_asiri, textos_paciente (JSON: mensajes del paciente de las últimas 12 h), turnos_json, contexto, datos, pedido.
+Salida: {agente, texto, estado, codigo, herramientas, traza, fuera_de_alcance, urgencia, derivar, error_tecnico, ...}."""
+import json
+
+from v7_lib import V7, Grafo
+
+PROMPTS = {k: (V7 / f"prompt_sub_{k}.md").read_text(encoding="utf-8").strip() for k in ("turnos", "pagos", "informacion", "urgencias")}
+
+ENT = "$('Entrada').first().json"
+EJEMPLO = {"tel": "5490000000651", "exec_id_actual": "0", "modo": "sombra", "texto_paciente": "Hola", "ultimo_asiri": "", "textos_paciente": "[]", "turnos_json": "[]",
+           "contexto": "", "datos": "", "pedido": ""}
+F = {k: f"{ENT}.{k}" for k in ("tel", "exec_id_actual", "modo", "texto_paciente", "ultimo_asiri", "textos_paciente")}
+AGENDA = {k: F[k] for k in ("tel", "exec_id_actual")}
+ESCRIBE = {k: F[k] for k in ("tel", "exec_id_actual", "modo")}
+CLINICA = {k: F[k] for k in ("tel", "exec_id_actual", "modo", "texto_paciente")}
+
+# (nombre, clave del workflow, descripción para el modelo, campos fijos (código), campos que decide el modelo)
+HERRAMIENTAS = [
+    ("ver_turnos", "ver_turnos", "Refresca los turnos vigentes del celular (de todas las fichas). Los del contexto ya están consultados: usala solo si cambió algo. Sin ids.", AGENDA, {}),
+    ("elegir_ficha", "elegir_ficha", "Fija para quién es el turno cuando el celular tiene varias fichas. Pasá el nombre o el DNI que dijo el paciente; el código lo verifica contra las fichas reales.",
+     AGENDA, {"nombre": "Nombre y/o apellido del paciente tal como lo dijo, o vacío si dio el DNI.", "dni": "DNI del paciente si lo dio, o vacío."}),
+    ("buscar_horarios", "buscar_horarios", "Busca los turnos disponibles; el sistema le muestra el bloque al paciente. Solo se puede reservar lo que esta herramienta ofreció. Día puntual: desde = hasta = esa fecha. Si ninguno le sirve: desde = el día siguiente al último ofrecido (máximo dos bloques por conversación).",
+     AGENDA, {"desde": "Opcional. Fecha YYYY-MM-DD desde la que buscar.", "hasta": "Opcional. Fecha límite inclusiva YYYY-MM-DD (para un día puntual, la misma que desde)."}),
+    ("gestionar_turno", "gestionar_turno", "Reserva, suma, cambia o cancela un turno en dos pasos. 1.º: con los datos, devuelve la confirmación que el sistema le muestra al paciente (no escribe nada). 2.º: si en su PRÓXIMO mensaje el paciente la acepta, llamala con confirma=true: el código verifica que vio esa confirmación y recién ahí escribe en la agenda. Tipos: cambio, reserva, sumar, cancelacion. Paciente nuevo: tipo reserva + nuevo_nombre, nuevo_apellido y nuevo_dni.",
+     {**F}, {"tipo": "cambio | reserva | sumar | cancelacion", "fecha": "Fecha YYYY-MM-DD del turno nuevo (vacío si es cancelacion). De buscar_horarios.", "hora": "Hora HH:MM del turno nuevo (vacío si es cancelacion). De buscar_horarios.",
+                      "fecha_turno_viejo": "Fecha YYYY-MM-DD del turno que se cambia o cancela. Vacío si es reserva o sumar.",
+                      "nuevo_nombre": "Solo paciente nuevo (sin ficha): su nombre, tal como lo escribió. Si no, vacío.", "nuevo_apellido": "Solo paciente nuevo: su apellido, tal como lo escribió. Si no, vacío.",
+                      "nuevo_dni": "Solo paciente nuevo: su DNI, tal como lo escribió. Si no, vacío.",
+                      "confirma": "true SOLO si el MENSAJE ACTUAL del paciente acepta la CONFIRMACIÓN PENDIENTE; si no, vacío."}),
+    ("confirmar_turno", "confirmar_turno", "Confirma la asistencia a un turno cuando el paciente responde a un recordatorio. Con varios recordatorios, una vez por fecha (YYYY-MM-DD).",
+     ESCRIBE, {"fecha": "Fecha YYYY-MM-DD del turno a confirmar; vacío si hay un solo recordatorio pendiente."}),
+    ("lista_espera", "clinica", "Anota para la clínica que el paciente quiere adelantar su turno si se libera uno. Una vez por pedido.",
+     {**CLINICA, "accion": "'espera'"}, {"texto": "Opcional: hasta qué fecha o qué horarios le sirven."}),
+    ("registrar_pago", "clinica", "Registra que el paciente avisó un pago o mandó un comprobante (la secretaria lo verifica). No valida montos.", {**CLINICA, "accion": "'pago'"}, {}),
+    ("datos_pago", "clinica", "El paciente pide los datos para pagar o transferir (alias, CBU, la cuenta). El sistema pega los datos exactos.",
+     {**CLINICA, "accion": "'datos_pago'"}, {"moneda": "pesos | otra (otra = dólares u otra moneda)"}),
+    ("derivar_triaje", "clinica", "Pasa el mensaje del paciente al protocolo de urgencias de la clínica, que le responde por su cuenta. Una vez.", {**CLINICA, "accion": "'triaje'"}, {}),
+]
+POR_NOMBRE = {h[0]: h for h in HERRAMIENTAS}
+TOOLS = {
+    "turnos": ["ver_turnos", "elegir_ficha", "buscar_horarios", "gestionar_turno", "confirmar_turno", "lista_espera"],
+    "pagos": ["registrar_pago", "datos_pago"],
+    "informacion": [],
+    "urgencias": ["derivar_triaje"],
+}
+NOMBRES = {"turnos": "v7 Agente Turnos", "pagos": "v7 Agente Pagos", "informacion": "v7 Agente Informacion", "urgencias": "v7 Agente Urgencias"}
+MAX_ITER = {"turnos": 6, "pagos": 4, "urgencias": 3}
+
+SALIDA_JS = {
+    "turnos": "let t = []; try { t = JSON.parse($('Entrada').first().json.turnos_json || '[]'); } catch (x) { t = []; }\nreturn [{ json: OrquestadorCore.salidaTurnos($('Agente').first().json || {}, { turnos: Array.isArray(t) ? t : [] }) }];",
+    "pagos": "return [{ json: OrquestadorCore.salidaPagos($('Agente').first().json || {}) }];",
+    "informacion": "return [{ json: OrquestadorCore.salidaInformacion($('Agente').first().json || {}) }];",
+    "urgencias": "return [{ json: OrquestadorCore.salidaUrgencias($('Agente').first().json || {}) }];",
+}
+
+
+def wf_subagente(clave):
+    g = Grafo(NOMBRES[clave])
+    g.trigger(EJEMPLO, 0, 300)
+    texto = ENT + ".contexto + '\\n\\nPEDIDO DEL ORQUESTADOR: ' + " + ENT + ".pedido"
+    sistema = json.dumps(PROMPTS[clave], ensure_ascii=False) + (" + '\\n\\n' + " + ENT + ".datos" if clave == "informacion" else "")
+    if clave == "informacion":
+        g.cadena("Agente", texto, sistema, 300, 300)
+    else:
+        g.agente("Agente", texto, sistema, 300, 300, max_iter=MAX_ITER[clave])
+    g.modelo("Modelo", "gpt-5-mini", "low", 300, 560)
+    g.conectar_ai("Modelo", "Agente", "ai_languageModel")
+    y = 80
+    for t in TOOLS[clave]:
+        n, wf_clave, desc, fijos, del_modelo = POR_NOMBRE[t]
+        g.herramienta(n, desc, f"@@ID:{wf_clave}@@", fijos, del_modelo, 640, y)
+        g.conectar_ai(n, "Agente", "ai_tool")
+        y += 90
+    g.code("Armar salida", SALIDA_JS[clave], 620, 300, usar=("orquestador_core",))
+    g.conectar("Entrada", "Agente", 0)
+    g.conectar("Agente", "Armar salida", 0)
+    return g.json()
+
+
+def wf_agente_turnos():
+    return wf_subagente("turnos")
+
+
+def wf_agente_pagos():
+    return wf_subagente("pagos")
+
+
+def wf_agente_informacion():
+    return wf_subagente("informacion")
+
+
+def wf_agente_urgencias():
+    return wf_subagente("urgencias")

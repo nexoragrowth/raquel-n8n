@@ -2,7 +2,8 @@
 // Soporta los tipos que usa el v7: executeWorkflowTrigger, code, if (v2.2, boolean), redis (get/set/incr/delete/push/lrange en memoria), httpRequest (simulado por nombre),
 // executeWorkflow (simulado por nombre), postgres (simulado por nombre), set, noOp. Reloj fijo. Registra pedidos HTTP, avisos al grupo, Redis final y el recorrido.
 // uso: node harness_grafo.mjs <workflow.json> <escenarios.json>   → JSON con el resultado de cada escenario.
-//   escenario = { id, trigger:{...}, ahora?, redis?:{clave:valor}, http?:{nodo: resp | [resp,...]}, subwf?:{nodo: resp}, pg?:{nodo: resp}, repeticiones?:n, redis_falla?:true }
+//   escenario = { id, trigger:{...}, ahora?, redis?:{clave:valor}, http?:{nodo: resp | [resp,...]}, subwf?:{nodo: resp}, pg?:{nodo: resp}, repeticiones?:n, redis_falla?:true,
+//                 agente?: salida de cualquier nodo AI Agent / LLM Chain, llm?:{nodo: salida} (08/10: por nodo, p. ej. el Orquestador) }
 //   Una respuesta http { __throw:true } simula un fallo de red (el nodo con continueOnFail devuelve {error:{message}}).
 import fs from 'node:fs';
 const [wfPath, escPath] = process.argv.slice(2);
@@ -49,7 +50,7 @@ async function correrUna(esc, estadoCompartido, nRep) {
       const ok = c.operator.operation === 'true' ? v === true : c.operator.operation === 'false' ? v === false : false;
       salidas[nombre] = entrada; return seguir(nombre, ok ? [entrada, []] : [[], entrada]);
     } else if (t === 'redis') {
-      const p = n.parameters; const key = evalExpr(p.key, ctx);
+      const p = n.parameters; const key = evalExpr(p.key !== undefined ? p.key : p.list, ctx);
       if (esc.redis_falla && ['incr', 'get', 'set'].includes(p.operation) && esc.redis_falla === p.operation) salida = [{ json: {} }];
       else if (p.operation === 'get') salida = [{ json: { [p.propertyName]: key in redis ? redis[key] : null } }];
       else if (p.operation === 'set') { redis[key] = evalExpr(p.value, ctx); salida = [{ json: { [key]: redis[key] } }]; }
@@ -72,10 +73,13 @@ async function correrUna(esc, estadoCompartido, nRep) {
         if (r === undefined) throw new Error('sin respuesta simulada para ' + nombre);
         salida.push({ json: r && r.__throw ? { error: { message: 'network error' } } : r });
       }
-    } else if (t === 'agent') {
-      if (esc.agente === undefined) throw new Error('sin respuesta simulada para el agente ' + nombre);
-      pedidos.push({ nodo: nombre, metodo: 'agent', url: null, entradas: { text: evalExpr(n.parameters.text, ctx), sistema: evalExpr(n.parameters.options.systemMessage, ctx) } });
-      salida = [{ json: esc.agente }];
+    } else if (t === 'agent' || t === 'chainLlm') {
+      // (08/10) Respuesta simulada POR NODO (esc.llm[nombre]: orquestador, sub-agentes) o la general (esc.agente).
+      const sim = (esc.llm && esc.llm[nombre] !== undefined) ? esc.llm[nombre] : esc.agente;
+      if (sim === undefined) throw new Error('sin respuesta simulada para el agente ' + nombre);
+      const sistema = t === 'agent' ? n.parameters.options.systemMessage : ((n.parameters.messages?.messageValues || [])[0] || {}).message;
+      pedidos.push({ nodo: nombre, metodo: t === 'agent' ? 'agent' : 'llm', url: null, entradas: { text: evalExpr(n.parameters.text, ctx), sistema: evalExpr(sistema, ctx) } });
+      salida = [{ json: sim }];
     } else if (t === 'executeWorkflow' || t === 'postgres') {
       const r = ((t === 'postgres' ? esc.pg : esc.subwf) || {})[nombre];
       if (r === undefined) throw new Error('sin respuesta simulada para ' + nombre);

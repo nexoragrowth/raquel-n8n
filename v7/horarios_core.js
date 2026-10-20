@@ -36,6 +36,15 @@ const HorariosCore = (() => {
   // Regla de la Dra. (07/09): como máximo 2 bloques por conversación. A la tercera consulta no se busca otro: se anota para la clínica.
   const MAX_LOTES = 2;
   const limiteLotes = (n) => Number(n) > MAX_LOTES;
-  return { parseBloque, unir, limiteLotes, MAX_LOTES };
+  // (07/10) Horarios del bloque que todavía NO se le habían ofrecido. Un bloque sin ninguno no es "un bloque nuevo": no cuenta para el límite y no se vuelve a pegar
+  // (examen completo 07/10: "solo puedo a las 17" → buscó desde mañana, volvió el MISMO bloque, se gastó el segundo y la charla terminó en lista de espera).
+  const clave = (o) => `${o.fecha} ${String(o.hora).replace(/^(\d):/, '0$1:')}`;
+  function nuevas(previas, delBloque) { const ya = new Set((previas || []).map(clave)); return (delBloque || []).filter((o) => !ya.has(clave(o))); }
+  // Día siguiente al último horario ofrecido: el `desde` correcto para buscar MÁS ADELANTE (el modelo a veces mandaba "mañana" y traía lo mismo).
+  function siguienteDesde(ofertas) {
+    const f = (ofertas || []).map((o) => o.fecha).sort().pop(); if (!f) return '';
+    const d = new Date(f + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10);
+  }
+  return { parseBloque, unir, limiteLotes, nuevas, siguienteDesde, MAX_LOTES };
 })();
 if (typeof module !== 'undefined') module.exports = HorariosCore;

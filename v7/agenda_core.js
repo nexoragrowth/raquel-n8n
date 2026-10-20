@@ -25,39 +25,136 @@ const AgendaCore = (() => {
   const no = (motivo, para_asiri, extra) => ({ ok: false, motivo, para_asiri, ...(extra || {}) });
   const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
+  // ----------------------------------------------------------------- paciente nuevo (06/10)
+  // Un turno para alguien SIN ficha (lead nuevo, o un familiar que no figura en el celular) se reserva igual: el modelo pasa nombre, apellido y DNI tal como
+  // los dijo el paciente, el read-back los muestra, y con el "sí" el código da el alta en la agenda y reserva en la misma ejecución. Antes (v6 y v7) se
+  // derivaba a la clínica: la retrospectiva del 06/10 lo marcó como la única falta funcional del v7 frente al v6 (que tenía crear_paciente_dentalink).
+  const sinTil = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const soloDig = (x) => String(x || '').replace(/\D/g, '');
+  const tokensNombre = (x) => sinTil(x).replace(/[^a-z ]/g, ' ').split(/\s+/).filter((t) => t.length >= 3);
+  const tituloNombre = (s) => String(s || '').replace(/[^\p{L}' -]/gu, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  const dniLindo = (d) => d.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  // → null (no vino nada) | { faltan: [...] } | { nombre, apellidos, dni }
+  function datosNuevo(entrada) {
+    const nombre = tituloNombre(entrada.nuevo_nombre), apellidos = tituloNombre(entrada.nuevo_apellido), dni = soloDig(entrada.nuevo_dni);
+    if (!nombre && !apellidos && !dni) return null;
+    const faltan = [];
+    if (nombre.length < 2) faltan.push('nombre');
+    if (apellidos.length < 2) faltan.push('apellido');
+    if (dni.length < 6 || dni.length > 8) faltan.push('DNI');   // DNI argentino: 6 a 8 dígitos (07/10: el modelo copió "33.444.555" como "334.445.555")
+    return faltan.length ? { faltan } : { nombre, apellidos, dni };
+  }
+  // ¿El paciente "nuevo" es en realidad una ficha que ya está en el celular? Por DNI, o por nombre + apellido (fichas que dio de alta el v6 sin DNI).
+  function fichaDelNuevo(fichas, n) {
+    const porDni = fichas.filter((f) => soloDig(f.rut) && soloDig(f.rut) === n.dni);
+    if (porDni.length === 1) return { id: porDni[0].id };
+    const tn = tokensNombre(n.nombre), ta = tokensNombre(n.apellidos);
+    const porNombre = fichas.filter((f) => { const ft = tokensNombre(f.nombre + ' ' + (f.apellidos || '')); return tn.some((t) => ft.includes(t)) && ta.some((t) => ft.includes(t)); });
+    if (porNombre.length !== 1) return null;
+    if (soloDig(porNombre[0].rut) && soloDig(porNombre[0].rut) !== n.dni) return { conflicto: true };
+    return { id: porNombre[0].id };
+  }
+
+  // (07/10) En los momentos clave el texto para el paciente lo arma el CÓDIGO, como el read-back: el orquestador entiende, elige y pega.
+  // Antes los redactaba el modelo a partir de una nota interna y a veces repetía la misma pregunta palabra por palabra o la armaba raro (examen AGE-03).
+  // `texto_repregunta`: si el último mensaje de Asiri ya era esa pregunta (el paciente contestó sin elegir), decidir manda esta otra versión.
+  const NOTA_PEGAR = '[Nota interna para vos, NO la repitas al paciente] Tu respuesta es texto_para_el_paciente, tal cual y sola. ';
+  const conTexto = (motivo, texto, para, extra) => no(motivo, NOTA_PEGAR + para, { texto_para_el_paciente: texto, ...(extra || {}) });
+  const lista = (xs, y) => (xs.length <= 1 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ` ${y} ` + xs[xs.length - 1]);
+
   // ----------------------------------------------------------------- proponer
-  // entrada: { tipo: 'cambio'|'reserva'|'sumar'|'cancelacion', fecha, hora, fecha_turno_viejo }   (lo unico que aporta el modelo)
-  // estado : { ficha:{fichas:[{id,nombre}], elegida}, turnos_vistos:[...], ofertas:[{fecha,hora}], exec_id, tel }   (lo pone el codigo)
+  // entrada: { tipo: 'cambio'|'reserva'|'sumar'|'cancelacion', fecha, hora, fecha_turno_viejo, nuevo_nombre?, nuevo_apellido?, nuevo_dni? }   (lo unico que aporta el modelo)
+  // estado : { ficha:{fichas:[{id,nombre,apellidos,rut}], elegida}, turnos_vistos:[...], ofertas:[{fecha,hora}], exec_id, tel }   (lo pone el codigo)
   function proponer(entrada, estado, ahoraISO) {
     const ahora = Date.parse(ahoraISO);
-    const tipo = String(entrada.tipo || '');
+    let tipo = String(entrada.tipo || '');
     if (!['cambio', 'reserva', 'sumar', 'cancelacion'].includes(tipo)) return no('tipo_invalido', 'Tipo de propuesta inválido.');
     const ficha = estado.ficha || { fichas: [], elegida: null };
     const fichas = ficha.fichas || [];
-    if (!fichas.length) return no('sin_ficha', 'No hay ficha de paciente para este celular: pasalo a la clínica con avisar_grupo.');
+    const pedirDatos = 'Cuando mande nombre, apellido y DNI, volvé a llamar gestionar_turno con esos datos (nuevo_nombre, nuevo_apellido, nuevo_dni) y el mismo horario. No le confirmes nada vos.';
+    // Paciente nuevo: los datos se piden recién con un horario que SÍ se ofreció (si no, primero hay que ofrecer).
+    const horaPedida = normHora(entrada.hora);
+    const slotOfrecido = esISO(entrada.fecha) && !!horaPedida && (estado.ofertas || []).some((o) => o.fecha === entrada.fecha && normHora(o.hora) === horaPedida);
+    const noOfrecido = () => no('no_ofrecido', 'Ese horario no se le ofreció al paciente. Llamá a buscar_horarios y ofrecé lo que devuelva.');
+    let nuevo = datosNuevo(entrada);
+    if (nuevo && nuevo.faltan) {
+      if (!slotOfrecido && tipo !== 'cancelacion') return noOfrecido();
+      return conTexto('faltan_datos_paciente', 'Para registrarlo me falta ' + lista(nuevo.faltan.map((f) => 'el ' + f), 'y') + ' del paciente.', 'Para registrarlo como paciente nuevo falta: ' + nuevo.faltan.join(', ') + '. ' + pedirDatos);
+    }
     let elegida = ficha.elegida;
-    if (!elegida && fichas.length === 1) elegida = fichas[0].id;
-    if (!elegida) return no('ficha_no_elegida', 'Este celular tiene varias fichas. Preguntá para quién es el turno (nombre o DNI) y llamá a elegir_ficha antes.', { fichas: fichas.map((f) => f.nombre) });
-    const nombreFicha = (fichas.find((f) => f.id === elegida) || {}).nombre || '';
+    if (nuevo) {
+      const ya = fichaDelNuevo(fichas, nuevo);
+      if (ya && ya.conflicto) return no('dni_no_coincide', 'Ese nombre ya tiene ficha en este celular pero con otro DNI: confirmá el DNI con el paciente (una sola pregunta).');
+      if (ya) { elegida = ya.id; nuevo = null; }                      // ya tiene ficha: es una reserva común
+      else elegida = null;
+    }
+    if (nuevo) {
+      if (tipo === 'sumar') tipo = 'reserva';                            // un paciente nuevo no tiene turno al que sumar
+      if (tipo !== 'reserva') return no('paciente_nuevo_sin_turnos', 'Un paciente sin ficha no tiene turnos para cambiar o cancelar. Si quiere un turno, usá tipo reserva; si dice que ya tiene uno, pedile nombre completo y DNI y pasalo a la clínica con avisar_grupo ACCION.');
+    } else if (!fichas.length) {
+      if ((tipo === 'reserva' || tipo === 'sumar') && !slotOfrecido) return noOfrecido();
+      return (tipo === 'reserva' || tipo === 'sumar') ? conTexto('sin_ficha', 'Para reservarle el turno necesito nombre, apellido y DNI del paciente, en un solo mensaje.', 'Es un paciente nuevo: no hay ficha con este celular. ' + pedirDatos,
+        { texto_repregunta: 'Disculpe, para registrarlo necesito el nombre, el apellido y el número de DNI del paciente.' })
+        : no('sin_ficha', 'No hay ficha con este celular, así que no veo sus turnos. Pedile nombre completo y DNI y pasalo a la clínica con avisar_grupo ACCION.');
+    }
+    if (!nuevo && !elegida && fichas.length === 1) elegida = fichas[0].id;
+    const vistos = nuevo ? (Array.isArray(estado.turnos_vistos) ? estado.turnos_vistos : []) : estado.turnos_vistos;
+    // (06/10) Familia sin ficha elegida: si el turno que se cambia/cancela, o el turno al que se le suma otro, es de UNA sola ficha, esa es la ficha
+    // (no hay ambigüedad; el read-back igual dice "para <nombre>" y el paciente lo confirma). Examen 06/10: el paciente dijo "Lucas" junto con el horario,
+    // el modelo no llamó a elegir_ficha y volvía a preguntar "¿para quién es?".
+    if (!nuevo && !elegida && Array.isArray(vistos)) {
+      const fichasCon = (lista) => [...new Set(lista.filter(vigente).map((t) => Number(t.id_paciente)))].filter((id) => fichas.some((f) => Number(f.id) === id));
+      let ids = [];
+      if ((tipo === 'cambio' || tipo === 'cancelacion') && entrada.fecha_turno_viejo) ids = fichasCon(vistos.filter((t) => t.fecha === entrada.fecha_turno_viejo));
+      // (07/10) sin fecha: si todos los turnos son de una ficha, es esa. (08/10) También para un turno NUEVO: "familias solo cuando el paciente lo pide"
+      // (Lucas). Si no dijo para quién y una sola ficha tiene turnos, es su paciente; el read-back dice "para <nombre>" y, si es otro, lo corrige (REAL-12).
+      else if (tipo === 'sumar' || tipo === 'reserva' || tipo === 'cambio' || tipo === 'cancelacion') ids = fichasCon(vistos);
+      if (ids.length === 1) elegida = ids[0];
+    }
+    // (08/10) REAL-06: la ficha elegida no tiene turno en la fecha del turno a cambiar/cancelar, pero UNA sola ficha del mismo celular sí: es ese turno
+    // (el paciente lo identificó por la fecha; el read-back dice "para <nombre>"). Antes devolvía turno_no_es_de_la_ficha, el modelo preguntaba
+    // "¿confirma…?" y con el "sí" volvía a llamar con la misma ficha: tres vueltas iguales.
+    if (!nuevo && elegida && (tipo === 'cambio' || tipo === 'cancelacion') && esISO(entrada.fecha_turno_viejo || '') && Array.isArray(vistos)) {
+      const f = entrada.fecha_turno_viejo, inv = `${f.slice(0, 4)}-${f.slice(8, 10)}-${f.slice(5, 7)}`;
+      const en = (fe) => vistos.filter((t) => t.fecha === fe && vigente(t));
+      if (![...en(f), ...en(inv)].some((t) => Number(t.id_paciente) === Number(elegida))) {
+        const otras = [...new Set(en(f).map((t) => Number(t.id_paciente)))].filter((id) => fichas.some((x) => Number(x.id) === id));
+        if (otras.length === 1) elegida = otras[0];
+      }
+    }
+    if (!nuevo && !elegida) return no('ficha_no_elegida', '[Nota interna para vos, NO la repitas al paciente] Este celular tiene varias fichas. Si el paciente YA dijo para quién es, NO mandes texto_para_el_paciente: llamá elegir_ficha con ese nombre y después gestionar_turno otra vez. Si no lo dijo, tu respuesta es texto_para_el_paciente, tal cual. Si es para alguien que no está entre las fichas, es paciente nuevo: pasá nuevo_nombre, nuevo_apellido y nuevo_dni.',
+      { fichas: fichas.map((f) => f.nombre), texto_para_el_paciente: `¿Para quién es el turno: ${lista(fichas.map((f) => f.nombre), 'o')}? Si es para otra persona, me pasa nombre, apellido y DNI.` });
+    const nombreFicha = (fichas.find((f) => Number(f.id) === Number(elegida)) || {}).nombre || '';
     const variasFichas = fichas.length > 1;
-    const vistos = estado.turnos_vistos;
     if (!Array.isArray(vistos)) return no('ver_turnos_primero', 'Llamá a ver_turnos antes de proponer.');
-    const delPaciente = vistos.filter((t) => Number(t.id_paciente) === Number(elegida) && vigente(t));
+    const delPaciente = nuevo ? [] : vistos.filter((t) => Number(t.id_paciente) === Number(elegida) && vigente(t));
 
+    // (07/10) Un turno nuevo el MISMO DÍA que uno que ya tiene es un cambio, no un turno extra: nadie saca dos turnos de ortodoncia el mismo día.
+    // Examen AGE-06: "quería un turno antes del que me toca" → eligió el 16/10 9:10 (su turno era el 16/10 10:30) → quedaba con los dos ese día.
+    let fechaViejo = entrada.fecha_turno_viejo;
+    if (tipo === 'reserva' && esISO(entrada.fecha) && delPaciente.some((t) => t.fecha === entrada.fecha)) { tipo = 'cambio'; fechaViejo = entrada.fecha; }
+
+    // (07/10) "10/12" leído como 12/10: si la fecha del turno viejo no coincide con ninguno suyo pero invertida sí, es esa.
+    if (fechaViejo && esISO(fechaViejo) && !delPaciente.some((t) => t.fecha === fechaViejo)) {
+      const inv = `${fechaViejo.slice(0, 4)}-${fechaViejo.slice(8, 10)}-${fechaViejo.slice(5, 7)}`;
+      if (delPaciente.some((t) => t.fecha === inv)) fechaViejo = inv;
+    }
     let viejo = null;
     if (tipo === 'cambio' || tipo === 'cancelacion') {
-      const f = entrada.fecha_turno_viejo;
+      const f = fechaViejo;
       let cands = delPaciente;
       if (f) {
         if (!esISO(f)) return no('fecha_invalida', 'La fecha del turno actual debe ser YYYY-MM-DD.');
         cands = delPaciente.filter((t) => t.fecha === f);
         if (!cands.length) {
           const deOtra = vistos.some((t) => t.fecha === f && Number(t.id_paciente) !== Number(elegida) && vigente(t));
-          return no(deOtra ? 'turno_no_es_de_la_ficha' : 'cita_no_vista', deOtra ? 'Ese turno es de otra ficha del mismo celular: confirmá para quién es.' : 'No veo un turno vigente en esa fecha para este paciente. Mostrale los turnos con ver_turnos.');
+          const duenios = fichas.filter((x) => vistos.some((t) => t.fecha === f && Number(t.id_paciente) === Number(x.id) && vigente(t))).map((x) => x.nombre);
+          return no(deOtra ? 'turno_no_es_de_la_ficha' : 'cita_no_vista', deOtra ? `[Nota interna para vos, NO la repitas al paciente] Ese turno figura a nombre de ${lista(duenios, 'o')}. Preguntale de quién es ese turno; cuando lo diga, llamá elegir_ficha con ese nombre y después gestionar_turno otra vez (no le pidas que confirme de nuevo).` : 'No veo un turno vigente en esa fecha para este paciente. Mostrale los turnos con ver_turnos.');
         }
       }
       if (cands.length === 0) return no('sin_turnos', 'El paciente no tiene turnos vigentes.');
-      if (cands.length > 1) return no('cual_turno', 'Tiene más de un turno vigente: preguntale cuál.', { turnos: cands.map((t) => largo(t.fecha, normHora(t.hora_inicio))) });
+      if (cands.length > 1) return conTexto('cual_turno', `¿Cuál de sus turnos: ${lista(cands.map((t) => 'el ' + corto(t.fecha, normHora(t.hora_inicio))), 'o')}?`, 'Tiene más de un turno vigente. Cuando conteste, volvé a llamar gestionar_turno con fecha_turno_viejo.', { turnos: cands.map((t) => largo(t.fecha, normHora(t.hora_inicio))) });
       viejo = cands[0];
       if (msTurno(viejo.fecha, viejo.hora_inicio) - ahora < MIN_ANTICIPACION_MS) {
         return no('menos_48h', 'El turno es en menos de 48 horas: no se cambia ni se cancela por acá. Decile que lo pasás a la clínica y llamá avisar_grupo con nivel ACCION. No menciones penalizaciones.', { cita_id: viejo.id });
@@ -69,22 +166,27 @@ const AgendaCore = (() => {
       const fecha = entrada.fecha, hora = normHora(entrada.hora);
       if (!esISO(fecha) || !hora) return no('horario_invalido', 'Faltan fecha (YYYY-MM-DD) y hora (HH:MM).');
       const ofrecidos = (estado.ofertas || []).map((o) => `${o.fecha} ${normHora(o.hora)}`);
-      if (!ofrecidos.includes(`${fecha} ${hora}`)) return no('no_ofrecido', 'Ese horario no se le ofreció al paciente. Llamá a buscar_horarios y ofrecé lo que devuelva.');
+      if (!ofrecidos.includes(`${fecha} ${hora}`)) return noOfrecido();
       slot = { fecha, hora };
-      if (tipo === 'reserva' && delPaciente.length > 0) return no('tiene_turno_vigente', 'El paciente ya tiene un turno vigente. Si quiere cambiarlo usá proponer_cambio; si quiere SUMAR otro, preguntale y usá tipo sumar.', { turnos: delPaciente.map((t) => largo(t.fecha, normHora(t.hora_inicio))) });
+      // (07/10, Lucas: "que funcione como una app; si pide un turno y eligió uno, hacé eso") Pide un turno y ya tiene uno: no se pregunta "¿cambiar o sumar?".
+      // Se arma la confirmación de OTRO turno "además de su turno del …": eso deja claro qué va a pasar y, si en realidad quería cambiarlo, lo dice ahí (antes la pregunta
+      // extra confundía: en el examen un "Sí" a la confirmación terminó en "¿Quiere pasarlo… o mantenerlo?"). Para CAMBIAR su turno el modelo usa tipo cambio.
+      if (tipo === 'reserva' && delPaciente.length > 0) tipo = 'sumar';
       if (tipo === 'sumar' && delPaciente.length === 0) return no('no_hay_turno_para_sumar', 'No tiene un turno vigente al que sumar: usá tipo reserva.');
     }
 
     const para = variasFichas && nombreFicha ? ` para ${nombreFicha}` : '';
     let readback;
     if (tipo === 'cambio') readback = `Le confirmo${para}: ${capital(largo(slot.fecha, slot.hora))} hs con la Dra. Raquel, reemplazando el turno del ${corto(viejo.fecha, normHora(viejo.hora_inicio))}. ¿Procedo con la reserva?`;
-    else if (tipo === 'sumar') readback = `Le confirmo${para}: ${capital(largo(slot.fecha, slot.hora))} hs con la Dra. Raquel, además de su turno del ${corto(delPaciente[0].fecha, normHora(delPaciente[0].hora_inicio))}. ¿Procedo con la reserva?`;
+    else if (tipo === 'sumar') readback = `Le confirmo${para}: ${capital(largo(slot.fecha, slot.hora))} hs con la Dra. Raquel, además de su${delPaciente.length > 1 ? 's turnos' : ' turno'} ${lista(delPaciente.map((t) => 'del ' + corto(t.fecha, normHora(t.hora_inicio))), 'y')}. ¿Procedo con la reserva?`;
+    else if (tipo === 'reserva' && nuevo) readback = `Le confirmo: ${capital(largo(slot.fecha, slot.hora))} hs con la Dra. Raquel, a nombre de ${nuevo.nombre} ${nuevo.apellidos} (DNI ${dniLindo(nuevo.dni)}), como paciente nuevo. ¿Procedo con la reserva?`;
     else if (tipo === 'reserva') readback = `Le confirmo${para}: ${capital(largo(slot.fecha, slot.hora))} hs con la Dra. Raquel. ¿Procedo con la reserva?`;
-    else readback = `¿Le confirmo que desea cancelar el turno${para} del ${corto(viejo.fecha, normHora(viejo.hora_inicio))}?`;
+    else readback = `¿Procedo con la cancelación de su turno${para} del ${corto(viejo.fecha, normHora(viejo.hora_inicio))}?`;
 
     const propuesta = {
       id: `${estado.tel}-${ahora}`, tipo, estado: 'pendiente', creada_ms: ahora, exec_id: estado.exec_id, tel: estado.tel,
-      paciente_id: elegida, slot, cita_vieja: viejo ? { id: viejo.id, fecha: viejo.fecha, hora: normHora(viejo.hora_inicio) } : null, readback_text: readback,
+      paciente_id: nuevo ? null : elegida, slot, cita_vieja: viejo ? { id: viejo.id, fecha: viejo.fecha, hora: normHora(viejo.hora_inicio) } : null, readback_text: readback,
+      ...(nuevo ? { paciente_nuevo: nuevo } : {}),
     };
     return { ok: true, propuesta, readback_text: readback, para_asiri: '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es readback_text: mandáselo tal cual, sin introducciones, y esperá su confirmación en el próximo mensaje. No digas que quedó hecho.' };
   }
@@ -93,7 +195,8 @@ const AgendaCore = (() => {
   // Cada paso: { fin: resultado } corta la ejecución con ese resultado; cualquier otra forma sigue.
   // El mensaje de éxito lo arma el CÓDIGO (el modelo lo pega): también el que se devuelve en modo sombra, para poder evaluar la charla completa sin escribir nada.
   const textoExito = (p) => (p.tipo === 'cambio' ? `Listo, quedó reprogramado su turno: anulé el del ${corto(p.cita_vieja.fecha, p.cita_vieja.hora)} y le reservé el ${corto(p.slot.fecha, p.slot.hora)}.`
-    : p.tipo === 'cancelacion' ? `Listo, su turno del ${corto(p.cita_vieja.fecha, p.cita_vieja.hora)} quedó cancelado.` : `Listo, le reservé el ${corto(p.slot.fecha, p.slot.hora)}.`);
+    : p.tipo === 'cancelacion' ? `Listo, su turno del ${corto(p.cita_vieja.fecha, p.cita_vieja.hora)} quedó cancelado.`
+    : p.paciente_nuevo ? `Listo, le reservé el ${corto(p.slot.fecha, p.slot.hora)} a nombre de ${p.paciente_nuevo.nombre} ${p.paciente_nuevo.apellidos}.` : `Listo, le reservé el ${corto(p.slot.fecha, p.slot.hora)}.`);
   const nuevoLedger = (p) => ({ propuesta: p && p.id, tipo: p && p.tipo, escrituras: [] });
 
   // 1) chequeos previos a tocar nada
@@ -108,8 +211,8 @@ const AgendaCore = (() => {
     if (p.exec_id === entrada.exec_id_actual || entrada.enviada !== true) {
       return { fin: { ...no('readback_no_visto', 'El paciente todavía no vio el texto de confirmación: mandáselo tal cual y esperá su respuesta en el próximo mensaje.'), ledger } };
     }
-    if (entrada.modo === 'sombra') {
-      return { fin: { ok: true, simulado: true, habria_hecho: { tipo: p.tipo, slot: p.slot, cita_vieja: p.cita_vieja }, readback_text: textoExito(p), ledger } };
+    if (entrada.modo !== 'vivo') {   // (08/10) solo escribe con modo 'vivo' EXPLÍCITO: si el modo no llega, es sombra (incidente de confirmar_turno del 06/10)
+      return { fin: { ok: true, simulado: true, habria_hecho: { tipo: p.tipo, slot: p.slot, cita_vieja: p.cita_vieja, ...(p.paciente_nuevo ? { alta_paciente: p.paciente_nuevo } : {}) }, readback_text: textoExito(p), primera_consulta: p.tipo !== 'cambio' && !!p.paciente_nuevo, ledger } };
     }
     return { ok: true, propuesta: p, ledger };
   }
@@ -130,17 +233,65 @@ const AgendaCore = (() => {
     if (!ok) return { fin: { ...no('cita_cambio', 'El turno cambió o ya no está vigente: no se tocó nada. Mostrale sus turnos de nuevo con ver_turnos.'), ledger: estado.ledger } };
     return { ok: true, propuesta: p, ledger: estado.ledger };
   }
+  // 3b) paciente nuevo: antes de reservar, el alta en la agenda (solo reservas con paciente_nuevo; el resto pasa de largo).
+  //   - pasoBuscarDni: resp = GET /pacientes?q={"rut":{"eq":dni}}. Si ese DNI ya tiene ficha (con otro celular) y el nombre coincide, se reserva en ESA ficha
+  //     (sin duplicar: el v6 tuvo fichas duplicadas por crear sin buscar). Si el DNI es de alguien con otro nombre, no se toca nada. Si la consulta falla, se sigue a crear.
+  //   - pasoAlta: resp = POST /pacientes/. Primero con el DNI (campo rut, el mismo que devuelve la agenda); si la agenda lo rechaza (4xx) se reintenta UNA vez
+  //     sin DNI (el cuerpo probado del v6) y se avisa a la clínica para cargarlo a mano. Error de red: no se reintenta (podría haberse creado).
+  const nombreCompleto = (n) => `${n.nombre} ${n.apellidos}`;
+  function pasoBuscarDni(estado, resp) {
+    const p = estado.propuesta; const ledger = estado.ledger; const n = p.paciente_nuevo;
+    if (!n || p.paciente_id) return { ok: true, crear: false, propuesta: p, ledger };
+    const data = resp && !resp.error && Array.isArray(resp.data) ? resp.data : [];
+    const conDni = data.filter((x) => x && x.id && soloDig(x.rut) === n.dni && Number(x.habilitado === undefined ? 1 : x.habilitado) === 1);
+    if (!conDni.length) return { ok: true, crear: true, propuesta: p, ledger };
+    const tn = tokensNombre(nombreCompleto(n));
+    const mismo = conDni.filter((x) => tokensNombre(`${x.nombre} ${x.apellidos || ''}`).some((t) => tn.includes(t)));
+    if (mismo.length === 1) return { ok: true, crear: false, propuesta: { ...p, paciente_id: Number(mismo[0].id), alta: 'existente' }, ledger };
+    return { fin: { ...no('dni_en_otra_ficha', 'Ese DNI ya figura en la agenda y no pude confirmar que sea el mismo paciente: NO se reservó nada. Decile con sinceridad que la secretaria le termina de agendar el turno.'),
+      aviso_clinica: `[ACCIÓN] Paciente nuevo por WhatsApp: ${nombreCompleto(n)} (DNI ${n.dni}) pidió el ${corto(p.slot.fecha, p.slot.hora)}, pero ese DNI ya figura en la agenda con otros datos. Asiri no reservó: revisar la ficha y agendar a mano.`, ledger } };
+  }
+  // (20/10, BOT-01) Quien escribe desde un número oculto de WhatsApp (@lid) llega con un identificador que NO es un celular: la ficha se da de alta
+  // sin celular (antes quedaba un celular falso en la agenda) y la clínica recibe el aviso para cargarlo a mano. Celular válido = argentino (54 + 10/11 dígitos).
+  const celularValido = (tel) => /^54\d{10,11}$/.test(String(tel || ''));
+  const armarPaciente = (p, conDni) => ({ nombre: p.paciente_nuevo.nombre, apellidos: p.paciente_nuevo.apellidos, ...(celularValido(p.tel) ? { celular: String(p.tel) } : {}), ...(conDni ? { rut: p.paciente_nuevo.dni } : {}) });
+  // Solo un rechazo explícito de la agenda (código HTTP 4xx) habilita el reintento; un error de red (que puede traer "port: 443") no.
+  const es4xx = (resp) => {
+    const e = resp && resp.error; if (!e) return false;
+    const o = typeof e === 'object' ? e : { message: String(e) };
+    const code = Number(o.statusCode || o.httpCode || o.status || (o.response && (o.response.status || o.response.statusCode)) || (/^\s*(4\d\d)\b/.exec(String(o.message || '')) || [])[1] || 0);
+    return code >= 400 && code < 500;
+  };
+  function pasoAlta(estado, resp, conDni) {
+    const p = estado.propuesta; const ledger = estado.ledger;
+    ledger.escrituras.push({ tipo: 'POST paciente', body: armarPaciente(p, conDni), resp: resp || null });
+    const id = resp && !resp.error && resp.data ? Number(resp.data.id) : 0;
+    // Si la agenda devuelve la ficha con un rut distinto (o vacío), el DNI no quedó cargado aunque el alta saliera: se avisa para cargarlo a mano.
+    const dniQuedo = id > 0 && conDni && !('rut' in resp.data && soloDig(resp.data.rut) !== p.paciente_nuevo.dni);
+    if (id > 0) return { ok: true, propuesta: { ...p, paciente_id: id, alta: dniQuedo ? 'creado' : 'creado_sin_dni' }, ledger };
+    if (conDni && es4xx(resp)) return { ok: true, reintentar: true, propuesta: p, ledger };
+    return { fin: { ...no('no_pude_registrar', 'No pude registrar al paciente en la agenda: NO se reservó ningún turno. Decile con sinceridad que la secretaria le termina de agendar el turno.'),
+      aviso_clinica: `[ACCIÓN] Paciente nuevo por WhatsApp: ${nombreCompleto(p.paciente_nuevo)} (DNI ${p.paciente_nuevo.dni}) quería el ${corto(p.slot.fecha, p.slot.hora)} y la agenda no aceptó el alta. Asiri no reservó: darlo de alta y agendar a mano.`, ledger } };
+  }
   // 4) cuerpos de las escrituras
   const armarReserva = (p) => ({ id_dentista: 1, id_sucursal: 1, id_sillon: 1, id_paciente: p.paciente_id, fecha: p.slot.fecha, hora_inicio: p.slot.hora, duracion: 40,
     comentario: p.tipo === 'cambio' ? `Reprogramado por Asiri (WhatsApp), reemplaza cita #${p.cita_vieja.id}` : 'Reservado por Asiri (WhatsApp)' });
   const armarAnulacion = () => ({ id_estado: 1 });
+  // Lo que la clínica tiene que saber de un alta (va en el aviso FYI de la reserva).
+  const notaAlta = (p) => (!p.paciente_nuevo || !p.alta ? null
+    : p.alta === 'existente' ? `Paciente que escribió desde un celular nuevo: ${nombreCompleto(p.paciente_nuevo)} (DNI ${p.paciente_nuevo.dni}); se usó su ficha #${p.paciente_id}.`
+    : `Paciente nuevo dado de alta: ${nombreCompleto(p.paciente_nuevo)} (DNI ${p.paciente_nuevo.dni}), ficha #${p.paciente_id}` + (p.alta === 'creado_sin_dni' ? '. La agenda no aceptó el DNI: cargarlo a mano en la ficha.' : '.')
+      + (celularValido(p.tel) ? '' : ' Escribió desde un número oculto de WhatsApp: la ficha quedó SIN celular, cargarlo a mano (pedírselo por este chat).'));
   // 5) verificar la reserva. resp = respuesta cruda del POST
   function pasoReserva(estado, resp) {
     const p = estado.propuesta; const ledger = estado.ledger;
     ledger.escrituras.push({ tipo: 'POST', body: armarReserva(p), resp: resp || null });
     const nueva = resp && resp.data && Number(resp.data.id_estado) > 0 ? resp.data : null;
-    if (!nueva) return { fin: { ...no('reserva_rechazada', 'La agenda no aceptó el horario (puede que se haya ocupado). Su turno actual sigue vigente. Contáselo y ofrecé otro horario con buscar_horarios.'), ledger } };
-    if (p.tipo !== 'cambio') return { fin: { ok: true, nueva_cita: nueva.id, readback_text: textoExito(p), ledger } };
+    const alta = notaAlta(p) ? { nota_alta: notaAlta(p) } : {};
+    if (!nueva) return { fin: { ...no('reserva_rechazada', p.paciente_nuevo ? 'La agenda no aceptó el horario (puede que se haya ocupado). Contáselo y ofrecé otro horario con buscar_horarios.' : 'La agenda no aceptó el horario (puede que se haya ocupado). Su turno actual sigue vigente. Contáselo y ofrecé otro horario con buscar_horarios.'), ...alta, ledger } };
+    // (16/10, plan §3.2 #1) primera_consulta: solo un paciente NUEVO dado de alta ahora (no uno que ya tenía ficha con otro celular). El pedido de
+    // pago de la consulta va solo en ese caso; a un paciente en tratamiento que saca un control no se le pide.
+    if (p.tipo !== 'cambio') return { fin: { ok: true, nueva_cita: nueva.id, readback_text: textoExito(p), primera_consulta: !!(p.paciente_nuevo && p.alta !== 'existente'), ...alta, ledger } };
     return { ok: true, propuesta: p, ledger, nueva_cita: nueva.id };
   }
   // 6) verificar la anulación. resp = respuesta cruda del PUT
@@ -162,7 +313,7 @@ const AgendaCore = (() => {
   }
 
   // Composición con E/S inyectada (tests y simulaciones). En n8n la misma secuencia la hacen los nodos.
-  // io: { consumir(id)->bool, getCita(id)->resp, postCita(body)->resp, putCita(id, body)->resp }   (cada una puede lanzar)
+  // io: { consumir(id)->bool, getCita(id)->resp, postCita(body)->resp, putCita(id, body)->resp, buscarDni(dni)->resp, postPaciente(body)->resp }   (cada una puede lanzar)
   async function ejecutar(entrada, io, ahoraISO) {
     const s0 = pasoInicial(entrada, ahoraISO);
     if (s0.fin) return s0.fin;
@@ -170,17 +321,78 @@ const AgendaCore = (() => {
     let consumida; try { consumida = await io.consumir(p.id); } catch (e) { consumida = undefined; }
     const s1 = pasoConsumo(s0, consumida); if (s1.fin) return s1.fin;
     let rc; try { rc = p.cita_vieja ? await io.getCita(p.cita_vieja.id) : null; } catch (e) { rc = { error: true }; }
-    const s2 = pasoCita(s1, rc); if (s2.fin) return s2.fin;
+    let s2 = pasoCita(s1, rc); if (s2.fin) return s2.fin;
     if (p.tipo === 'cancelacion') {
       let r; try { r = await io.putCita(p.cita_vieja.id, armarAnulacion()); } catch (e) { r = null; }
       return pasoAnulacion(s2, r).fin;
     }
-    let r1; try { r1 = await io.postCita(armarReserva(p)); } catch (e) { r1 = null; }
+    if (p.paciente_nuevo && !p.paciente_id) {
+      let rd; try { rd = await io.buscarDni(p.paciente_nuevo.dni); } catch (e) { rd = { error: { message: 'network error' } }; }
+      s2 = pasoBuscarDni(s2, rd); if (s2.fin) return s2.fin;
+      if (s2.crear) {
+        let ra; try { ra = await io.postPaciente(armarPaciente(s2.propuesta, true)); } catch (e) { ra = { error: { message: 'network error' } }; }
+        s2 = pasoAlta(s2, ra, true); if (s2.fin) return s2.fin;
+        if (s2.reintentar) {
+          try { ra = await io.postPaciente(armarPaciente(s2.propuesta, false)); } catch (e) { ra = { error: { message: 'network error' } }; }
+          s2 = pasoAlta(s2, ra, false); if (s2.fin) return s2.fin;
+        }
+      }
+    }
+    let r1; try { r1 = await io.postCita(armarReserva(s2.propuesta)); } catch (e) { r1 = null; }
     const s3 = pasoReserva(s2, r1); if (s3.fin) return s3.fin;
     let r2; try { r2 = await io.putCita(p.cita_vieja.id, armarAnulacion()); } catch (e) { r2 = null; }
     return pasoAnulacion(s3, r2).fin;
   }
 
-  return { proponer, ejecutar, pasoInicial, pasoConsumo, pasoCita, pasoReserva, pasoAnulacion, armarReserva, armarAnulacion, normHora, vigente, TTL_PROPUESTA_MS, MIN_ANTICIPACION_MS };
+  // ----------------------------------------------------------------- decidir (herramienta única gestionar_turno, 06/10; 08/10 orquestador)
+  // El mismo pedido se llama DOS veces. Primera vez: el código valida y devuelve el read-back (no escribe).
+  // Segunda vez, cuando el paciente contestó: el agente de TURNOS (la IA, no una regex) decide si el MENSAJE ACTUAL acepta la confirmación pendiente y lo
+  // dice con `confirma`. El código SOLO verifica datos: que haya una confirmación guardada pendiente, que ese read-back sea lo último que le dijo Asiri
+  // (el paciente lo vio), que no haya vencido (30 min) y, al ejecutar, el candado INCR. (08/10) Se borraron el reconocedor de afirmaciones y el atajo del sí directo: una regex no decide un "sí".
+  const sinTildes = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const normT = (x) => sinTildes(x).replace(/[^a-z0-9:/? ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function hashTexto(s) { let h = 5381; const t = normT(s); for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); }
+  const esVerdadero = (v) => v === true || String(v || '').trim().toLowerCase() === 'true';
+  // ¿Hay una confirmación guardada que el paciente vio (es lo último que le dijo Asiri) y sigue vigente? Es estado, no lectura del texto del paciente.
+  function pendienteVista(pg, ultimoAsiri, ahoraISO) {
+    return !!(pg && pg.estado === 'pendiente' && pg.readback_text && ultimoAsiri && normT(ultimoAsiri).includes(normT(pg.readback_text))
+      && Date.parse(ahoraISO) - Number(pg.creada_ms || 0) <= TTL_PROPUESTA_MS);
+  }
+  // (08/10, I3 de la crítica) El DNI del paciente nuevo: el modelo lo copia y el código verifica que esos dígitos estén en lo que escribió el paciente
+  // (sus mensajes de las últimas 12 h, los mismos que ve el contexto). Se comparan SOLO dígitos de los dos lados: "35.123.456" y "35 123 456" valen.
+  // Es validación de un dato (anti-alucinación), no juicio de intención; si no aparece, se le pide el DNI con un texto fijo. Nunca se pisa el DNI del modelo.
+  function dniEnMensajes(dni, textos) {
+    const d = soloDig(dni);
+    if (!d) return true;
+    return (Array.isArray(textos) ? textos : [textos]).some((t) => soloDig(t).includes(d));
+  }
+  // entrada: lo que decide el modelo { tipo, fecha, hora, fecha_turno_viejo, nuevo_*, confirma }; estado: el de proponer + { ultimo_asiri, propuesta_guardada, textos_paciente? }
+  function decidir(entrada, estado, ahoraISO) {
+    const pg = estado.propuesta_guardada;
+    // El agente dijo que el paciente aceptó: se ejecuta la confirmación GUARDADA (la que vio el paciente), no lo que mande el modelo en esta llamada.
+    // (15/10, prueba en vivo) La guardada tiene que haberse ENVIADO en un mensaje ANTERIOR: si el agente la armó en esta misma ejecución y en la misma
+    // llamada dice "confirma", el texto puede coincidir con el último mensaje de Asiri (misma pregunta de antes) y se ejecutaba sin que el paciente
+    // la viera de nuevo. Sin enviada === true, o creada en esta ejecución, no hay "sí" posible.
+    if (esVerdadero(entrada.confirma) && pg && pg.enviada === true && String(pg.exec_id) !== String(estado.exec_id) && pendienteVista(pg, estado.ultimo_asiri, ahoraISO)) {
+      // (15/10) El candado de consumo es por PROPUESTA (texto + cuándo se creó): con solo el texto, una segunda propuesta idéntica (cancelar un turno
+      // vuelto a dar en el mismo horario) quedaba bloqueada como "ya ejecutada". Dos "sí" a la MISMA propuesta siguen chocando en el mismo candado.
+      return { etapa: 'ejecutar', propuesta: { ...pg, id: `h-${estado.tel}-${hashTexto(pg.readback_text)}-${Number(pg.creada_ms) || 0}`, exec_id: 'confirmada', enviada: true, confirmada_por: 'agente_turnos' } };
+    }
+    if (entrada.nuevo_dni && Array.isArray(estado.textos_paciente) && !dniEnMensajes(entrada.nuevo_dni, estado.textos_paciente)) {
+      return { etapa: 'error', resultado: { etapa: 'error', ...conTexto('dni_no_escrito', 'Para registrarlo me falta el DNI del paciente.', 'El DNI no aparece en lo que escribió el paciente: no lo inventes ni lo corrijas. Pediselo.') } };
+    }
+    const r = proponer(entrada, estado, ahoraISO);
+    if (!r.ok) {
+      const { texto_repregunta, ...resto } = r;
+      // Si Asiri ya le hizo ESA pregunta en su último mensaje (el paciente contestó sin elegir), se pregunta con otras palabras: nunca el mismo texto dos veces.
+      if (texto_repregunta && resto.texto_para_el_paciente && estado.ultimo_asiri && normT(estado.ultimo_asiri).includes(normT(resto.texto_para_el_paciente))) resto.texto_para_el_paciente = texto_repregunta;
+      return { etapa: 'error', resultado: { etapa: 'error', ...resto } };
+    }
+    // Sin "confirma" (o sin confirmación vigente que el paciente haya visto) NUNCA se escribe: se muestra el read-back.
+    return { etapa: 'confirmacion', propuesta: r.propuesta, resultado: { etapa: 'confirmacion', ok: true, texto_para_el_paciente: r.readback_text,
+      para_asiri: '[Nota interna para vos, NO la repitas al paciente] El sistema le manda este texto. Cuando el paciente acepte en su PRÓXIMO mensaje, llamá gestionar_turno con confirma=true: recién ahí se escribe en la agenda.' } };
+  }
+
+  return { proponer, decidir, pendienteVista, dniEnMensajes, hashTexto, ejecutar, pasoInicial, pasoConsumo, pasoCita, pasoBuscarDni, pasoAlta, pasoReserva, pasoAnulacion, armarPaciente, armarReserva, armarAnulacion, normHora, vigente, TTL_PROPUESTA_MS, MIN_ANTICIPACION_MS };
 })();
 if (typeof module !== 'undefined') module.exports = AgendaCore;

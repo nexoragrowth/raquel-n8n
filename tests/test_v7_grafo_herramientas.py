@@ -13,7 +13,7 @@ import build_v7_workflows as B  # noqa: E402
 AHORA = "2026-10-05T12:36:00Z"
 TEL = "5490000000651"
 D = "https://api.dentalink.healthatom.com/api/v1"
-TRIG = {"tel": TEL, "exec_id_actual": "ex-2"}
+TRIG = {"tel": TEL, "exec_id_actual": "ex-2", "modo": "vivo"}   # (08/10) las herramientas solo escriben con modo "vivo" explícito
 total = fallas = 0
 
 
@@ -106,7 +106,7 @@ def main():
         esc("P1 cambio feliz", CAMBIO, base),
         esc("P2 horario que nadie ofreció", {**CAMBIO, "hora": "10:00"}, base),
         esc("P3 sin ver_turnos antes", CAMBIO, {k: v for k, v in base.items() if not k.startswith("turnos_vistos")}),
-        esc("P4 dos fichas sin elegir", CAMBIO, {**base, f"ficha:{TEL}": FICHA_2}),
+        esc("P4 dos fichas sin elegir", CAMBIO, {**base, f"ficha:{TEL}": FICHA_2, f"turnos_vistos:{TEL}": json.dumps(json.loads(TURNOS) + [{**json.loads(TURNOS)[0], "id": 9300, "id_paciente": 777}])}),   # las dos con turno ese día: ambiguo
         esc("P5 turno en menos de 48 h", {**CAMBIO, "fecha_turno_viejo": "2026-10-06"}, {**base, f"turnos_vistos:{TEL}": json.dumps([{"id": 9, "id_paciente": 651, "fecha": "2026-10-06", "hora_inicio": "09:10", "id_estado": 15, "estado_anulacion": 0}])}),
         esc("P6 el modelo intenta colar un paciente_id", {**CAMBIO, "paciente_id": 777}, base),
     ])
@@ -126,6 +126,9 @@ def main():
         esc("B4 la agenda falla", {"desde": "", "hasta": ""}, {}, subwf={"Buscar horarios (sub-WF)": {"error": {"message": "x"}}}),
         esc("B5 segundo bloque: se suma a lo ya ofrecido", {"desde": "2026-10-24", "hasta": ""}, {f"lotes:{TEL}": 1, f"ofertas:{TEL}": json.dumps([{"fecha": "2026-10-22", "hora": "09:20"}])}, subwf={"Buscar horarios (sub-WF)": {"bloque": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n\nLe sirve alguno?"}}),
         esc("B6 el modelo pide lo MISMO dos veces", {"desde": "", "hasta": ""}, {f"lotes:{TEL}": 2, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|", f"ofertas:{TEL}": OFERTAS}, subwf={"Buscar horarios (sub-WF)": {"bloque": "NO DEBE LLAMARSE"}}),
+        esc("B8 pide otra ventana y vuelve el MISMO bloque (sin horarios nuevos)", {"desde": "2026-10-08", "hasta": ""}, {f"lotes:{TEL}": 1, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|",
+            f"ofertas:{TEL}": json.dumps([{"fecha": "2026-10-22", "hora": h} for h in ("08:00", "09:20")] + [{"fecha": "2026-10-23", "hora": "09:10"}, {"fecha": "2026-11-02", "hora": "16:20"}] + [{"fecha": "2026-11-04", "hora": h} for h in ("15:00", "15:40")])},
+            subwf={"Buscar horarios (sub-WF)": {"bloque": BLOQUE}}),
         esc("B7 pedido distinto con 2 bloques ya contados", {"desde": "2026-11-10", "hasta": ""}, {f"lotes:{TEL}": 2, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|", f"ofertas:{TEL}": OFERTAS}, subwf={"Buscar horarios (sub-WF)": {"bloque": "NO DEBE LLAMARSE"}}),
     ])
     print("\nbuscar_horarios")
@@ -144,6 +147,12 @@ def main():
     x = r["B6 el modelo pide lo MISMO dos veces"]; a = x["reps"][0]
     chequear("B6 devuelve el bloque cacheado, NO llama al sub-WF y NO suma lote", a["salida"]["bloque"] == BLOQUE and a["salida"]["repetido"] is True and not any(p["metodo"] == "executeWorkflow" for p in a["pedidos"]) and x["redis_final"][f"lotes:{TEL}"] == 2, (a["salida"], x["redis_final"]))
     chequear("B6 NO marca el bloque como de esta ejecución (si el paciente ya eligió, no se lo vuelve a forzar)", f"bloque_exec:{TEL}:ex-2" not in x["redis_final"], list(x["redis_final"]))
+    x = r["B5 segundo bloque: se suma a lo ya ofrecido"]
+    chequear("B5b un bloque con horarios nuevos SÍ cuenta (lotes 1 → 2) y trae siguiente_desde = día después del último ofrecido", x["redis_final"][f"lotes:{TEL}"] == 2 and x["reps"][0]["salida"].get("siguiente_desde") == "2026-10-28", (x["redis_final"].get(f"lotes:{TEL}"), x["reps"][0]["salida"].get("siguiente_desde")))
+    x = r["B8 pide otra ventana y vuelve el MISMO bloque (sin horarios nuevos)"]; a = x["reps"][0]
+    chequear("B8 sin horarios nuevos: NO cuenta como bloque (lotes sigue en 1), NO se marca para pegar y la nota dice nombrar lo más cercano de lo ya ofrecido",
+             a["error"] is None and x["redis_final"][f"lotes:{TEL}"] == 1 and f"bloque_exec:{TEL}:ex-2" not in x["redis_final"] and a["salida"].get("sin_horarios_nuevos") is True
+             and "más cercano" in a["salida"]["para_asiri"] and "bloque" not in {k for k in a["salida"] if k == "bloque"}, (a["error"], x["redis_final"].get(f"lotes:{TEL}"), a["salida"]))
     a = r["B7 pedido distinto con 2 bloques ya contados"]["reps"][0]
     chequear("B7 un pedido distinto sí cuenta: tercer bloque → límite", a["salida"]["motivo"] == "limite_de_bloques" and not any(p["metodo"] == "executeWorkflow" for p in a["pedidos"]), a["salida"])
 
@@ -153,7 +162,10 @@ def main():
     CITA = {"data": {"id": 9104, "id_paciente": 651, "fecha": "2026-10-16", "hora_inicio": "09:10:00", "id_estado": 15, "estado_anulacion": 0}}
     PUT18 = {"data": {"id": 9104, "id_estado": 18}}
     r = correr(B.wf_confirmar_turno(), [
+        esc("C10 SOMBRA: verifica pero no confirma ni marca el recordatorio (incidente 06/10)", {"fecha": "", "modo": "sombra"}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
+        esc("C11 SIN modo: tampoco escribe (solo con 'vivo' explícito)", {"fecha": "", "modo": ""}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
         esc("C1 un recordatorio abierto, todo ok", {"fecha": ""}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
+        esc("C9 'confirmo' y el modelo pasa una fecha equivocada (10/12 leído como 12/10): con UN recordatorio abierto, confirma ese", {"fecha": "2026-10-12"}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
         esc("C2 ya estaba confirmada", {"fecha": ""}, http={"GET cita": {"data": {**CITA["data"], "id_estado": 18}}}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
         esc("C3 Dentalink dice 'igual al original'", {"fecha": ""}, http={"GET cita": CITA, "PUT confirmar": {"error": {"message": "400 - el nuevo estado es igual al original"}}}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
         esc("C4 el PUT falla", {"fecha": ""}, http={"GET cita": CITA, "PUT confirmar": {"error": {"message": "500"}}}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
@@ -168,14 +180,21 @@ def main():
     ])
     print("\nconfirmar_turno")
     met = lambda a: [p["metodo"] + " " + (p["url"] or "").replace(D, "") for p in a["pedidos"] if p["metodo"] in ("GET", "PUT", "POST")]
+    a = r["C9 'confirmo' y el modelo pasa una fecha equivocada (10/12 leído como 12/10): con UN recordatorio abierto, confirma ese"]["reps"][0]
+    chequear("C9 fecha equivocada + un solo recordatorio → confirma ese (07/10, escenarios reales REAL-14/15)", a["salida"]["ok"] is True and "16/10" in (a["salida"]["readback_text"] or ""), a["salida"])
+    for k in ("C10 SOMBRA: verifica pero no confirma ni marca el recordatorio (incidente 06/10)", "C11 SIN modo: tampoco escribe (solo con 'vivo' explícito)"):
+        a = r[k]["reps"][0]
+        chequear(k[:3] + " ningún PUT a Dentalink ni UPDATE del recordatorio; devuelve el mensaje marcado simulado", met(a) == ["GET /citas/9104"] and not any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]) and a["salida"].get("simulado") is True and a["salida"]["ok"] is True, (met(a), [p["nodo"] for p in a["pedidos"]], a["salida"]))
     x = r["C1 un recordatorio abierto, todo ok"]; a = x["reps"][0]
     chequear("C1 GET → PUT (id_estado 18) y marca el recordatorio", a["error"] is None and met(a) == ["GET /citas/9104", "PUT /citas/9104"] and next(q for q in a["pedidos"] if q["nodo"] == "PUT confirmar")["body"] == {"id_estado": 18} and any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]), (a["error"], a["pedidos"]))
-    chequear("C1 el mensaje lo arma el código", a["salida"]["readback_text"] == "Listo, su turno del viernes 16/10 a las 09:10 quedó confirmado." and a["salida"]["ok"] is True, a["salida"])
+    chequear("C1 el mensaje lo arma el código", a["salida"]["readback_text"] == "Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado." and a["salida"]["ok"] is True, a["salida"])
     lib = json.loads(x["redis_final"][f"escrituras:{TEL}:ex-2"])
     chequear("C1 deja el libro (tipo confirmacion, ok)", lib[0]["tipo"] == "confirmacion" and lib[0]["ok"] is True and lib[0]["readback_text"] == a["salida"]["readback_text"], lib)
     x = r["C2 ya estaba confirmada"]; a = x["reps"][0]
-    chequear("C2 ya confirmada: no hace PUT, lo dice y igual cierra el recordatorio", met(a) == ["GET /citas/9104"] and a["salida"]["ya_estaba_confirmada"] is True and "ya estaba confirmado" in a["salida"]["readback_text"] and any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]), (met(a), a["salida"]))
-    chequear("C2 sin escritura no hay libro", not any(k.startswith("escrituras:") for k in x["redis_final"]))
+    lib2 = json.loads(x["redis_final"].get(f"escrituras:{TEL}:{TRIG['exec_id_actual']}") or "null")
+    chequear("C2b ya confirmada: igual queda en el libro (ok, confirmación) para que el chequeo de salida no frene 'está confirmado'", isinstance(lib2, list) and lib2[0]["ok"] is True and lib2[0]["tipo"] == "confirmacion" and "está confirmado" in lib2[0]["readback_text"], lib2)
+    chequear("C2 ya confirmada: no hace PUT, le dice lo mismo que si se confirmara recién (no \"ya estaba\") y igual cierra el recordatorio", met(a) == ["GET /citas/9104"] and a["salida"]["ya_estaba_confirmada"] is True and a["salida"]["readback_text"] == "Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado." and any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]), (met(a), a["salida"]))
+    chequear("C2c sin PUT a la agenda (ya estaba confirmada), el libro registra solo la verificación: una entrada, sin cita nueva ni anulada", len(lib2) == 1 and lib2[0]["nueva_cita"] is None and lib2[0]["vieja_anulada"] is None, lib2)
     a = r["C3 Dentalink dice 'igual al original'"]["reps"][0]
     chequear("C3 el 400 'igual al original' cuenta como éxito idempotente", a["salida"]["ok"] is True and a["salida"]["ya_estaba_confirmada"] is True, a["salida"])
     x = r["C4 el PUT falla"]; a = x["reps"][0]
@@ -192,48 +211,125 @@ def main():
         a = r[k]["reps"][0]
         chequear(f"{k[:3].strip()} → {motivo}, no escribe", a["salida"]["motivo"] == motivo and not any(q["metodo"] == "PUT" for q in a["pedidos"]) and not any(q["nodo"] == "Marcar recordatorio" for q in a["pedidos"]), (a["salida"], met(a)))
 
-    # ------------------------------------------------------------------ clinica
+    # ------------------------------------------------------------------ clinica (08/10: derivar / humano / pago / datos_pago / espera / triaje; textos fijos por código)
     ESTADO = {f"{k}:{TEL}": "x" for k in ("propuesta", "ofertas", "lotes", "turnos_vistos", "bloque")}
-    base_c = {"modo": "vivo", "nivel": "", "texto": "", "motivo": "", "cita_textual": "", "texto_paciente": ""}
+    base_c = {"modo": "vivo", "nivel": "", "texto": "", "motivo": "", "cita_textual": "", "texto_paciente": "", "moneda": ""}
     r = correr(B.wf_clinica(), [
         esc("K1 avisar_grupo FYI", {**base_c, "accion": "aviso", "nivel": "FYI", "texto": "Preguntó por un presupuesto de alineadores"}, dict(ESTADO)),
-        esc("K2 pasar_a_humano verificado", {**base_c, "accion": "humano", "motivo": "pidio_persona", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "Hola, quiero hablar con la secretaria"}, dict(ESTADO)),
-        esc("K3 pasar_a_humano inventado", {**base_c, "accion": "humano", "motivo": "pidio_persona", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "Confirmo mi turno"}, dict(ESTADO)),
+        esc("K2 pasar_a_humano verificado", {**base_c, "accion": "humano", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "Hola, quiero hablar con la secretaria"}, dict(ESTADO)),
+        esc("K3 pasar_a_humano inventado", {**base_c, "accion": "humano", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "Confirmo mi turno"}, dict(ESTADO)),
         esc("K4 primer comprobante", {**base_c, "accion": "pago"}, dict(ESTADO)),
         esc("K4b segundo comprobante en 15 min", {**base_c, "accion": "pago"}, {**ESTADO, f"pago:{TEL}": "1"}),
-        esc("K5 sombra: pasar_a_humano", {**base_c, "modo": "sombra", "accion": "humano", "motivo": "pidio_persona", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "quiero hablar con la secretaria"}, dict(ESTADO)),
-        esc("K6 el webhook del grupo está caído", {**base_c, "accion": "humano", "motivo": "pidio_persona", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "quiero hablar con la secretaria"}, dict(ESTADO), aviso_falla=True),
+        esc("K5 sombra: pasar_a_humano", {**base_c, "modo": "sombra", "accion": "humano", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "quiero hablar con la secretaria"}, dict(ESTADO)),
+        esc("K6 el webhook del grupo está caído", {**base_c, "accion": "humano", "cita_textual": "quiero hablar con la secretaria", "texto_paciente": "quiero hablar con la secretaria"}, dict(ESTADO), aviso_falla=True),
         esc("K7 lista de espera", {**base_c, "accion": "espera", "texto": "Quiere antes del 22/10"}, dict(ESTADO)),
-        esc("K8 derivar_triaje", {**base_c, "accion": "triaje", "cita_textual": "se me salió el alambre", "texto_paciente": "se me salió el alambre"}, dict(ESTADO)),
-        esc("K9 pasar_a_humano con urgencia", {**base_c, "accion": "humano", "motivo": "urgencia", "cita_textual": "me duele mucho", "texto_paciente": "me duele mucho"}, dict(ESTADO)),
+        esc("K8 derivar_triaje", {**base_c, "accion": "triaje", "texto_paciente": "se me salió el alambre"}, dict(ESTADO)),
+        esc("K10 avisar_grupo en SOMBRA", {**base_c, "accion": "aviso", "nivel": "FYI", "texto": "El paciente consulta por su presupuesto", "modo": "sombra"}, dict(ESTADO)),
+        esc("K12 derivar 1.ª vez", {**base_c, "accion": "derivar", "cita_textual": "presupuesto en dólares?", "motivo": "presupuesto en dólares", "texto_paciente": "presupuesto en dólares?"}, dict(ESTADO)),
+        esc("K13 derivar: insiste (2.ª en 30 min)", {**base_c, "accion": "derivar", "cita_textual": "y en dólares?", "texto_paciente": "y en dólares?"}, {**ESTADO, f"deriva:{TEL}": "1"}),
+        esc("K14 derivar en SOMBRA con insistencia", {**base_c, "modo": "sombra", "accion": "derivar", "cita_textual": "y en dólares?", "texto_paciente": "y en dólares?"}, {**ESTADO, f"v7s:deriva:{TEL}": "1"}),
+        esc("K15 un aviso técnico previo NO cuenta como insistencia", {**base_c, "accion": "derivar", "cita_textual": "x", "texto_paciente": "presupuesto"}, {**ESTADO, f"avisos:{TEL}": "1"}),
+        esc("K16 datos_pago en dólares", {**base_c, "accion": "datos_pago", "moneda": "otra"}, dict(ESTADO)),
+        esc("K17 datos_pago en pesos", {**base_c, "accion": "datos_pago", "moneda": "pesos"}, dict(ESTADO)),
+        esc("K18 sin modo (campo que no llega) = sombra", {**base_c, "modo": "", "accion": "derivar", "cita_textual": "x", "texto_paciente": "x"}, {**ESTADO, f"v7s:deriva:{TEL}": "1"}),
     ])
     print("\nclinica")
     x = r["K1 avisar_grupo FYI"]; a = x["reps"][0]
     chequear("K1 avisa al grupo con [FYI], SIN pedir silencio, y deja el estado intacto", len(a["avisos"]) == 1 and a["avisos"][0]["qs"]["resumen"].startswith("[FYI]") and "tomar" not in a["avisos"][0]["qs"] and a["avisos"][0]["qs"]["phone"] == TEL and all(k in x["redis_final"] for k in ESTADO), (a["avisos"], list(x["redis_final"])))
+    chequear("K1b cuenta el aviso para el límite de 2 cada 30 min (avisos:{tel} = 1)", str(x["redis_final"].get(f"avisos:{TEL}")) == "1", x["redis_final"].get(f"avisos:{TEL}"))
+    x = r["K10 avisar_grupo en SOMBRA"]; a = x["reps"][0]
+    chequear("K10 en sombra no avisa a nadie pero cuenta el aviso en la clave de sombra (v7s:avisos:), no en la de vivo", a["avisos"] == [] and str(x["redis_final"].get(f"v7s:avisos:{TEL}")) == "1" and f"avisos:{TEL}" not in x["redis_final"], (a["avisos"], {k: v for k, v in x["redis_final"].items() if "avisos" in k}))
+    x = r["K12 derivar 1.ª vez"]; a = x["reps"][0]
+    chequear("K12 derivar: texto fijo, aviso [ACCIÓN] con la frase textual, sin silenciar, y cuenta deriva:{tel} = 1", a["salida"].get("texto_para_el_paciente") == "Le paso con la secretaria para que lo atienda." and len(a["avisos"]) == 1 and a["avisos"][0]["qs"]["resumen"].startswith("[ACCIÓN]") and "«presupuesto en dólares?»" in a["avisos"][0]["qs"]["resumen"] and "tomar" not in a["avisos"][0]["qs"] and str(x["redis_final"].get(f"deriva:{TEL}")) == "1" and all(k in x["redis_final"] for k in ESTADO), (a["salida"], a["avisos"], x["redis_final"].get(f"deriva:{TEL}")))
+    x = r["K13 derivar: insiste (2.ª en 30 min)"]; a = x["reps"][0]
+    chequear("K13 (Lucas: 'si insiste, modo humano') 2.ª derivación en 30 min: aviso con tomar=true, se limpia el estado y texto de insistencia", a["salida"].get("modo_humano") is True and len(a["avisos"]) == 1 and a["avisos"][0]["qs"].get("tomar") == "true" and not any(k in x["redis_final"] for k in ESTADO) and a["salida"].get("texto_para_el_paciente", "").startswith("Ya le pasé su consulta"), (a["salida"], a["avisos"]))
+    x = r["K14 derivar en SOMBRA con insistencia"]; a = x["reps"][0]
+    chequear("K14 sombra: modo humano simulado, sin avisar ni silenciar el chat real (no llama al webhook), sin tocar el estado; el contador va a v7s:deriva:", a["salida"].get("modo_humano") is True and a["salida"].get("simulado") is True and a["avisos"] == [] and all(k in x["redis_final"] for k in ESTADO) and str(x["redis_final"].get(f"v7s:deriva:{TEL}")) == "2" and f"deriva:{TEL}" not in x["redis_final"], (a["salida"], a["avisos"], x["redis_final"]))
+    a = r["K15 un aviso técnico previo NO cuenta como insistencia"]["reps"][0]
+    chequear("K15 contadores separados: un aviso técnico (avisos:) no convierte la 1.ª derivación en modo humano", a["salida"].get("modo_humano") is None and a["salida"].get("derivado") is True, a["salida"])
+    a = r["K18 sin modo (campo que no llega) = sombra"]["reps"][0]
+    chequear("K18 (decisión 08/10) sin modo es sombra: ni avisos ni silencio aunque insista", a["avisos"] == [] and a["salida"].get("simulado") is True, (a["salida"], a["avisos"]))
     x = r["K2 pasar_a_humano verificado"]; a = x["reps"][0]
-    chequear("K2 pasa a una persona: aviso con tomar=true", len(a["avisos"]) == 1 and a["avisos"][0]["qs"].get("tomar") == "true" and "pidió hablar con una persona" in a["avisos"][0]["qs"]["resumen"], a["avisos"])
-    chequear("K2 borra propuesta, ofertas, lotes, turnos_vistos y bloque (el staff interviene: nada viejo se puede ejecutar)", not any(k in x["redis_final"] for k in ESTADO), list(x["redis_final"]))
-    chequear("K2 le dice a Asiri que no siga con turnos", a["salida"]["ok"] is True and "no sigas" in a["salida"]["para_asiri"], a["salida"])
+    chequear("K2 pasa a una persona: aviso con tomar=true y texto fijo", len(a["avisos"]) == 1 and a["avisos"][0]["qs"].get("tomar") == "true" and "pidió hablar con una persona" in a["avisos"][0]["qs"]["resumen"] and a["salida"].get("texto_para_el_paciente") == "Le paso con la secretaria para que lo atienda.", (a["avisos"], a["salida"]))
+    chequear("K2 borra propuesta, ofertas, lotes, turnos_vistos y bloque (una persona toma el chat: nada viejo se puede ejecutar)", not any(k in x["redis_final"] for k in ESTADO), list(x["redis_final"]))
     x = r["K3 pasar_a_humano inventado"]; a = x["reps"][0]
-    chequear("K3 el motivo no se verifica: NO silencia, NO borra estado, avisa ACCIÓN", len(a["avisos"]) == 1 and "tomar" not in a["avisos"][0]["qs"] and a["avisos"][0]["qs"]["resumen"].startswith("[ACCIÓN]") and all(k in x["redis_final"] for k in ESTADO) and a["salida"]["degradado"] is True, (a["avisos"], a["salida"]))
+    chequear("K3 la cita no está en el mensaje: NO silencia, NO borra estado, deriva con aviso ACCIÓN", len(a["avisos"]) == 1 and "tomar" not in a["avisos"][0]["qs"] and a["avisos"][0]["qs"]["resumen"].startswith("[ACCIÓN]") and all(k in x["redis_final"] for k in ESTADO) and a["salida"]["degradado"] is True, (a["avisos"], a["salida"]))
     x = r["K4 primer comprobante"]; a = x["reps"][0]
-    chequear("K4 comprobante: aviso ACCIÓN sin silenciar y marca para no repetir", a["avisos"][0]["qs"]["resumen"].startswith("[ACCIÓN]") and "tomar" not in a["avisos"][0]["qs"] and x["redis_final"][f"pago:{TEL}"] == "1", (a["avisos"], x["redis_final"]))
+    chequear("K4 comprobante: aviso ACCIÓN sin silenciar, marca para no repetir y texto fijo de recepción", a["avisos"][0]["qs"]["resumen"].startswith("[ACCIÓN]") and "tomar" not in a["avisos"][0]["qs"] and x["redis_final"][f"pago:{TEL}"] == "1" and a["salida"].get("texto_para_el_paciente", "").startswith("Recibido."), (a["avisos"], x["redis_final"], a["salida"]))
     a = r["K4b segundo comprobante en 15 min"]["reps"][0]
-    chequear("K4b segundo comprobante: no repite el aviso", not a["avisos"] and a["salida"]["ok"] is True, a["avisos"])
+    chequear("K4b segundo comprobante: no repite el aviso", not a["avisos"] and a["salida"]["ok"] is True and a["salida"].get("texto_para_el_paciente") == "Recibido, gracias.", a)
     x = r["K5 sombra: pasar_a_humano"]; a = x["reps"][0]
     chequear("K5 sombra: ni avisos ni borrado de estado", not a["avisos"] and all(k in x["redis_final"] for k in ESTADO) and a["salida"]["simulado"] is True, (a["avisos"], a["salida"]))
     a = r["K6 el webhook del grupo está caído"]["reps"][0]
-    chequear("K6 si el aviso no sale, se lo dice a Asiri para que no afirme que ya avisó", a["salida"].get("aviso_no_enviado") is True and "no digas que ya les avisaste" in a["salida"]["para_asiri"], a["salida"])
+    chequear("K6 si el aviso no sale, se marca (el cerebro avisa por su lado)", a["salida"].get("aviso_no_enviado") is True, a["salida"])
     a = r["K7 lista de espera"]["reps"][0]
-    chequear("K7 lista de espera: aviso FYI y prohíbe prometer", a["avisos"][0]["qs"]["resumen"].startswith("[FYI] Lista de espera") and "NO prometas" in a["salida"]["para_asiri"], (a["avisos"], a["salida"]))
-
-    for k in ("K8 derivar_triaje", "K9 pasar_a_humano con urgencia"):
-        x = r[k]; a = x["reps"][0]; clave = f"triaje_v7:{TEL}:{TRIG['exec_id_actual']}"
-        marca = json.loads(x["redis_final"].get(clave) or "null")
-        chequear(f"{k[:2]} deja la marca triaje_v7 de ESTA ejecución, sin aviso al grupo, sin silenciar y sin borrar estado",
-                 marca and marca["cita"] and not a["avisos"] and all(c in x["redis_final"] for c in ESTADO) and a["salida"]["derivado_a_triaje"] is True, (x["redis_final"], a["avisos"], a["salida"]))
+    chequear("K7 lista de espera: aviso FYI y texto fijo que no promete", a["avisos"][0]["qs"]["resumen"].startswith("[FYI] Lista de espera") and a["salida"].get("texto_para_el_paciente", "").startswith("Le dejo anotado"), (a["avisos"], a["salida"]))
+    a = r["K16 datos_pago en dólares"]["reps"][0]
+    chequear("K16 datos_pago con moneda=otra: fuera de alcance, sin datos ni aviso", a["salida"].get("fuera_de_alcance") is True and a["salida"]["ok"] is False and not a["avisos"], a["salida"])
+    a = r["K17 datos_pago en pesos"]["reps"][0]
+    chequear("K17 datos_pago en pesos: ok, marca datos_pago y el texto fijo (los datos los pega el cerebro)", a["salida"].get("datos_pago") is True and a["salida"].get("texto_para_el_paciente") == "Le paso los datos para transferir:" and not a["avisos"], a["salida"])
+    x = r["K8 derivar_triaje"]; a = x["reps"][0]; clave = f"triaje_v7:{TEL}:{TRIG['exec_id_actual']}"
+    marca = json.loads(x["redis_final"].get(clave) or "null")
+    chequear("K8 derivar_triaje deja la marca triaje_v7 de ESTA ejecución con el mensaje completo, sin aviso al grupo, sin silenciar y sin borrar estado",
+             marca and marca["cita"] == "se me salió el alambre" and not a["avisos"] and all(c in x["redis_final"] for c in ESTADO) and a["salida"]["derivado_a_triaje"] is True, (x["redis_final"], a["avisos"], a["salida"]))
     x = r["K1 avisar_grupo FYI"]
-    chequear("K10 las demás acciones NO dejan marca de triaje", not any(c.startswith("triaje_v7:") for c in x["redis_final"]), list(x["redis_final"]))
+    chequear("K9 las demás acciones NO dejan marca de triaje", not any(c.startswith("triaje_v7:") for c in x["redis_final"]), list(x["redis_final"]))
+
+    # ------------------------------------------------------------------ gestionar_turno (herramienta única de agenda, 06/10)
+    base = {f"ficha:{TEL}": FICHA_1, f"turnos_vistos:{TEL}": TURNOS, f"ofertas:{TEL}": OFERTAS}
+    RB = "Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, reemplazando el turno del viernes 16/10 a las 09:10. ¿Procedo con la reserva?"
+    PEDIDO = {"modo": "sombra", "tipo": "cambio", "fecha": "2026-10-22", "hora": "9:20", "fecha_turno_viejo": "2026-10-16"}
+    EJEC = {"ok": True, "simulado": True, "readback_text": "Listo, quedó reprogramado su turno: anulé el del viernes 16/10 a las 09:10 y le reservé el jueves 22/10 a las 09:20."}
+    NUEVO_SIN_DATOS = {"modo": "sombra", "tipo": "reserva", "fecha": "2026-10-22", "hora": "9:20"}
+    RB_SUMA = "Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, además de su turno del viernes 16/10 a las 09:10. ¿Procedo con la reserva?"
+    GUARDADA = {"id": f"{TEL}-1", "tipo": "sumar", "estado": "pendiente", "creada_ms": int(__import__("datetime").datetime(2026, 10, 5, 12, 30, tzinfo=__import__("datetime").timezone.utc).timestamp() * 1000),
+                "exec_id": "ex-1", "tel": TEL, "paciente_id": 651, "slot": {"fecha": "2026-10-22", "hora": "09:20"}, "cita_vieja": None, "readback_text": RB_SUMA, "enviada": True}
+    NUEVO = {**NUEVO_SIN_DATOS, "nuevo_nombre": "Juan", "nuevo_apellido": "Pérez", "nuevo_dni": "40.123.456"}
+    RBN = "Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, a nombre de Juan Pérez (DNI 40.123.456), como paciente nuevo. ¿Procedo con la reserva?"
+    # (08/10) El "sí" ejecuta la confirmación GUARDADA que vio el paciente, cuando el agente de Turnos pone confirma=true (ya no hay regex de "sí").
+    GUARDADA_C = {**GUARDADA, "tipo": "cambio", "cita_vieja": {"id": 9104, "fecha": "2026-10-16", "hora": "09:10"}, "readback_text": RB}
+    GUARDADA_N = {**GUARDADA, "tipo": "reserva", "paciente_id": None, "readback_text": RBN, "paciente_nuevo": {"nombre": "Juan", "apellidos": "Pérez", "dni": "40123456"}}
+    r = correr(B.wf_gestionar_turno(), [
+        esc("GT1 primera llamada", {**PEDIDO, "ultimo_asiri": "Tenemos los próximos turnos disponibles…", "texto_paciente": "el jueves 22 a las 9:20"}, base),
+        esc("GT2 el paciente vio el read-back y Turnos puso confirma", {**PEDIDO, "confirma": "true", "ultimo_asiri": RB, "texto_paciente": "ya"}, {**base, f"propuesta:{TEL}": json.dumps(GUARDADA_C)}, subwf={"Ejecutar": EJEC}),
+        esc("GT3 sin confirma no ejecuta (aunque diga 'Sí')", {**PEDIDO, "ultimo_asiri": RB, "texto_paciente": "Sí, pero mejor el viernes"}, {**base, f"propuesta:{TEL}": json.dumps(GUARDADA_C)}, subwf={"Ejecutar": EJEC}),
+        esc("GT4 horario no ofrecido", {**PEDIDO, "hora": "10:00", "ultimo_asiri": RB, "texto_paciente": "Sí"}, base, subwf={"Ejecutar": EJEC}),
+        esc("GT8 'Sí' y el modelo cambia el pedido en la 2.ª llamada (sumar → reserva)", {**PEDIDO, "tipo": "reserva", "fecha_turno_viejo": "", "confirma": "true", "ultimo_asiri": RB_SUMA, "texto_paciente": "Sí."},
+            {**base, f"propuesta:{TEL}": json.dumps(GUARDADA)}, subwf={"Ejecutar": EJEC}),
+        esc("GT5 paciente nuevo sin datos", {**NUEVO_SIN_DATOS, "ultimo_asiri": "…", "texto_paciente": "el jueves 22 a las 9:20"}, {f"ofertas:{TEL}": OFERTAS}),
+        esc("GT6 paciente nuevo con datos", {**NUEVO, "ultimo_asiri": "…", "texto_paciente": "Juan Pérez 40123456"}, {f"ofertas:{TEL}": OFERTAS}),
+        esc("GT7 paciente nuevo: vio el read-back y Turnos puso confirma", {**NUEVO, "confirma": "true", "ultimo_asiri": RBN, "texto_paciente": "Sí"}, {f"ofertas:{TEL}": OFERTAS, f"propuesta:{TEL}": json.dumps(GUARDADA_N)}, subwf={"Ejecutar": EJEC}),
+        esc("GT9 DNI que el paciente no escribió", {**NUEVO, "nuevo_dni": "41123456", "ultimo_asiri": "…", "texto_paciente": "Juan Pérez 40.123.456", "textos_paciente": json.dumps(["quiero turno", "Juan Pérez 40.123.456"])}, {f"ofertas:{TEL}": OFERTAS}),
+        esc("GT10 DNI con espacios en el mensaje", {**NUEVO, "ultimo_asiri": "…", "texto_paciente": "40 123 456", "textos_paciente": json.dumps(["Juan Pérez", "40 123 456"])}, {f"ofertas:{TEL}": OFERTAS}),
+    ])
+    print("\ngestionar_turno")
+    x = r["GT1 primera llamada"]; a = x["reps"][0]; prop = json.loads(x["redis_final"][f"propuesta:{TEL}"])
+    chequear("GT1 primera llamada: devuelve el read-back del código, guarda la propuesta con la ejecución actual y NO llama a la ejecución",
+             a["salida"]["etapa"] == "confirmacion" and a["salida"]["texto_para_el_paciente"] == RB and prop["exec_id"] == "ex-2" and not any(p["nodo"] == "Ejecutar" for p in a["pedidos"]), a["salida"])
+    x = r["GT2 el paciente vio el read-back y Turnos puso confirma"]; a = x["reps"][0]; prop = json.loads(x["redis_final"][f"propuesta:{TEL}"])
+    ej = next((p for p in a["pedidos"] if p["nodo"] == "Ejecutar"), None)
+    chequear("GT2 vio el read-back y Turnos puso confirma: guarda la propuesta CONFIRMADA (id estable) y corre la ejecución con el teléfono, la ejecución y el modo del código",
+             prop["enviada"] is True and prop["exec_id"] == "confirmada" and prop["id"].startswith("h-" + TEL) and ej is not None and ej["entradas"] == {"tel": TEL, "exec_id_actual": "ex-2", "modo": "sombra"}, (prop, ej))
+    chequear("GT2 devuelve el resultado de la ejecución con etapa 'ejecutado' primero (el examen y el chequeo lo leen)", list(a["salida"])[0] == "etapa" and a["salida"]["etapa"] == "ejecutado" and a["salida"]["ok"] is True, a["salida"])
+    chequear("GT2b el mensaje final va como texto_para_el_paciente (no readback_text) con la instrucción de mandarlo solo (examen AGE-01, 07/10)",
+             a["salida"].get("texto_para_el_paciente") == EJEC["readback_text"] and "readback_text" not in a["salida"] and "tal cual y sola" in (a["salida"].get("para_asiri") or ""), a["salida"])
+    a = r["GT3 sin confirma no ejecuta (aunque diga 'Sí')"]["reps"][0]
+    chequear("GT3 sin confirma NO ejecuta (el código no lee el 'sí'): vuelve a mostrar la confirmación", a["salida"]["etapa"] == "confirmacion" and not any(p["nodo"] == "Ejecutar" for p in a["pedidos"]), a["salida"])
+    x = r["GT4 horario no ofrecido"]; a = x["reps"][0]
+    chequear("GT4 horario no ofrecido: error del código, ni propuesta guardada ni ejecución", a["salida"]["etapa"] == "error" and a["salida"]["motivo"] == "no_ofrecido" and f"propuesta:{TEL}" not in x["redis_final"] and not any(p["nodo"] == "Ejecutar" for p in a["pedidos"]), a["salida"])
+    x = r["GT8 'Sí' y el modelo cambia el pedido en la 2.ª llamada (sumar → reserva)"]; a = x["reps"][0]; prop = json.loads(x["redis_final"][f"propuesta:{TEL}"])
+    chequear("GT8 ejecuta la confirmación GUARDADA (sumar, la que vio el paciente) aunque el modelo mandó 'reserva' (caso de la captura de Lucas, 07/10)",
+             a["error"] is None and any(p["nodo"] == "Ejecutar" for p in a["pedidos"]) and prop["tipo"] == "sumar" and prop["exec_id"] == "confirmada" and a["salida"]["etapa"] == "ejecutado", (a["error"], prop, a["salida"]))
+    a = r["GT5 paciente nuevo sin datos"]["reps"][0]
+    chequear("GT5 celular sin ficha y sin datos: pide nombre, apellido y DNI (no deriva)", a["error"] is None and a["salida"]["motivo"] == "sin_ficha" and "nombre, apellido y DNI" in a["salida"]["para_asiri"], (a["error"], a["salida"]))
+    x = r["GT6 paciente nuevo con datos"]; a = x["reps"][0]
+    chequear("GT6 con los datos: read-back de paciente nuevo y propuesta guardada con el alta", a["salida"].get("texto_para_el_paciente") == RBN and json.loads(x["redis_final"][f"propuesta:{TEL}"])["paciente_nuevo"]["dni"] == "40123456", a["salida"])
+    x = r["GT7 paciente nuevo: vio el read-back y Turnos puso confirma"]; a = x["reps"][0]; prop = json.loads(x["redis_final"][f"propuesta:{TEL}"])
+    chequear("GT7 confirma al read-back de paciente nuevo: corre la ejecución con la propuesta confirmada (sin ficha, con los datos del alta)", any(p["nodo"] == "Ejecutar" for p in a["pedidos"]) and prop["exec_id"] == "confirmada" and prop["paciente_id"] is None and prop["paciente_nuevo"]["apellidos"] == "Pérez", (prop, a["salida"]))
+    a = r["GT9 DNI que el paciente no escribió"]["reps"][0]
+    chequear("GT9 (I3) el DNI que copió el modelo no está en lo que escribió el paciente: no hay read-back, se pide el DNI (texto fijo)", a["salida"].get("motivo") == "dni_no_escrito" and a["salida"].get("texto_para_el_paciente") == "Para registrarlo me falta el DNI del paciente.", a["salida"])
+    a = r["GT10 DNI con espacios en el mensaje"]["reps"][0]
+    chequear("GT10 (I3) '40 123 456' en el mensaje y '40.123.456' en la copia del modelo: vale (solo dígitos de los dos lados)", a["salida"].get("texto_para_el_paciente") == RBN, a["salida"])
 
     print(f"\n{total - fallas}/{total} {'TODO OK' if not fallas else str(fallas) + ' FALLAS'}")
     sys.exit(1 if fallas else 0)

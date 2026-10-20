@@ -78,6 +78,15 @@ class Grafo:
     def redis_del(self, nombre, key_expr, x=0, y=0):
         return self._nodo(nombre, "n8n-nodes-base.redis", 1, {"operation": "delete", "key": "={{ " + key_expr + " }}"}, x, y, {"credentials": CRED_REDIS, "onError": "continueRegularOutput"})
 
+    def redis_push(self, nombre, lista_expr, valor_expr, x=0, y=0):
+        """Agrega un elemento (texto) al final de una lista de Redis."""
+        return self._nodo(nombre, "n8n-nodes-base.redis", 1, {"operation": "push", "list": "={{ " + lista_expr + " }}", "messageData": "={{ " + valor_expr + " }}", "tail": True}, x, y,
+                          {"credentials": CRED_REDIS, "onError": "continueRegularOutput"})
+
+    def redis_get_lista(self, nombre, key_expr, propiedad, x=0, y=0):
+        return self._nodo(nombre, "n8n-nodes-base.redis", 1, {"operation": "get", "propertyName": propiedad, "key": "={{ " + key_expr + " }}", "keyType": "list", "options": {}}, x, y,
+                          {"credentials": CRED_REDIS, "alwaysOutputData": True, "onError": "continueRegularOutput"})
+
     def postgres(self, nombre, query, params_expr, x=0, y=0):
         """Consulta Postgres (Supabase v3). params_expr = expresión n8n que devuelve el texto o el ARRAY de parámetros ($1, $2…)."""
         return self._nodo(nombre, "n8n-nodes-base.postgres", 2.5, {"operation": "executeQuery", "query": query, "options": {"queryReplacement": "={{ " + params_expr + " }}"}}, x, y,
@@ -87,6 +96,13 @@ class Grafo:
         """AI Agent (Tools Agent) v2.2. El mensaje y el system prompt entran por expresión."""
         return self._nodo(nombre, "@n8n/n8n-nodes-langchain.agent", 2.2,
                           {"promptType": "define", "text": "={{ " + texto_expr + " }}", "options": {"systemMessage": "={{ " + sistema_expr + " }}", "maxIterations": max_iter, "returnIntermediateSteps": True}}, x, y,
+                          {"onError": "continueRegularOutput"})
+
+    def cadena(self, nombre, texto_expr, sistema_expr, x=0, y=0):
+        """Basic LLM Chain v1.7: UNA llamada al modelo, sin herramientas (orquestador con salida JSON; agente de Información). Salida: {text}."""
+        return self._nodo(nombre, "@n8n/n8n-nodes-langchain.chainLlm", 1.7,
+                          {"promptType": "define", "text": "={{ " + texto_expr + " }}", "hasOutputParser": False,
+                           "messages": {"messageValues": [{"type": "SystemMessagePromptTemplate", "message": "={{ " + sistema_expr + " }}"}]}}, x, y,
                           {"onError": "continueRegularOutput"})
 
     def modelo(self, nombre, modelo="gpt-5-mini", esfuerzo="low", x=0, y=0):

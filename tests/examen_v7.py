@@ -27,7 +27,11 @@ ROOT = Path(__file__).resolve().parent.parent
 ESCENARIOS = json.loads((ROOT / "tests" / "escenarios" / "turnos.json").read_text(encoding="utf-8"))
 SALIDA = ROOT / "tests" / "examen_v7_results.json"
 PHONE_PRUEBA = "5491161461034"
+# (06/10) Escenarios de paciente NUEVO (AGE-01): celular sintético SIN ficha en la agenda (549 + característica 999, que no existe). Siempre en sombra: no se da de alta a nadie.
+PHONE_NUEVO = "5499990000123"
+NUEVOS = {"AGE-01": {"nombre": "Camila", "apellido": "Prueba Examen", "dni": "40123456"}}
 MAX_TURNOS = 8
+RE_PIDE_CONFIRMACION = re.compile(r"¿\s*(procedo|le confirmo|confirma)\b[^?]*\?", re.I)   # read-back de reserva / cambio / cancelación sin contestar
 OBJETIVO_LAT_P95 = 10.0
 MODELO_PACIENTE = "gpt-5-mini"
 
@@ -49,16 +53,27 @@ def _obs_json(t):
         for k in ("ok", "simulado", "parcial", "derivado_a_triaje", "degradado"):
             m = re.search(r'"%s":\s*(true|false)' % k, raw)
             if m: o[k] = (m.group(1) == "true")
-        for k in ("motivo", "paciente", "readback_text"):
+        for k in ("etapa", "motivo", "paciente", "readback_text"):
             m = re.search(r'"%s":\s*"((?:[^"\\]|\\.)*)"' % k, raw)
             if m: o[k] = m.group(1)
         return o
 
 def _propuso(turnos, tipo):
-    return [t for t in _llamadas(turnos, "proponer") if (t.get("input") or {}).get("tipo") == tipo and _obs_json(t).get("ok") is True]
+    """proponer (diseño viejo) o gestionar_turno (06/10: la misma herramienta en dos pasos; cualquiera de sus dos etapas con ok cuenta como propuesta de ese tipo)."""
+    viejo = [t for t in _llamadas(turnos, "proponer") if (t.get("input") or {}).get("tipo") == tipo and _obs_json(t).get("ok") is True]
+    nuevo = [t for t in _llamadas(turnos, "gestionar_turno") if (t.get("input") or {}).get("tipo") == tipo and _obs_json(t).get("etapa") in ("confirmacion", "ejecutado") and _obs_json(t).get("ok") is True]
+    return viejo + nuevo
 
 def _ejecuto_ok(turnos):
-    return [t for t in _llamadas(turnos, "ejecutar_propuesta") if _obs_json(t).get("ok") is True]
+    viejo = [t for t in _llamadas(turnos, "ejecutar_propuesta") if _obs_json(t).get("ok") is True]
+    nuevo = [t for t in _llamadas(turnos, "gestionar_turno") if _obs_json(t).get("etapa") == "ejecutado" and _obs_json(t).get("ok") is True]
+    return viejo + nuevo
+
+def _pregunto_cambiar_o_sumar(texto):
+    """(07/10) Asiri preguntó si cambia el turno que tiene o saca otro, con la redacción que sea ("¿pasarlo… o mantenerlo y sacar uno más?", "¿cambiar o sumar?")."""
+    t = texto.lower()
+    return "?" in t and bool(re.search(r"\b(cambi\w*|pas(?:ar|a|arlo)\b|muev\w*|mover\w*)", t)) and bool(re.search(r"(sum\w*|sac\w*\s+(?:uno|otro|un\s+turno)|adicional|adem[aá]s|mant\w*)", t))
+
 
 def _horario_ofrecido(turnos, fecha, hora):
     """El horario propuesto tiene que estar en un bloque que buscar_horarios devolvió EN ESTA conversación (nunca inventado).
@@ -74,6 +89,11 @@ def _horario_ofrecido(turnos, fecha, hora):
             for texto in (str(o.get("bloque") or ""), str(t.get("obs") or "").replace("\\n", "\n"), str(tu.get("asiri") or "")):
                 if fecha and texto and _fecha_en_bloque(texto, fecha, hora):
                     return True
+    # (07/10) Si el modelo nombró horarios sin buscarlos, el CÓDIGO buscó y pegó el bloque real (horario_sin_buscar): eso también se ofreció.
+    for tu in turnos:
+        asiri = str(tu.get("asiri") or "")
+        if tu.get("enviar") and "turnos disponibles" in asiri and fecha and _fecha_en_bloque(asiri, fecha, hora):
+            return True
     return False
 
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
@@ -90,11 +110,14 @@ def juzgar(esc, turnos):
     f = esc["funcion"]; motivos = []
     humano = _llamadas(turnos, "pasar_a_humano")
     humano_ok = [t for t in humano if _obs_json(t).get("ok") is True and not _obs_json(t).get("derivado_a_triaje")]
-    CORRECCIONES = ("falta_bloque", "falta_readback")   # el código pegó el bloque/read-back que el modelo se salteó: el paciente recibe lo correcto (se informa, no reprueba)
+    CORRECCIONES = ("falta_bloque", "falta_readback", "horario_sin_buscar")   # horario_sin_buscar (07/10): nombró horarios sin buscarlos; el código buscó y pegó el bloque real   # el código pegó el bloque/read-back que el modelo se salteó: el paciente recibe lo correcto (se informa, no reprueba)
     correcciones = [tu.get("motivo_chequeo") for tu in turnos if tu.get("motivo_chequeo") in CORRECCIONES]
     if correcciones: motivos_info = [f"{len(correcciones)} corrección(es) por código: {correcciones}"]
     else: motivos_info = []
-    bloqueos = [tu for tu in turnos if tu.get("motivo_chequeo") not in (None, "cierre_puro") + CORRECCIONES or tu.get("motivo_banlist")]
+    # (07/10) Una frase quitada por la banlist (el resto del mensaje salió) es una corrección, no un bloqueo: el paciente recibió un mensaje útil.
+    quitadas = [tu.get("motivo_banlist") for tu in turnos if "(frase quitada)" in str(tu.get("motivo_banlist") or "")]
+    if quitadas: motivos_info = motivos_info + [f"{len(quitadas)} frase(s) quitada(s) por la banlist: {quitadas}"]
+    bloqueos = [tu for tu in turnos if tu.get("motivo_chequeo") not in (None, "cierre_puro") + CORRECCIONES or (tu.get("motivo_banlist") and "(frase quitada)" not in str(tu.get("motivo_banlist")))]
     fallos = [tu for tu in turnos if tu.get("fallo_agente")]
     if bloqueos: motivos.append(f"{len(bloqueos)} bloqueo(s) del chequeo/banlist: {[(b.get('motivo_chequeo'), b.get('motivo_banlist')) for b in bloqueos]}")
     if fallos: motivos.append(f"{len(fallos)} fallo(s) del agente (timeout / maxIterations)")
@@ -102,6 +125,12 @@ def juzgar(esc, turnos):
 
     if f in ("agendar", "reprogramar", "cancelar"):
         tipo = {"agendar": ("reserva", "sumar"), "reprogramar": ("cambio",), "cancelar": ("cancelacion",)}[f]
+        # (06/10) Con la cita de prueba vigente, en los AGE-* el paciente simulado puede elegir CAMBIAR su turno: es válido SOLO si Asiri le preguntó
+        # antes si quería cambiarlo o sumar otro (lo que pide el prompt). DANA-06 sigue exigiendo sumar.
+        if esc["id"] != "DANA-06" and any(_pregunto_cambiar_o_sumar(str(tu.get("asiri") or "")) for tu in turnos):
+            tipo = tipo + ("cambio",)
+        elif esc["id"].startswith("AGE-") and any(re.search(r"cambi\w*[^?]{0,80}\bo\b[^?]{0,40}sum|sum\w*[^?]{0,80}\bo\b[^?]{0,40}cambi|\bo\s+(?:lo\s+)?mant\w*\s+y\s+sac|sac\w*\s+(?:un\s+turno|uno)\s+m[aá]s[^?]{0,40}\bo\b\s+cambi|cambi\w*[^?]{0,90}\bo\b[^?]{0,40}sac\w*\s+(?:un\s+turno|uno|otro)", str(tu.get("asiri") or ""), re.I) for tu in turnos):
+            tipo = tipo + ("cambio",)
         props = [t for ti in tipo for t in _propuso(turnos, ti)]
         ej = _ejecuto_ok(turnos)
         if not props: motivos.append(f"nunca propuso ({'/'.join(tipo)}) con ok")
@@ -116,6 +145,13 @@ def juzgar(esc, turnos):
             if "proponer" in nombres and "ejecutar_propuesta" in nombres and any(_obs_json(t).get("ok") for t in tu["tools"] if t.get("tool") == "ejecutar_propuesta"):
                 motivos.append("ejecutó en el mismo mensaje en que propuso")
         if esc["id"] == "DANA-06" and not _propuso(turnos, "sumar"): motivos.append("DANA-06 exige sumar (dos turnos), no cambiar")
+        if esc["id"] == "MULTI-02" and not any("dra.raquel.aurea" in str(tu.get("asiri") or "").lower() for tu in turnos): motivos.append("MULTI-02: nunca le pasó el alias")
+        if esc["id"] in NUEVOS:
+            # paciente nuevo: el alta va por gestionar_turno con los datos que dio el paciente (nada de derivar a la clínica para que la den de alta)
+            dni = NUEVOS[esc["id"]]["dni"]
+            con_datos = [t for t in props if re.sub(r"\D", "", str((t.get("input") or {}).get("nuevo_dni") or "")) == dni]
+            if not con_datos: motivos.append("paciente nuevo: nunca pasó nombre, apellido y DNI a gestionar_turno")
+            if not any("como paciente nuevo" in str(tu.get("asiri") or "") for tu in turnos): motivos.append("paciente nuevo: el paciente nunca vio el read-back de alta")
         if esc["id"] == "AGE-07":
             # acá el éxito NO es reservar: es no quedar en bucle (busca otra ventana, anota en lista de espera o avisa) y no callarse
             motivos = [m for m in motivos if not m.startswith("nunca propuso") and not m.startswith("nunca ejecutó")]
@@ -127,6 +163,13 @@ def juzgar(esc, turnos):
     elif f == "confirmar":
         c = [t for t in _llamadas(turnos, "confirmar_turno") if _obs_json(t).get("ok") is True]
         if not c: motivos.append("nunca confirmó con ok")
+        if esc["id"] == "MULTI-01":
+            # varias cosas en un mensaje: en la PRIMERA respuesta tiene que estar la confirmación, el precio y el avance con el turno de la hija
+            primera = next((tu for tu in turnos if tu.get("enviar")), {})
+            txt = str(primera.get("asiri") or "")
+            if "50.000" not in txt: motivos.append("MULTI-01: en la primera respuesta no contestó el precio")
+            if not re.search(r"confirmad|confirmé", txt, re.I): motivos.append("MULTI-01: en la primera respuesta no dijo que el turno quedó confirmado")
+            if not (re.search(r"turnos disponibles", txt, re.I) or re.search(r"nombre|DNI|para qui[eé]n", txt, re.I)): motivos.append("MULTI-01: en la primera respuesta no avanzó con el turno de la hija (ni horarios ni datos)")
         if esc["id"] == "CON-04" and len(c) < 2: motivos.append("CON-04 exige confirmar DOS turnos")
     elif f == "pagos":
         if not _llamadas(turnos, "registrar_pago"): motivos.append("no llamó registrar_pago")
@@ -148,12 +191,16 @@ def persona_de(esc, nombre_paciente):
             f"Escribís como una persona real: corto, informal, a veces con faltas o sin signos de pregunta, a veces 'si' o 'dale' a secas. Nunca escribís más de 2 oraciones. "
             f"Tu nombre (o el del paciente de la familia) es {nombre_paciente}: si te preguntan para quién es el turno, o nombre o DNI, respondé con ese nombre. "
             f"Si te ofrecen horarios, elegí UNO de los que te ofrecieron (copiá día y hora tal cual). Si te leen una confirmación y te preguntan si proceden, respondé que sí. "
+            f"Si te preguntan entre dos opciones (por ejemplo cambiar tu turno o sumar otro), elegí una con palabras según tu objetivo; nunca contestes solo 'sí' a una pregunta con 'o'. "
             f"Cuando tu objetivo esté cumplido (te confirmaron lo que querías) o ya no tenga sentido seguir, respondé SOLO con la palabra [FIN]. "
+            # (07/10) Ruido del paciente simulado en el examen completo: cortaba cuando le pedían un dato que no tenía y contestaba "Confirmo" a una lista de horarios.
+            f"Seguí hasta lograr tu objetivo: si te piden un dato que no tenés en tu consigna (por ejemplo el apellido de tu hija), inventá uno común y dalo; no cortes la charla por eso. "
+            f"Si te muestran una lista de horarios, elegí uno; no contestes 'Confirmo' a una lista (eso es solo para cuando te preguntan si confirmás tu turno). "
             f"No inventes datos que no tenés. Estilo de mensajes reales de este escenario, para que te inspires (no los copies): {ejemplos}")
     objetivos = {
         "agendar": "OBJETIVO: sacar un turno nuevo para una consulta de ortodoncia y que te lo dejen reservado.",
         "reprogramar": "OBJETIVO: tenés un turno ya reservado y NO podés ir; querés cambiarlo a otro día/horario y que te confirmen el cambio.",
-        "cancelar": "OBJETIVO: tenés un turno reservado y querés cancelarlo (no reprogramar); si te ofrecen otro, decí que después ves.",
+        "cancelar": "OBJETIVO: tenés un turno reservado y querés cancelarlo (no reprogramar); si te ofrecen otro, decí que después ves. Si te preguntan si mantenés el turno, decí que no, que lo querés cancelar.",
         "confirmar": "OBJETIVO: te llegó un recordatorio del turno; querés confirmar que vas. Nada más.",
         "pagos": "OBJETIVO: ya hiciste la transferencia de la seña y querés avisar/mandar el comprobante. No pedís nada más.",
         "urgencia": "OBJETIVO: empezaste pidiendo cambiar el turno pero en tu segundo mensaje contás que se te salió un alambre y te está pinchando mucho.",
@@ -165,16 +212,24 @@ def persona_de(esc, nombre_paciente):
         "AGE-04": " Antes de elegir un horario, preguntá si podés abonar el día de la consulta; después seguí con el turno.",
         "AGE-05": " Querés la semana que viene, cualquier día después de las 15 hs.",
         "AGE-07": " Ninguno de los horarios del primer bloque te sirve; pedí otros.",
+        "AGE-01": " Sos paciente NUEVA (nunca fuiste). Si te piden datos, tus datos son: nombre Camila, apellido Prueba Examen, DNI 40123456 (no digas otro nombre).",
         "CON-02": " Vos sos la mamá y confirmás por tu hijo.",
+        "MULTI-01": " Además de confirmar, querés saber el precio y sacarle un turno a tu hija Martina (paciente nueva, DNI 52111222); si te ofrecen horarios elegí uno y si te piden datos dalos.",
+        "MULTI-02": " También querés el alias para transferir. Si te preguntan si cambiás tu turno o sacás otro, sacás otro.",
         "CON-06": " Tu primer mensaje es solo 'No podré asistir', sin pedir nada; si te preguntan si lo reprogramás, decí que sí y elegí uno.",
         "PAG-02": " No tenés el comprobante a mano todavía; solo avisás 'ya transferí'.",
     }.get(esc["id"], "")
-    return base + "\n" + objetivos[f] + extra + "\nContexto: " + esc["exito"]
+    # (07/10) Escenarios armados desde conversaciones REALES (tests/escenarios_reales_v7.py): traen su propio objetivo.
+    objetivo = esc.get("objetivo_real") or objetivos.get(f, "OBJETIVO: resolver lo que necesitás con la clínica.")
+    return base + "\n" + objetivo + extra + "\nContexto: " + esc["exito"]
 
 
 def primer_mensaje(esc):
     """El primer mensaje sale del caso real (es lo que un paciente de verdad escribió). Los adjuntos van como marcador de multimedia del v6."""
     return esc["pasos"][0]["p"]
+
+
+TURNO_PRUEBA = ""   # (07/10) "jueves 10/12 a las 08:00": lo fija main con el turno vigente real, para que el recordatorio del historial coincida con la agenda
 
 
 def historial_inicial(esc, nombre_paciente):
@@ -185,14 +240,15 @@ def historial_inicial(esc, nombre_paciente):
         if clave == "PRE_RESERVA":
             txt = "Listo, su turno quedó pre-reservado. Para confirmarlo, abone la seña con el alias dra.raquel.aurea y envíe el comprobante por este chat."
         if clave.startswith("RECORDATORIO"):
-            txt = f"Estimado/a {nombre_paciente}, le recordamos su turno con la Dra. Rodríguez Raquel. Por favor confirme su asistencia respondiendo 'Confirmo'."
+            txt = f"Estimado/a {nombre_paciente}, le recordamos su turno" + (f" del {TURNO_PRUEBA}" if TURNO_PRUEBA else "") + " con la Dra. Rodríguez Raquel. Por favor confirme su asistencia respondiendo 'Confirmo'."
         filas.insert(0, {"message": {"type": "ai" if quien == "B" else "human", "content": txt, "additional_kwargs": {"source": "reminder_note" if clave.startswith("RECORDATORIO") else "wa_outbound"}}})
     return filas
 
 
 # ----------------------------------------------------------------------------- transportes (reales y falsos)
 class CerebroReal:
-    def __init__(self):
+    def __init__(self, destino="cerebro"):
+        self.destino = destino   # "cerebro" (agente único) o "cerebro_ma" (orquestador + especialistas)
         self.base = (env("N8N_API_BASE") or require("N8N_BASE_URL")).rstrip("/")
         self.ruta = (ROOT / "data" / "v7_test_ruta.txt").read_text(encoding="utf-8").strip()
     def _post(self, body):
@@ -208,7 +264,7 @@ class CerebroReal:
         return {"error": f"red: {ultimo!r}"}
     def responder(self, phone, push, texto, historial):
         t0 = time.time()
-        r = self._post({"destino": "cerebro", "phone": phone, "texto": texto, "pushName": push, "modo": "sombra", "historial_json": json.dumps(historial, ensure_ascii=False)})
+        r = self._post({"destino": self.destino, "phone": phone, "texto": texto, "pushName": push, "modo": "sombra", "historial_json": json.dumps(historial, ensure_ascii=False)})
         return r, time.time() - t0
     def reset(self, phone):
         return self._post({"destino": "reset", "tel": phone})
@@ -261,6 +317,15 @@ class CerebroFalso:
             e["paso"] = 1
             tools.append(self._tool("buscar_horarios", {}, {"ok": True, "bloque": self.BLOQUE, "ofertas": self.OFERTAS}))
             return {"texto": self.BLOQUE, "enviar": True, "tools": tools}, 0.3
+        if e["paso"] == 1 and self.esc_id in NUEVOS:   # paciente nuevo: gestionar_turno sin datos → pide nombre, apellido y DNI
+            e["paso"] = 15
+            tools.append(self._tool("gestionar_turno", {"tipo": "reserva", "fecha": "2026-10-22", "hora": "09:20"}, {"etapa": "error", "ok": False, "motivo": "sin_ficha"}))
+            return {"texto": "Para reservarlo, ¿me pasa nombre, apellido y DNI del paciente?", "enviar": True, "tools": tools}, 0.3
+        if e["paso"] == 15 and len(re.sub(r"\D", "", texto)) >= 7:
+            e["paso"] = 2; dni = re.sub(r"\D", "", texto)
+            rb = f"Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, a nombre de Camila Perez (DNI {dni}), como paciente nuevo. ¿Procedo con la reserva?"
+            tools.append(self._tool("gestionar_turno", {"tipo": "reserva", "fecha": "2026-10-22", "hora": "09:20", "nuevo_nombre": "Camila", "nuevo_apellido": "Perez", "nuevo_dni": dni}, {"etapa": "confirmacion", "ok": True, "texto_para_el_paciente": rb}))
+            return {"texto": rb, "enviar": True, "tools": tools}, 0.3
         if e["paso"] == 1:
             e["paso"] = 2
             tipo = {"agendar": "reserva", "reprogramar": "cambio", "cancelar": "cancelacion", "urgencia": "cambio"}.get(self.funcion, "reserva")
@@ -328,6 +393,8 @@ def correr_escenario(esc, cerebro, paciente, phone, push, nombre_paciente, verbo
         elif tu["silencio"]:
             break  # Asiri calló (cierre): la conversación terminó
         texto = paciente.siguiente(sistema, charla).strip()
+        if texto.upper().startswith("[FIN]") and tu["enviar"] and RE_PIDE_CONFIRMACION.search(str(tu["asiri"] or "")):
+            texto = "Sí"; turnos[-1]["si_forzado"] = True   # arnés: un paciente real no se va con un read-back sin contestar (DANA-01/CON-06 del 06/10 reprobaban por esto)
         if texto.upper().startswith("[FIN]"):
             turnos[-1]["fin_paciente"] = True   # el paciente dio por cumplido (o perdido) su objetivo
             break
@@ -340,6 +407,13 @@ def correr_escenario(esc, cerebro, paciente, phone, push, nombre_paciente, verbo
             turnos.append({"turno": n + 1, "paciente": texto, "asiri": r.get("texto"), "enviar": r.get("enviar"), "silencio": r.get("silencio"), "derivar_triaje": r.get("derivar_triaje"),
                            "tools": r.get("tools") or [], "motivo_chequeo": r.get("motivo_chequeo"), "motivo_banlist": r.get("motivo_banlist"), "fallo_agente": r.get("fallo_agente"), "segundos": round(seg, 1), "error": r.get("error"), "fin_paciente": True})
             if verbose: print(f"    [{n + 1}] PACIENTE: {texto}\n        ASIRI ({seg:.1f} s): " + (str(r.get("texto")) if r.get("enviar") else "(silencio)").replace("\n", "\n            "))
+            if r.get("enviar") and RE_PIDE_CONFIRMACION.search(str(r.get("texto") or "")):
+                historial.insert(0, {"message": {"type": "human", "content": texto, "additional_kwargs": {"source": "wa_inbound"}}})
+                historial.insert(0, {"message": {"type": "ai", "content": r["texto"], "additional_kwargs": {"source": "wa_outbound"}}})
+                r2, seg2 = cerebro.responder(phone, push, "Sí", historial)
+                turnos.append({"turno": n + 2, "paciente": "Sí", "asiri": r2.get("texto"), "enviar": r2.get("enviar"), "silencio": r2.get("silencio"), "derivar_triaje": r2.get("derivar_triaje"),
+                               "tools": r2.get("tools") or [], "motivo_chequeo": r2.get("motivo_chequeo"), "motivo_banlist": r2.get("motivo_banlist"), "fallo_agente": r2.get("fallo_agente"), "segundos": round(seg2, 1), "error": r2.get("error"), "si_forzado": True})
+                if verbose: print(f"    [{n + 2}] PACIENTE: Sí (forzado por el arnés)\n        ASIRI ({seg2:.1f} s): " + (str(r2.get("texto")) if r2.get("enviar") else "(silencio)").replace("\n", "\n            "))
             break
     return turnos
 
@@ -350,15 +424,19 @@ def necesita_turno(esc):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--offline", action="store_true"); ap.add_argument("--guion", action="store_true", help="cerebro real, paciente de guion (sin modelo)"); ap.add_argument("--todos", action="store_true"); ap.add_argument("--solo", nargs="*", default=[])
+    ap.add_argument("--offline", action="store_true"); ap.add_argument("--guion", action="store_true", help="cerebro real, paciente de guion (sin modelo)"); ap.add_argument("--todos", action="store_true"); ap.add_argument("--rapido", action="store_true", help="humo de ~5 min: 7 escenarios clave × 1"); ap.add_argument("--solo", nargs="*", default=[])
     ap.add_argument("--reps", type=int, default=1); ap.add_argument("--phone", default=PHONE_PRUEBA); ap.add_argument("--push", default="Lucas Test")
-    ap.add_argument("--nombre", default="Lucas", help="nombre de la ficha de prueba que el paciente simulado dice cuando le preguntan"); ap.add_argument("-q", action="store_true")
+    ap.add_argument("--cerebro", default="cerebro", help="cerebro (agente único) | cerebro_ma (orquestador con especialistas)"); ap.add_argument("--nombre", default="Lucas", help="nombre de la ficha de prueba que el paciente simulado dice cuando le preguntan"); ap.add_argument("-q", action="store_true")
     a = ap.parse_args()
+    RAPIDO = ["DANA-01", "DANA-08", "DANA-06", "DANA-10", "AGE-03", "CON-01", "PAG-01"]   # humo de ~5 min: reprogramar, cancelar, sumar, urgencia, agendar, confirmar, pago
+    if a.rapido: a.solo = RAPIDO; a.reps = 1
     escs = [e for e in ESCENARIOS["escenarios"] if a.todos or e["id"] in a.solo or (a.offline and not a.solo)]
     if not escs: sys.exit("elegí --todos, --solo <ids> o --offline")
-    cerebro = CerebroFalso() if a.offline else CerebroReal()
+    cerebro = CerebroFalso() if a.offline else CerebroReal(a.cerebro)
     vigentes, _ = cerebro.turnos_vigentes(a.phone)
     hay_turno = len(vigentes) > 0
+    global TURNO_PRUEBA
+    TURNO_PRUEBA = re.sub(r"\s*\([^)]*\)\s*$", "", vigentes[0]) if vigentes else ""
     print(f"EXAMEN v7 · {'OFFLINE (cerebro y paciente falsos)' if a.offline else ('SOMBRA contra n8n real, paciente de GUION (humo)' if a.guion else 'SOMBRA contra n8n real, paciente SIMULADO')} · celular {a.phone} · turnos vigentes de prueba: {vigentes or 'NINGUNO'} · {len(escs)} escenarios × {a.reps}")
     resultados = []
     try:
@@ -366,14 +444,21 @@ def main():
             if necesita_turno(esc) and not hay_turno:
                 print(f"\n== {esc['id']} ({esc['funcion']}): NO EVALUABLE, la ficha de prueba no tiene turno vigente (crear una cita de prueba en Dentalink)")
                 resultados.append({"id": esc["id"], "funcion": esc["funcion"], "estado": "no_evaluable", "motivo": "sin turno vigente de prueba", "reps": []}); continue
+            if esc["id"] == "CON-04" and len(vigentes) < 2 and not a.offline:
+                # (07/10) "Confirmo los dos" necesita DOS turnos de prueba de la familia con recordatorio; con uno solo el escenario no se puede cumplir.
+                print(f"\n== {esc['id']} ({esc['funcion']}): NO EVALUABLE, hace falta un segundo turno de prueba en la familia (hay {len(vigentes)})")
+                resultados.append({"id": esc["id"], "funcion": esc["funcion"], "estado": "no_evaluable", "motivo": "falta un segundo turno de prueba", "reps": []}); continue
             print(f"\n== {esc['id']} ({esc['funcion']}) · éxito esperado: {esc['exito']}")
             reps = []
+            nuevo = NUEVOS.get(esc["id"])   # paciente nuevo: celular sin ficha, nombre y push de ese paciente
+            phone, push, nombre = (PHONE_NUEVO, nuevo["nombre"], f"{nuevo['nombre']} {nuevo['apellido']}") if nuevo and not a.offline else (a.phone, a.push, a.nombre)
+            if nuevo and not a.offline: print(f"  (paciente nuevo: celular sintético sin ficha {PHONE_NUEVO}, en sombra)")
             for k in range(1, a.reps + 1):
-                cerebro.reset(a.phone)
+                cerebro.reset(phone)
                 if a.offline: cerebro.funcion, cerebro.esc_id = esc["funcion"], esc["id"]
-                paciente = PacienteFalso(esc) if (a.offline or a.guion) else PacienteReal()
+                paciente = PacienteFalso(esc) if (a.offline or a.guion or esc["funcion"] == "urgencia") else PacienteReal()   # la urgencia va con guion: el paciente simulado a veces no la mencionaba (DANA-10, 06/10)
                 if a.reps > 1: print(f"  -- repetición {k}")
-                turnos = correr_escenario(esc, cerebro, paciente, a.phone, a.push, a.nombre, verbose=not a.q)
+                turnos = correr_escenario(esc, cerebro, paciente, phone, push, nombre, verbose=not a.q)
                 ok, motivos = juzgar(esc, turnos)
                 if any(tu.get("error") for tu in turnos): ok, motivos = False, motivos + ["error de red o del webhook en un turno: " + str(next(tu["error"] for tu in turnos if tu.get("error")))[:120]]
                 lat = [t["segundos"] for t in turnos]
@@ -382,6 +467,7 @@ def main():
             resultados.append({"id": esc["id"], "funcion": esc["funcion"], "estado": "evaluado", "reps": reps})
     finally:
         cerebro.reset(a.phone)   # teardown SIEMPRE (regla 9)
+        if not a.offline and any(e["id"] in NUEVOS for e in escs): cerebro.reset(PHONE_NUEVO)
     # ---- resumen
     ev = [r for r in resultados if r["estado"] == "evaluado"]; ne = [r for r in resultados if r["estado"] != "evaluado"]
     aprob = sum(1 for r in ev if all(x["ok"] for x in r["reps"])); inest = [r["id"] for r in ev if any(x["ok"] for x in r["reps"]) and not all(x["ok"] for x in r["reps"])]

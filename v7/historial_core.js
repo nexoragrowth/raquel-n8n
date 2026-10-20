@@ -35,53 +35,39 @@ const HistorialCore = (() => {
     if (i.ok === true) {
       const t = (i.turnos && i.turnos.length) ? 'Turnos vigentes: ' + i.turnos.join('; ') + '.' : 'No tiene turnos vigentes.';
       if (i.varias_fichas) {
-        return 'Pacientes con este celular: ' + (i.pacientes || []).join(', ') + '. ' + (i.ficha_elegida ? 'Ya está elegido: ' + (i.paciente_elegido || '') + '. ' : 'TODAVÍA no sabés para quién es: igual buscá y ofrecé horarios, y en el MISMO mensaje preguntá para quién es (nombre o DNI); elegir_ficha hace falta recién para proponer. ') + t;
+        // (06/10) Si TODOS los turnos vigentes son de una sola ficha, para cambiar/cancelar/sumar a ESE turno no hace falta preguntar para quién es
+        // (gestionar_turno deduce la ficha por el turno). Solo un turno NUEVO puede ser para cualquiera de la familia. Examen 06/10, DANA-08: preguntaba "¿para quién?" de más.
+        const duenos = [...new Set((i.turnos || []).map((x) => { const m = /\(([^()]+)\)\s*$/.exec(String(x)); return m ? m[1].trim() : null; }))];
+        const unDueno = (i.turnos || []).length > 0 && duenos.length === 1 && duenos[0] ? duenos[0] : null;
+        const pista = i.ficha_elegida ? 'Ya está elegido: ' + (i.paciente_elegido || '') + '. '
+          : unDueno ? 'El paciente con turno es ' + unDueno + ' (los turnos de abajo son suyos). Si quiere cambiar o cancelar, es SU turno: gestionar_turno con esa fecha, SIN preguntar para quién es. Las otras fichas solo importan si pide un turno NUEVO para otra persona. '
+          : 'TODAVÍA no sabés para quién es: igual buscá y ofrecé horarios, y en el MISMO mensaje preguntá para quién es (nombre o DNI); elegir_ficha hace falta recién para proponer. ';
+        // Un familiar que no está en la lista es un paciente nuevo (gestionar_turno con nuevo_nombre/nuevo_apellido/nuevo_dni).
+        return 'Pacientes con este celular: ' + (i.pacientes || []).join(', ') + '. ' + pista + 'Si es para alguien que no está en esta lista, es paciente nuevo. ' + t;
       }
       return 'Paciente de este celular: ' + (i.paciente_elegido || '(una ficha)') + '. ' + t;
     }
-    return 'No pude consultar la ficha o la agenda en este momento' + (i.motivo ? ' (' + i.motivo + ')' : '') + '. No inventes turnos; para consultas de datos del consultorio seguí normal, y si necesitás la agenda avisá a la clínica con avisar_grupo.';
+    // (06/10) Sin ficha = paciente NUEVO (la mayoría de los que llegan por anuncios), no una falla: se le ofrece turno y se lo da de alta al reservar.
+    if (i.motivo === 'sin_ficha') return 'Paciente NUEVO: no hay ficha con este celular y no tiene turnos. Si quiere un turno, ofrecé horarios y, cuando elija uno, pedile nombre, apellido y DNI y pasalos a gestionar_turno.';
+    return 'No pude consultar la ficha o la agenda en este momento' + (i.motivo ? ' (' + i.motivo + ')' : '') + '. No inventes turnos.';
   }
-  function mensajeAgente(historial, mensaje, ahoraJujuy, recordatorios, pushName, ident) {
+  // extra (08/10, orquestador): { conversacion_nueva:boolean, confirmacion_pendiente:{ texto, minutos }|null } — datos armados por código, no compuertas.
+  function mensajeAgente(historial, mensaje, ahoraJujuy, recordatorios, pushName, ident, extra) {
     const partes = [];
+    const x = extra || {};
     partes.push('FECHA Y HORA ACTUAL (Jujuy): ' + ahoraJujuy);
+    if (x.conversacion_nueva !== undefined) partes.push('CONVERSACIÓN NUEVA (12 h sin mensajes): ' + (x.conversacion_nueva ? 'sí' : 'no'));
     if (pushName) partes.push('Nombre en WhatsApp de quien escribe: ' + corta(pushName, 40) + ' (puede ser un familiar y no el paciente).');
     if (ident !== undefined) partes.push('DATOS DE ESTE CELULAR EN LA AGENDA (ya consultados por el sistema): ' + identidad(ident));
-    if (recordatorios && recordatorios.length) partes.push('RECORDATORIOS PENDIENTES DE CONFIRMAR: ' + recordatorios.join(' | '));
+    // (08/10, Lucas) Antes decía "PENDIENTES DE CONFIRMAR" y el modelo abría con "¿Me confirma su asistencia…?". Pedir confirmación es tarea del recordatorio, no de Asiri.
+    if (recordatorios && recordatorios.length) partes.push('RECORDATORIOS YA ENVIADOS (sin respuesta; NO le pidas que confirme: si él confirma, confirmar_turno): ' + recordatorios.join(' | '));
+    if (x.confirmacion_pendiente && x.confirmacion_pendiente.texto) partes.push('CONFIRMACIÓN PENDIENTE (el paciente la vio y todavía no contestó; hace ' + Number(x.confirmacion_pendiente.minutos || 0) + ' min): «' + corta(x.confirmacion_pendiente.texto, 400) + '»');
     partes.push('CONVERSACIÓN RECIENTE (lo más nuevo abajo):\n' + (historial.length ? historial.join('\n') : '(es la primera vez que escribe)'));
     partes.push('MENSAJE ACTUAL DEL PACIENTE:\n' + mensaje);
     return partes.join('\n\n');
   }
-  // ---------------------------------------------------------------------------------------------------- cierres de conversación ("gracias", "ok", "si, gracias")
-  // Un agradecimiento / despedida PURO no necesita respuesta: se corta ANTES de llamar al modelo (sin costo, sin demora y sin el "De nada! Quedo a disposición para…" genérico
-  // ni el "ya le transmito su consulta a la secretaria"). El 27/05 se había sacado el filtro conversacional porque mataba "Confirmamos turno gracias": por eso este exige que el
-  // mensaje sean SOLO palabras de cierre (+ a lo sumo un nombre), y el pipeline lo anula si lo último que se le dijo al paciente fue una pregunta o hay un recordatorio sin confirmar.
-  const sinT = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const PALABRAS_CIERRE = new Set(['gracias', 'ok', 'oka', 'okey', 'okk', 'dale', 'listo', 'perfecto', 'genial', 'buenisimo', 'excelente', 'joya', 'barbaro', 'entendido', 'chau', 'saludos', 'abrazo', 'abrazos', 'igualmente', 'luego', 'vemos', 'pronto', 'hasta']);
-  const RELLENO = new Set(['si', 'sii', 'siii', 'bien', 'muy', 'muchas', 'muchisimas', 'mil', 'de', 'nada', 'acuerdo', 'a', 'usted', 'todo', 'un', 'nos', 'que', 'tenga', 'buen', 'buena', 'dia', 'tarde', 'noche', 'lindo', 'linda', 'descanse', 'hasta', 'ya', 'recibido', 'queda', 'asi', 'y', 'tambien', 'igual']);
-  function esCierre(texto) {
-    const crudo = String(texto || '');
-    if (/[?¿]/.test(crudo) || crudo.length > 70) return false;
-    const t = sinT(crudo).replace(/[\p{Extended_Pictographic}‍️\u{1F3FB}-\u{1F3FF}]/gu, ' ').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!t) return false;                                   // solo emojis: lo resuelve el pre-filtro técnico del v6, acá no se decide
-    const toks = t.split(' ');
-    if (toks.length > 8 || !toks.some((w) => PALABRAS_CIERRE.has(w))) return false;
-    let nombres = 0;
-    for (const w of toks) {
-      if (PALABRAS_CIERRE.has(w) || RELLENO.has(w)) continue;
-      if (/^[a-z]{3,12}$/.test(w) && toks.includes('gracias')) { nombres++; continue; }   // "Gracias Iris", "Muchas gracias Iri"
-      return false;
-    }
-    return nombres <= 1;
-  }
-  // ¿Lo último que se le dijo al paciente (Asiri, el staff o un recordatorio) le pedía una respuesta? Si sí, "si, gracias" NO es un cierre: es la respuesta.
-  function ultimoPideRespuesta(hist) {
-    for (let i = (hist || []).length - 1; i >= 0; i--) {
-      const l = String(hist[i]);
-      if (/^PACIENTE:/.test(l)) continue;
-      return /[?¿]/.test(l) || /confirmar su asistencia|confirme su asistencia|responda|respondiendo a este mensaje|necesito|pasame|pásame/i.test(l);
-    }
-    return false;
-  }
-  return { armar, mensajeAgente, identidad, corta, esCierre, ultimoPideRespuesta };
+  // (08/10, orquestador) Se BORRARON las funciones de cierre, de pregunta pendiente, de saludo y de pedido de información: eran regex que decidían la intención del paciente
+  // (silencio ante un "gracias", menú ante un saludo). Ahora lo decide el ORQUESTADOR (la IA) con el contexto; "conversación nueva" es un dato (12 h sin mensajes).
+  return { armar, mensajeAgente, identidad, corta };
 })();
 if (typeof module !== 'undefined') module.exports = HistorialCore;

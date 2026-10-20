@@ -968,6 +968,41 @@
      "bot": null
     }
    ]
+  },
+  {
+   "id": "MULTI-01",
+   "origen": "PEDIDO de Lucas (07/10): varias cosas en un mensaje tras el recordatorio",
+   "funcion": "confirmar",
+   "exito": "confirma el turno, responde el precio y avanza con el turno de la hija (horarios o para quién) en la misma respuesta",
+   "inicio": [
+    [
+     "B",
+     "RECORDATORIO"
+    ]
+   ],
+   "pasos": [
+    {
+     "p": "Confirmo el turno. Y cuanto sale la consulta? quiero sacarle uno a mi hija tambien",
+     "router": [],
+     "espera": "",
+     "bot": null
+    }
+   ]
+  },
+  {
+   "id": "MULTI-02",
+   "origen": "PEDIDO de Lucas (07/10): turno + datos de pago en el mismo mensaje",
+   "funcion": "agendar",
+   "exito": "da el alias y sigue con el turno hasta reservarlo",
+   "inicio": [],
+   "pasos": [
+    {
+     "p": "Hola quiero sacar un turno y pasame el alias para transferir",
+     "router": [],
+     "espera": "",
+     "bot": null
+    }
+   ]
   }
  ]
 }

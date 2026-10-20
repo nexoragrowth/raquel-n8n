@@ -13,14 +13,19 @@ const ConfirmarCore = (() => {
   function elegir(rows, turnosVistos, fecha, hoyISO) {
     const abiertas = (rows || []).filter((r) => r && r.id_cita_dentalink && r.fecha_turno && String(r.fecha_turno).slice(0, 10) >= hoyISO)
       .map((r) => ({ cita_id: Number(r.id_cita_dentalink), paciente_id: Number(r.id_paciente_dentalink) || null, fecha: String(r.fecha_turno).slice(0, 10), hora: normHora(r.hora_turno), origen: 'recordatorio' }));
-    const sel = fecha ? abiertas.filter((c) => c.fecha === fecha) : abiertas;
+    // (07/10) El modelo a veces da vuelta día y mes ("jueves 10/12" → 2026-10-12; escenarios reales REAL-14/15). Si la fecha no coincide se prueba invertida,
+    // y si hay UN solo recordatorio pendiente, "confirmo" es para ese.
+    const invertida = (f) => (/^\d{4}-\d{2}-\d{2}$/.test(String(f || '')) ? `${f.slice(0, 4)}-${f.slice(8, 10)}-${f.slice(5, 7)}` : f);
+    let sel = fecha ? abiertas.filter((c) => c.fecha === fecha) : abiertas;
+    if (fecha && !sel.length) sel = abiertas.filter((c) => c.fecha === invertida(fecha));
+    if (fecha && !sel.length && abiertas.length === 1) sel = abiertas;
     if (sel.length === 1) return { ok: true, cand: sel[0] };
     if (sel.length > 1) {
       return { fin: no('varios_recordatorios', 'Hay varios recordatorios pendientes. Si el paciente confirma todos, llamá a confirmar_turno una vez por cada fecha (formato YYYY-MM-DD); si no está claro, preguntale cuál.',
         { fechas: sel.map((c) => corto(c.fecha, c.hora)), fechas_iso: sel.map((c) => c.fecha) }) };
     }
     if (fecha && Array.isArray(turnosVistos)) {
-      const t = turnosVistos.find((x) => x.fecha === fecha && vigente(x));
+      const t = turnosVistos.find((x) => (x.fecha === fecha || x.fecha === invertida(fecha)) && vigente(x));
       if (t) return { ok: true, cand: { cita_id: Number(t.id), paciente_id: Number(t.id_paciente) || null, fecha: t.fecha, hora: normHora(t.hora_inicio), origen: 'agenda' } };
     }
     if (!abiertas.length && !fecha) {
@@ -46,7 +51,8 @@ const ConfirmarCore = (() => {
     if (/igual|mismo|same|already/i.test(msg)) return { ok: true, ya: true };
     return { fin: no('no_pude_confirmar', 'No pude confirmar el turno en la agenda: sigue como estaba. Decíselo y avisá a la clínica con avisar_grupo (ACCION).') };
   }
-  const mensaje = (cand, ya) => (ya ? `Su turno del ${corto(cand.fecha, cand.hora)} ya estaba confirmado.` : `Listo, su turno del ${corto(cand.fecha, cand.hora)} quedó confirmado.`);
+  // (07/10, Lucas) Para el paciente es lo mismo si ya figuraba confirmado o se confirmó recién: "ya estaba confirmado" sonaba a corrección cuando él acababa de confirmar.
+  const mensaje = (cand) => `Perfecto, su turno del ${corto(cand.fecha, cand.hora)} está confirmado.`;
   return { elegir, verificar, evaluarConfirmacion, mensaje, ESTADO_CONFIRMADO };
 })();
 if (typeof module !== 'undefined') module.exports = ConfirmarCore;

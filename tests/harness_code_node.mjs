@@ -1,6 +1,6 @@
 // harness_code_node.mjs — corre el JS REAL de UN nodo Code de n8n con sus entradas simuladas. Sin red.
 // uso: node harness_code_node.mjs <casos.json>
-// caso = { id, codigo, input: {...json del item de entrada}, nodos: { "Nombre de nodo": {...json} }, ahora?: ISO }
+// caso = { id, codigo, input: {...json del item de entrada}, nodos: { "Nombre de nodo": {...json} }, noEjecutados?: [nombres], ahora?: ISO }
 // Un nodo que no esta en `nodos` se comporta como en n8n cuando no se ejecuto: $('X') tira error (el codigo vivo lo ataja con try/catch).
 import fs from 'node:fs';
 const casos = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
@@ -13,6 +13,8 @@ for (const c of casos) {
   const items = [{ json: c.input || {} }];
   const $input = { first: () => items[0], all: () => items, item: items[0] };
   const $ = (n) => {
+    // caso.noEjecutados: nodos que EXISTEN en el workflow pero no corrieron (n8n: isExecuted === false y .first() tira).
+    if ((c.noEjecutados || []).includes(n)) return { isExecuted: false, first: () => { throw new Error(`Referenced node is unexecuted: '${n}'`); }, all: () => [] };
     if (!c.nodos || !(n in c.nodos)) throw new Error(`Referenced node is unexecuted: '${n}'`);
     return { first: () => ({ json: c.nodos[n] }), all: () => [{ json: c.nodos[n] }], isExecuted: true };
   };

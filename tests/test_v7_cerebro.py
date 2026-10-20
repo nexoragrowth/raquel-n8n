@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-test_v7_cerebro.py — v7 Cerebro como GRAFO de n8n (nodo por nodo, sin red). El agente (LLM) se simula con lo que "responde"; lo que se prueba es TODO lo que el código
-hace alrededor: el contexto que ve Asiri, el chequeo de salida contra el libro de escrituras, el banlist, la marca de propuesta enviada, la memoria y los avisos.
-Más: la ESTRUCTURA de las 10 herramientas (qué decide el modelo y qué decide el código).
+test_v7_cerebro.py — v7 Cerebro con ORQUESTADOR + SUB-AGENTES (08/10) como GRAFO de n8n (nodo por nodo, sin red).
+El orquestador (LLM) se simula con su JSON; los sub-agentes (workflows) con lo que devuelven. Se prueba TODO lo que hace el código alrededor:
+el contexto, el despacho (qué sub-agente se llama, con qué datos, una vez), el ruteo por estado del "sí", urgencias, fuera de alcance, modo humano,
+la composición (orden fijo, read-back al final, datos bancarios por código), el chequeo de salida, la marca de propuesta enviada, memoria, avisos y sombra.
+(La suite del agente único quedó en v7/_retirados/test_v7_cerebro_agente_unico.py.txt; sus casos Z/U/S se portaron acá cuando aplican.)
 USO:  python tests/test_v7_cerebro.py
 """
-import json, os, subprocess, sys, tempfile
+import json, os, re, subprocess, sys, tempfile, datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 sys.stdout.reconfigure(encoding="utf-8")
 import build_v7_workflows as B  # noqa: E402
+import v7_workflow_cerebro as C  # noqa: E402
 
 AHORA = "2026-10-05T12:36:00Z"   # lunes 09:36 en Jujuy
 TEL = "5490000000651"
@@ -23,7 +26,7 @@ def chequear(nombre, cond, extra=None):
     total += 1
     if not cond:
         fallas += 1
-        print(f"  FALLA {nombre}" + (f" → {json.dumps(extra, ensure_ascii=False)[:500]}" if extra else ""))
+        print(f"  FALLA {nombre}" + (f" → {json.dumps(extra, ensure_ascii=False)[:600]}" if extra is not None else ""))
     else:
         print(f"  ok    {nombre}")
 
@@ -32,25 +35,48 @@ KB = [{"id": "20", "contenido": "La Dra. Raquel atiende martes y jueves de 8:00 
       {"id": "21", "contenido": "La primera consulta tiene un valor de $50.000 e incluye evaluación + diagnóstico presuntivo."},
       {"id": "24", "contenido": "Titular: Laura Raquel Rodríguez. Alias: dra.raquel.aurea. Al abonar, enviar el comprobante por favor."},
       {"id": "25", "contenido": "ÁUREA ODONTOLOGÍA ESTÉTICA — Balcarce Nº37, 2º piso."},
-      {"id": "36", "contenido": "El valor de la cuota mensual del tratamiento ortodóncico es de $70.000."},
-      {"id": "39", "contenido": "$50.000 (incluye control + refuerzo retenedor)."},
-      {"id": "dir:notas_para_asiri", "contenido": ""}]
-IDENT_UNA = {"ok": True, "varias_fichas": False, "ficha_elegida": True, "paciente_elegido": "Dana Yael", "turnos": ["viernes 16/10 a las 09:10"], "para_asiri": "..."}
-IDENT_VARIAS = {"ok": True, "varias_fichas": True, "ficha_elegida": False, "paciente_elegido": None, "pacientes": ["Test - Jana", "Test - Lucas"], "turnos": [], "para_asiri": "..."}
-IDENT_ERROR = {"ok": False, "motivo": "error_tecnico", "para_asiri": "No pude consultar la agenda"}
-PG_BASE = {"Historial": [{}], "Recordatorios": [{}], "Datos del consultorio": KB, "Guardar en memoria": {}}
+      {"id": "22", "contenido": "No trabajamos con ninguna obra social, solo de forma particular, con turnos programados."},
+      {"id": "dir:notas_para_asiri", "contenido": "Hablar con calidez."},
+      {"id": "dir:menu_bienvenida", "contenido": "Hola! Soy Asiri 🤗\n\nEn qué puedo ayudarle hoy?\n1. Turnos\n4. Precios y formas de pago (Valor de consulta, cuotas, alias)"}]
+IDENT = {"ok": True, "varias_fichas": False, "ficha_elegida": True, "paciente_elegido": "Dana Yael", "turnos": ["viernes 16/10 a las 09:10"], "para_asiri": "..."}
+RECIENTE = "2026-10-05T12:20:00Z"
+RB = "Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, reemplazando el turno del viernes 16/10 a las 09:10. ¿Procedo con la reserva?"
+EXITO = "Listo, quedó reprogramado su turno: anulé el del viernes 16/10 a las 09:10 y le reservé el jueves 22/10 a las 09:20."
+BLOQUE = "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n\nLe sirve alguno?"
 OFERTAS = json.dumps([{"fecha": "2026-10-22", "hora": "08:00"}, {"fecha": "2026-10-22", "hora": "09:20"}])
 VISTOS = json.dumps([{"id": 9104, "id_paciente": 651, "fecha": "2026-10-16", "hora_inicio": "09:10", "id_estado": 15, "estado_anulacion": 0}])
-BLOQUE = "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n\nLe sirve alguno?"
-RB = "Listo, quedó reprogramado su turno: anulé el del viernes 16/10 a las 09:10 y le reservé el jueves 22/10 a las 09:20."
-TRIAJE = json.dumps({"motivo": "derivar_triaje", "cita": "Se me salió el alambre y me pincha"})
-LIBRO_OK = json.dumps([{"ok": True, "parcial": False, "tipo": "cambio", "readback_text": RB}])
+LIBRO_OK = json.dumps([{"ok": True, "parcial": False, "tipo": "cambio", "readback_text": EXITO}])
+TRIAJE = json.dumps({"motivo": "derivar_triaje", "cita": "la nena tiene el alambre q le pincha"})
+DERIVA = "Le paso con la secretaria para que lo atienda."
+MS = lambda iso: int(datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+PROP_VIEJA = {"id": f"{TEL}-1", "tipo": "cambio", "estado": "pendiente", "creada_ms": MS("2026-10-05T12:30:00Z"), "exec_id": "ex-anterior", "tel": TEL, "paciente_id": 651,
+              "slot": {"fecha": "2026-10-22", "hora": "09:20"}, "cita_vieja": {"id": 9104, "fecha": "2026-10-16", "hora": "09:10"}, "readback_text": RB, "enviada": True}
+H_RB = [{"message": {"type": "ai", "content": RB, "additional_kwargs": {"source": "asiri_v7"}}, "created_at": "2026-10-05T12:30:00Z"}]
 
 
-def esc(id_, agente, texto="Hola", redis=None, pg=None, modo="vivo", **extra):
-    trig = {"phone": TEL, "texto": texto, "pushName": "CELE", "modo": modo, **(extra.pop("trigger", {}))}
-    subwf = {"Identificar paciente": IDENT_UNA, **(extra.pop("subwf", {}))}
-    return {"id": id_, "trigger": trig, "ahora": AHORA, "exec_id": EXEC, "redis": redis or {}, "pg": {**PG_BASE, **(pg or {})}, "subwf": subwf, "agente": agente, **extra}
+def orq(*pasos):
+    return {"text": json.dumps({"pasos": list(pasos)}, ensure_ascii=False)}
+
+
+def sub(agente, texto="", estado="respondido", **x):
+    base = {"agente": agente, "texto": texto, "estado": estado, "codigo": "[LISTO]", "herramientas": [], "traza": [], "fuera_de_alcance": False, "urgencia": False, "derivar": None, "error_tecnico": False}
+    base.update(x)
+    return base
+
+
+T_RB = sub("turnos", RB, "readback_pendiente", readback=True, traza=[{"tool": "gestionar_turno", "input": {"tipo": "cambio"}, "obs": "{\"etapa\":\"confirmacion\"}"}])
+T_OK = sub("turnos", EXITO, "escrito_ok", traza=[{"tool": "gestionar_turno", "input": {"confirma": "true"}, "obs": "{\"etapa\":\"ejecutado\",\"ok\":true}"}])
+P_DAT = sub("pagos", "Le paso los datos para transferir:", "datos_enviados", datos_pago=True)
+I_PRECIO = sub("informacion", "La primera consulta tiene un valor de $50.000.")
+U_OK = sub("urgencias", "", "derivado", codigo="[NO_REPLY]")
+
+
+def esc(id_, orquestador, texto="Hola", redis=None, pg=None, modo="vivo", subwf=None, **extra):
+    trig = {"phone": TEL, "texto": texto, "pushName": "CELE", "modo": modo, "historial_json": "", **(extra.pop("trigger", {}))}
+    sw = {"Identificar paciente": IDENT, "Derivar a secretaria": {"ok": True, "derivado": True, "texto_para_el_paciente": DERIVA},
+          "Pasar a humano": {"ok": True, "humano": True, "texto_para_el_paciente": DERIVA}, **(subwf or {})}
+    pg_ = {"Historial": [{}], "Recordatorios": [{}], "Datos del consultorio": KB, "Guardar en memoria": {}, **(pg or {})}
+    return {"id": id_, "trigger": trig, "ahora": AHORA, "exec_id": EXEC, "redis": redis or {}, "pg": pg_, "subwf": sw, "llm": {"Orquestador": orquestador}, **extra}
 
 
 def correr(wf, escenarios):
@@ -64,158 +90,180 @@ def correr(wf, escenarios):
         return {r["id"]: r for r in json.loads(p.stdout)}
 
 
+def llamados(a, nodo):
+    return [p for p in a["pedidos"] if p["nodo"] == nodo]
+
+
+def mem(a):
+    m = llamados(a, "Guardar en memoria")
+    return (json.loads(m[0]["params"][1]), json.loads(m[0]["params"][2])) if m else (None, None)
+
+
 def main():
     wf = B.wf_cerebro()
-    HIST = [{"message": {"type": "ai", "content": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 22 de octubre 8:00 , 9:20\n\nLe sirve alguno?", "additional_kwargs": {"source": "wa_outbound"}}},
-            {"message": {"type": "human", "content": "Buen dia me pude cambiar ese turno"}}]
-    PROP = {"id": f"{TEL}-1", "tipo": "cambio", "estado": "pendiente", "creada_ms": 1, "exec_id": EXEC, "tel": TEL, "paciente_id": 651, "slot": {"fecha": "2026-10-22", "hora": "09:20"},
-            "cita_vieja": {"id": 9104, "fecha": "2026-10-16", "hora": "09:10"}, "readback_text": "Le confirmo: Jueves 22 de octubre a las 09:20 hs con la Dra. Raquel, reemplazando el turno del viernes 16/10 a las 09:10. ¿Procedo con la reserva?"}
-    base_redis = {f"ofertas:{TEL}": OFERTAS, f"turnos_vistos:{TEL}": VISTOS, f"bloque:{TEL}": BLOQUE}
+    nodos = {n["name"]: n for n in wf["nodes"]}
+    txt = json.dumps(wf, ensure_ascii=False)
+
+    print("ESTRUCTURA")
+    chequear("E1 sin desvíos por regex: no hay IF de cierre, de 'sí directo' ni de bienvenida, ni nodos 'Bienvenida' / 'Sí directo' / 'Cierre'",
+             not any(k in nodos for k in ("¿Es un cierre?", "¿Sí a la confirmación?", "¿Es una bienvenida?", "Bienvenida", "Sí directo", "Gestionar (sí directo)", "Cierre sin respuesta")), list(nodos))
+    chequear("E2 (estático) ninguna función de juicio de intención vuelve al cerebro: esAfirmacion, siDirecto, esCierre, esSaludo, esPedidoInfo, ultimoPideRespuesta, VERIF, veto de dólares sobre el texto",
+             not re.search(r"esAfirmacion|siDirecto|siALaConfirmacion|esCierre|esSaludo|esPedidoInfo|ultimoPideRespuesta|VERIF\.|test\(String\(e\.texto|DIJO_AVISO|RE_PRESENTA|RE_DECILE", txt))
+    orq_n = nodos["Orquestador"]
+    chequear("E3 el ORQUESTADOR es UNA llamada al modelo (sin herramientas): no puede tocar la agenda ni escribirle al paciente",
+             orq_n["type"].endswith("chainLlm") and not any("Orquestador" in [d["node"] for d in v.get("ai_tool", [[]])[0]] for v in wf["connections"].values()), orq_n["type"])
+    chequear("E4 el orquestador usa gpt-5-mini con razonamiento medio (20/10: con 'low' ruteaba mal pedidos múltiples en vivo)", nodos["Modelo Orquestador"]["parameters"]["model"]["value"] == "gpt-5-mini" and nodos["Modelo Orquestador"]["parameters"]["options"]["reasoningEffort"] == "medium")
+    for clave, nodo in C.SUBAGENTES:
+        v = nodos[nodo]["parameters"]["workflowInputs"]["value"]
+        chequear(f"E5 {nodo}: recibe la ejecución del CEREBRO, teléfono, modo explícito, mensaje, último Asiri, mensajes del paciente, contexto y pedido (lo pone el código)",
+                 v["exec_id_actual"] == "={{ $execution.id }}" and "phone" in v["tel"] and "'vivo' : 'sombra'" in v["modo"] and all(k in v for k in ("texto_paciente", "ultimo_asiri", "textos_paciente", "contexto", "pedido")), v)
+        chequear(f"E6 {nodo}: los DATOS del consultorio solo van a Información", ("datos_info" in v["datos"]) == (clave == "informacion"), v["datos"])
+        chequear(f"E6b {nodo}: llama a su workflow por id a resolver (@@ID:agente_{clave}@@)", nodos[nodo]["parameters"]["workflowId"]["value"] == f"@@ID:agente_{clave}@@")
+    for n in ("Derivar a secretaria", "Pasar a humano"):
+        v = nodos[n]["parameters"]["workflowInputs"]["value"]
+        chequear(f"E7 {n}: acción fija por código y modo explícito (C10/C11)", v["accion"] in ("={{ 'derivar' }}", "={{ 'humano' }}") and "'vivo' : 'sombra'" in v["modo"], v)
+    ids = set(re.findall(r"@@ID:([a-z_]+)@@", txt))
+    chequear("E8 ids a resolver: ver_turnos, clinica y los 4 sub-agentes (nada de Dentalink directo)", ids == {"ver_turnos", "clinica", "agente_turnos", "agente_pagos", "agente_informacion", "agente_urgencias"}, sorted(ids))
+    chequear("E9 ningún workflow generado lleva claves ni tokens escritos", not any(s in txt for s in ("sb_secret", "Bearer ", "apikey", "Token ")))
+
     R = correr(wf, [
-        esc("Z1 charla normal", {"output": "Hola! ¿En qué puedo ayudarle?"}),
-        esc("Z2 sombra: no escribe nada afuera", {"output": "Hola! ¿En qué puedo ayudarle?"}, modo="sombra"),
-        esc("Z3 afirma que reprogramó sin escritura ok", {"output": "Listo, quedó reprogramado su turno para el jueves 22/10 a las 09:20."}, redis=base_redis),
-        esc("Z4 escritura ok y el texto la dice", {"output": "Perfecto. " + RB + " ¿Necesita algo más?"}, redis={**base_redis, f"escrituras:{TEL}:{EXEC}": LIBRO_OK}),
-        esc("Z5 el agente se cae pero la agenda SÍ se escribió", {"error": {"message": "timeout"}}, redis={**base_redis, f"escrituras:{TEL}:{EXEC}": LIBRO_OK}),
-        esc("Z6 el agente se cae y no hubo escritura", {"error": {"message": "Agent stopped due to max iterations"}}),
-        esc("Z7 invita a ir ahora (filtro de seguridad)", {"output": "Acérquese ahora mismo a la clínica."}),
-        esc("Z8 'los esperamos el día de su turno' (negocio funcionando)", {"output": "Quedó todo. Los esperamos el día de su turno, el jueves 22/10 a las 9:20."}, redis=base_redis),
-        esc("Z9 propuesta de esta ejecución con su read-back en el mensaje", {"output": PROP["readback_text"]}, redis={**base_redis, f"propuesta:{TEL}": json.dumps(PROP)}),
-        esc("Z9b propuesta pero el mensaje no trae el read-back", {"output": "Un momento por favor."}, redis={**base_redis, f"propuesta:{TEL}": json.dumps(PROP)}),
-        esc("Z16 el modelo se saltea el bloque de horarios recién buscado", {"output": "Le quedan las fichas de Jana y Lucas. ¿Confirma?"}, redis={**base_redis, f"bloque_exec:{TEL}:{EXEC}": BLOQUE}),
-        esc("Y1 'Si , gracias' tras confirmar el turno (caso real de Irina)", {"output": "NO DEBE LLAMARSE"}, texto="Si , gracias", pg={"Historial": [{"message": {"type": "ai", "content": "Listo, su turno del 6 de Octubre a las 08:00 hs queda confirmado. Cualquier consulta nos puede escribir por este medio.", "additional_kwargs": {"source": "wa_outbound"}}}]}),
-        esc("Y2 'Muchas gracias 🫂' tras una respuesta de datos (caso real de Irina)", {"output": "NO DEBE LLAMARSE"}, texto="Muchas gracias 🫂", pg={"Historial": [{"message": {"type": "ai", "content": "La consulta inicial cuesta $50.000.", "additional_kwargs": {}}}]}),
-        esc("Y3 'Bien\\nMuchas gracias Iris' (caso real)", {"output": "NO DEBE LLAMARSE"}, texto="Bien\nMuchas gracias Iris", pg={"Historial": [{"message": {"type": "ai", "content": "Quedó anotado, la clínica se comunica con usted.", "additional_kwargs": {}}}]}),
-        esc("Y4 'Si, gracias' como respuesta al read-back (es una confirmación, NO un cierre)", {"output": "Perfecto."}, texto="Si, gracias", pg={"Historial": [{"message": {"type": "ai", "content": PROP["readback_text"], "additional_kwargs": {}}}]}),
-        esc("Y5 'Gracias' con un recordatorio sin confirmar", {"output": "Perfecto."}, texto="Gracias", pg={"Historial": [{"message": {"type": "ai", "content": "Estimada Dana, le recordamos su turno. Le pedimos confirmar su asistencia.", "additional_kwargs": {"source": "reminder_note"}}}], "Recordatorios": [{"id_cita_dentalink": 9104, "fecha_turno": "2026-10-16", "hora_turno": "09:10:00"}]}),
-        esc("Y6 'Gracias, ¿cuánto sale?' (agradece pero pregunta)", {"output": "La consulta cuesta $50.000."}, texto="Gracias, ¿cuánto sale?", pg={"Historial": [{"message": {"type": "ai", "content": "Listo, quedó confirmado.", "additional_kwargs": {}}}]}),
-        esc("Z17 celular con varias fichas, sin elegir", {"output": "Ok"}, subwf={"Identificar paciente": IDENT_VARIAS}),
-        esc("Z18 la agenda no responde al identificar", {"output": "Ok"}, subwf={"Identificar paciente": IDENT_ERROR}),
-        esc("Z10 cierre sin nada pendiente", {"output": "[NO_REPLY]"}, texto="Gracias"),
-        esc("Z11 contexto con historial y recordatorios", {"output": "Ok"}, pg={"Historial": HIST, "Recordatorios": [{"id_cita_dentalink": 9104, "fecha_turno": "2026-10-16", "hora_turno": "09:10:00"}]}),
-        esc("Z12 con notas de la clínica", {"output": "Ok"}, pg={"Datos del consultorio": KB[:-1] + [{"id": "dir:notas_para_asiri", "contenido": "Este mes hay promoción en alineadores."}]}),
-        esc("Z13 inventa un horario", {"output": "Tenemos el jueves 22/10 a las 11:40, ¿le sirve?"}, redis=base_redis),
-        esc("Z14a da la dirección sin que la pidan", {"output": "Estamos en Balcarce 37, 2do piso."}, texto="Hola quiero un turno"),
-        esc("Z14b da la dirección cuando la piden", {"output": "Estamos en Balcarce 37, 2do piso."}, texto="Dónde queda el consultorio?"),
-        esc("Z15 historial_json (sombra retrospectiva)", {"output": "Ok"}, modo="sombra", trigger={"historial_json": json.dumps(HIST)}),
-        esc("M1 el modelo antepone una frase interna al bloque", {"output": "Le copio el mensaje para que lo confirme:\n\n" + PROP["readback_text"]}, redis={**base_redis, f"propuesta:{TEL}": json.dumps(PROP)}),
-        esc("M2 'Pegá este bloque TEXTUAL al paciente:' antes del bloque real", {"output": "Pegá este bloque TEXTUAL al paciente:\n" + BLOQUE}, redis=base_redis),
-        esc("M3 'Decile que dejé anotado su aviso de pago.' (nota interna copiada)", {"output": "Decile que dejé anotado su aviso de pago. La secretaria lo verifica."}, texto="Ya transferí"),
-        esc("U1 urgencia derivada al triaje", {"output": "[NO_REPLY]"}, texto="Se me salió el alambre y me pincha", redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
-        esc("U2 urgencia derivada pero el modelo igual escribe", {"output": "Tranquila, póngase cera y venga mañana."}, texto="Se me salió el alambre y me pincha", redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
-        esc("U3 urgencia + cambio de agenda ok en el mismo mensaje", {"output": "Perfecto. " + RB}, texto="Sí, cámbielo. Ah, y se me salió el alambre", redis={**base_redis, f"escrituras:{TEL}:{EXEC}": LIBRO_OK, f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
-        esc("U4 sombra: urgencia derivada", {"output": "[NO_REPLY]"}, modo="sombra", texto="me duele", redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
-        esc("U5 marca de triaje de OTRA ejecución no cuenta", {"output": "Hola! ¿En qué puedo ayudarle?"}, redis={f"triaje_v7:{TEL}:ex-viejo": TRIAJE}),
+        esc("Z1 saludo en conversación nueva", orq({"a": "menu_bienvenida"}), texto="hola doc buenas tardes q tal"),
+        esc("Z2 sombra: saludo", orq({"a": "menu_bienvenida"}), texto="Hola", modo="sombra"),
+        esc("Z3 'ola kiero turno pal jueves'", orq({"a": "turnos", "pedido": "quiere turno para el jueves 8/10"}), texto="ola kiero turno pal jueves", subwf={"Agente Turnos": sub("turnos", BLOQUE, "bloque_ofrecido")},
+            redis={f"ofertas:{TEL}": OFERTAS, f"bloque:{TEL}": BLOQUE, f"bloque_exec:{TEL}:{EXEC}": BLOQUE}),
+        esc("Z4 cambiar turno y pasame el alias (multi-pedido)", orq({"a": "turnos", "pedido": "cambiar el turno del jueves 22 a las 9:20"}, {"a": "pagos", "pedido": "pide el alias"}),
+            texto="kiero pasar el turno al jueves 22 9:20 y pasame el alia", subwf={"Agente Turnos": T_RB, "Agente Pagos": P_DAT},
+            redis={f"ofertas:{TEL}": OFERTAS, f"turnos_vistos:{TEL}": VISTOS, f"propuesta:{TEL}": json.dumps({**PROP_VIEJA, "exec_id": EXEC, "enviada": False})}),
+        esc("Z5 'ya' con confirmación pendiente; el orquestador dice no_reply", orq({"a": "no_reply"}), texto="ya", subwf={"Agente Turnos": T_OK},
+            redis={f"propuesta:{TEL}": json.dumps(PROP_VIEJA), f"escrituras:{TEL}:{EXEC}": LIBRO_OK, f"turnos_vistos:{TEL}": VISTOS}, pg={"Historial": H_RB}),
+        esc("Z6 'ok, lo pienso' con confirmación pendiente", orq({"a": "turnos", "pedido": "responde a la confirmación pendiente"}), texto="ok, lo pienso", subwf={"Agente Turnos": sub("turnos", "", "no_reply", codigo="[NO_REPLY]")},
+            redis={f"propuesta:{TEL}": json.dumps(PROP_VIEJA)}, pg={"Historial": H_RB}),
+        esc("Z7 la nena tiene el alambre q le pincha", orq({"a": "urgencias", "pedido": "a la hija le pincha el alambre"}), texto="la nena tiene el alambre q le pincha", subwf={"Agente Urgencias": U_OK},
+            redis={f"triaje_v7:{TEL}:{EXEC}": TRIAJE}),
+        esc("Z8 (U3) sí, cámbielo; ah y se me salió el alambre", orq({"a": "urgencias", "pedido": "se le salió el alambre"}, {"a": "turnos", "pedido": "responde a la confirmación pendiente"}), texto="si cambielo. ah y se me salio el alambre",
+            subwf={"Agente Urgencias": U_OK, "Agente Turnos": T_OK}, redis={f"propuesta:{TEL}": json.dumps(PROP_VIEJA), f"escrituras:{TEL}:{EXEC}": LIBRO_OK, f"triaje_v7:{TEL}:{EXEC}": TRIAJE}, pg={"Historial": H_RB}),
+        esc("Z9 Turnos ve una urgencia que el orquestador no vio", orq({"a": "turnos", "pedido": "quiere cambiar el turno"}), texto="mi hija esta incomoda, no come, quiero cambiar el turno",
+            subwf={"Agente Turnos": sub("turnos", "", "nada", codigo="URGENCIA", urgencia=True), "Agente Urgencias": U_OK}, redis={f"triaje_v7:{TEL}:{EXEC}": json.dumps({"motivo": "derivar_triaje", "cita": "mi hija esta incomoda, no come"})}),
+        esc("Z10 fuera de alcance: presupuesto en dólares", orq({"a": "derivar_secretaria", "cita": "cuanto sale en dolares", "motivo": "presupuesto en dólares"}), texto="cuanto sale en dolares el tratamiento"),
+        esc("Z11 Información devuelve FUERA_DE_ALCANCE", orq({"a": "informacion", "pedido": "presupuesto de su caso"}), texto="cuanto me sale lo mio",
+            subwf={"Agente Información": sub("informacion", "", "fuera_de_alcance", fuera_de_alcance=True, codigo="FUERA_DE_ALCANCE")}),
+        esc("Z12 que me atienda la seño", orq({"a": "pasar_a_humano", "cita": "que me atienda la seño"}), texto="que me atienda la seño"),
+        esc("Z13 el orquestador escribe texto libre", {"text": "Hola! Claro, ya le agendo el jueves a las 10 😊"}, texto="quiero turno"),
+        esc("Z14 2.º no_entendi seguido", orq({"a": "no_entendi"}), texto="asdf qwe", redis={f"noentendi:{TEL}": "1"}),
+        esc("Z15 1.er no_entendi", orq({"a": "no_entendi"}), texto="asdf qwe"),
+        esc("Z16 gracias (cierre)", orq({"a": "no_reply"}), texto="gracias mañana", pg={"Historial": [{"message": {"type": "ai", "content": "Su turno es el viernes 16/10 a las 09:10."}, "created_at": RECIENTE}]}),
+        esc("Z17 Turnos se cae DESPUÉS de escribir (B7)", orq({"a": "turnos", "pedido": "responde a la confirmación pendiente"}), texto="dale", subwf={"Agente Turnos": {"error": {"message": "max iterations"}}},
+            redis={f"propuesta:{TEL}": json.dumps(PROP_VIEJA), f"escrituras:{TEL}:{EXEC}": LIBRO_OK}, pg={"Historial": H_RB}),
+        esc("Z18 historial_json + recordatorio (sombra retrospectiva)", orq({"a": "informacion", "pedido": "precio"}), texto="cuanto sale la consulta", modo="sombra", subwf={"Agente Información": I_PRECIO},
+            trigger={"historial_json": json.dumps([{"message": {"type": "human", "content": "Hola, mi DNI es 35.123.456"}}, {"message": {"type": "ai", "content": "Hola"}}])},
+            pg={"Recordatorios": [{"id_cita_dentalink": 9104, "fecha_turno": "2026-10-16", "hora_turno": "09:10:00"}]}),
+        esc("Z19 sombra: derivar y no_entendi van a claves v7s:", orq({"a": "no_entendi"}), texto="?", modo="sombra", redis={f"v7s:noentendi:{TEL}": "1"}),
+        esc("Z20 confirmación guardada pero el último mensaje de Asiri es otro (no la vio)", orq({"a": "no_reply"}), texto="ok", redis={f"propuesta:{TEL}": json.dumps(PROP_VIEJA)},
+            pg={"Historial": [{"message": {"type": "ai", "content": "Su turno es el viernes 16/10 a las 09:10."}, "created_at": RECIENTE}]}),
+        esc("Z21 precio en conversación nueva", orq({"a": "informacion", "pedido": "precio de la consulta"}), texto="cuanto sale la consulta", subwf={"Agente Información": I_PRECIO}),
+        esc("Z22 reserva hecha en este mensaje", orq({"a": "turnos", "pedido": "responde a la confirmación pendiente"}), texto="sisi porfa",
+            subwf={"Agente Turnos": sub("turnos", "Listo, le reservé el jueves 22/10 a las 09:20.", "escrito_ok")}, pg={"Historial": H_RB},
+            redis={f"propuesta:{TEL}": json.dumps({**PROP_VIEJA, "tipo": "reserva"}), f"escrituras:{TEL}:{EXEC}": json.dumps([{"ok": True, "tipo": "reserva", "primera_consulta": True, "readback_text": "Listo, le reservé el jueves 22/10 a las 09:20."}])}),
+        esc("Z23 Turnos (por error) afirma algo sin escritura", orq({"a": "turnos", "pedido": "cambiar"}), texto="cambielo", subwf={"Agente Turnos": sub("turnos", "Listo, quedó reprogramado su turno para el jueves 22/10 a las 09:20.")},
+            redis={f"ofertas:{TEL}": OFERTAS, f"turnos_vistos:{TEL}": VISTOS}),
+        esc("Z24 urgencia que no se pudo derivar", orq({"a": "urgencias", "pedido": "dolor"}), texto="me duele mucho la muela", subwf={"Agente Urgencias": sub("urgencias", "", "derivar_fallo", codigo=None)}),
+        esc("Z25 audio", orq({"a": "pedir_texto"}), texto="[audio]"),
     ])
 
-    print("CEREBRO (grafo real, agente simulado)")
-    a = R["Z1 charla normal"]["reps"][0]; s = a["salida"]
-    mem = next(p for p in a["pedidos"] if p["nodo"] == "Guardar en memoria")
-    chequear("Z1 sin error del motor y texto intacto", a["error"] is None and s["texto"] == "Hola! ¿En qué puedo ayudarle?" and s["enviar"] is True, (a["error"], s))
-    chequear("Z1 guarda la charla en memoria (paciente y Asiri) con el texto FINAL", mem["params"][0] == TEL and json.loads(mem["params"][1])["content"] == "Hola" and json.loads(mem["params"][2])["content"] == s["texto"] and json.loads(mem["params"][2])["additional_kwargs"]["source"] == "wa_outbound", mem)
-    a = R["Z2 sombra: no escribe nada afuera"]["reps"][0]
-    chequear("Z2 sombra: sin memoria, sin avisos, devuelve el texto y las herramientas usadas", not any(p["nodo"] == "Guardar en memoria" for p in a["pedidos"]) and not a["avisos"] and a["salida"]["texto"] and "tools" in a["salida"], (a["pedidos"], a["avisos"]))
-    x = R["Z3 afirma que reprogramó sin escritura ok"]; a = x["reps"][0]; mem = next(p for p in a["pedidos"] if p["nodo"] == "Guardar en memoria")
-    chequear("Z3 bloquea el 'quedó reprogramado' sin escritura y manda un mensaje honesto", a["salida"]["motivo_chequeo"] == "afirma_reprogramar_sin_ok" and "no quedó hecho" in a["salida"]["texto"] and "quedó reprogramado" not in a["salida"]["texto"], a["salida"])
-    chequear("Z3 en memoria queda lo que REALMENTE se le dijo (no el texto bloqueado)", json.loads(mem["params"][2])["content"] == a["salida"]["texto"], mem)
-    a = R["Z4 escritura ok y el texto la dice"]["reps"][0]
-    chequear("Z4 escritura ok y el texto la dice: pasa sin tocar", a["salida"]["motivo_chequeo"] is None and a["salida"]["texto"].startswith("Perfecto.") and RB in a["salida"]["texto"], a["salida"])
-    a = R["Z5 el agente se cae pero la agenda SÍ se escribió"]["reps"][0]
-    chequear("Z5 el agente cae pero la agenda se escribió: la paciente igual recibe lo que pasó, sin aviso de error", a["salida"]["texto"] == RB and a["salida"]["fallo_agente"] is True and not a["avisos"], (a["salida"], a["avisos"]))
-    a = R["Z6 el agente se cae y no hubo escritura"]["reps"][0]
-    chequear("Z6 el agente cae sin escritura: mensaje honesto y aviso [ACCIÓN] a la clínica", "inconveniente" in a["salida"]["texto"] and len(a["avisos"]) == 1 and a["avisos"][0]["qs"]["resumen"].startswith("[ACCIÓN]") and a["avisos"][0]["qs"]["phone"] == TEL, (a["salida"], a["avisos"]))
-    a = R["Z7 invita a ir ahora (filtro de seguridad)"]["reps"][0]
-    chequear("Z7 'acérquese ahora mismo': reemplazado y avisado", a["salida"]["motivo_banlist"] == "invita a ir de inmediato" and "Acérquese" not in a["salida"]["texto"] and a["avisos"], (a["salida"], a["avisos"]))
-    a = R["Z8 'los esperamos el día de su turno' (negocio funcionando)"]["reps"][0]
-    chequear("Z8 'los esperamos el día de su turno' pasa (es el negocio)", a["salida"]["motivo_banlist"] is None and a["salida"]["motivo_chequeo"] is None and "esperamos" in a["salida"]["texto"], a["salida"])
-    x = R["Z9 propuesta de esta ejecución con su read-back en el mensaje"]
-    chequear("Z9 marca la propuesta como ENVIADA (así ejecutar_propuesta sabe que el paciente vio el read-back)", json.loads(x["redis_final"][f"propuesta:{TEL}"])["enviada"] is True, x["redis_final"])
-    x = R["Z9b propuesta pero el mensaje no trae el read-back"]; a = x["reps"][0]
-    chequear("Z9b si el modelo se saltea el read-back, el CÓDIGO lo manda (sin él la charla se traba) y recién entonces queda enviada", a["salida"]["motivo_chequeo"] == "falta_readback" and a["salida"]["texto"] == PROP["readback_text"] and json.loads(x["redis_final"][f"propuesta:{TEL}"]).get("enviada") is True, (a["salida"], x["redis_final"]))
-    x = R["Z16 el modelo se saltea el bloque de horarios recién buscado"]; a = x["reps"][0]
-    chequear("Z16 el modelo se saltea el bloque que buscó: el código lo manda tal cual", a["salida"]["motivo_chequeo"] == "falta_bloque" and a["salida"]["texto"] == BLOQUE, a["salida"])
-    a = R["Z10 cierre sin nada pendiente"]["reps"][0]
-    chequear("Z10 [NO_REPLY]: no se envía ni se guarda memoria", a["salida"]["enviar"] is False and not any(p["nodo"] == "Guardar en memoria" for p in a["pedidos"]), a["salida"])
-    a = R["Z11 contexto con historial y recordatorios"]["reps"][0]
-    ag = next(p for p in a["pedidos"] if p["nodo"] == "Asiri")["entradas"]
-    chequear("Z11 el agente recibe fecha de Jujuy, el pushName, el recordatorio pendiente, la charla y el mensaje", "FECHA Y HORA ACTUAL (Jujuy): lunes 2026-10-05 09:36" in ag["text"] and "CELE" in ag["text"] and "viernes 16/10 a las 09:10" in ag["text"] and "PACIENTE: Buen dia me pude cambiar ese turno" in ag["text"] and ag["text"].endswith("MENSAJE ACTUAL DEL PACIENTE:\nHola"), ag["text"])
-    chequear("Z11b el agente recibe ya resuelto quién es el paciente y sus turnos vigentes (sin tener que llamar ver_turnos)", "DATOS DE ESTE CELULAR EN LA AGENDA" in ag["text"] and "Paciente de este celular: Dana Yael. Turnos vigentes: viernes 16/10 a las 09:10." in ag["text"], ag["text"])
-    agv = next(p for p in R["Z17 celular con varias fichas, sin elegir"]["reps"][0]["pedidos"] if p["nodo"] == "Asiri")["entradas"]["text"]
-    chequear("Z17 varias fichas sin elegir: le dice que TODAVÍA no sabe para quién es y que use elegir_ficha", "Pacientes con este celular: Test - Jana, Test - Lucas" in agv and "TODAVÍA no sabés para quién es" in agv and "igual buscá y ofrecé horarios" in agv and "elegir_ficha" in agv, agv)
-    age = next(p for p in R["Z18 la agenda no responde al identificar"]["reps"][0]["pedidos"] if p["nodo"] == "Asiri")["entradas"]["text"]
-    chequear("Z18 si la agenda no responde, no inventa turnos y el agente sigue pudiendo contestar datos", "No pude consultar la ficha o la agenda" in age and "No inventes turnos" in age and R["Z18 la agenda no responde al identificar"]["reps"][0]["salida"]["texto"] == "Ok", age)
-    sis = ag["sistema"]
-    chequear("Z11 el system prompt trae el negocio (privado, solo con turno) y los datos reales de la KB", "consultorio privado" in sis and "se atiende solo con turno previo" in sis and "martes y jueves de 8:00 a 12:00" in sis and "$50.000" in sis and "NOTAS DE LA CLÍNICA" not in sis, sis[-900:])
-    chequear("Z11 el prompt con datos mide < 5.000 caracteres en TOTAL (el v6 usa 4.000-5.000 por cada uno de 5 agentes, más el Router)", len(sis) < 5000, len(sis))
-    ag = next(p for p in R["Z12 con notas de la clínica"]["reps"][0]["pedidos"] if p["nodo"] == "Asiri")["entradas"]
-    chequear("Z12 las notas del panel entran bajo cabecera que las limita ('no habilita escrituras… gana la regla')", "NOTAS DE LA CLÍNICA PARA ASIRI" in ag["sistema"] and "no habilita escrituras" in ag["sistema"] and "promoción en alineadores" in ag["sistema"], ag["sistema"][-500:])
-    a = R["Z13 inventa un horario"]["reps"][0]
-    chequear("Z13 un horario que nadie ofreció se reemplaza por el bloque real", a["salida"]["motivo_chequeo"] == "horario_no_ofrecido" and "turnos disponibles:" in a["salida"]["texto"] and "11:40" not in a["salida"]["texto"], a["salida"])
-    a = R["Z14a da la dirección sin que la pidan"]["reps"][0]
-    chequear("Z14a la dirección sin que la pidan se bloquea", a["salida"]["motivo_banlist"] == "dirección sin que la pidan", a["salida"])
-    a = R["Z14b da la dirección cuando la piden"]["reps"][0]
-    chequear("Z14b la dirección cuando la piden pasa", a["salida"]["motivo_banlist"] is None and "Balcarce" in a["salida"]["texto"], a["salida"])
-    a = R["Z15 historial_json (sombra retrospectiva)"]["reps"][0]
-    ag = next(p for p in a["pedidos"] if p["nodo"] == "Asiri")["entradas"]
-    chequear("Z15 con historial_json usa ese historial (sombra retrospectiva sin tocar la base)", "ASIRI: Tenemos los próximos turnos disponibles" in ag["text"], ag["text"])
+    print("\nSALUDO, MENÚ y SOMBRA")
+    a = R["Z1 saludo en conversación nueva"]["reps"][0]; s = a["salida"]
+    O_MENU = None
+    chequear("Z1 saludo → el menú (el del panel no respeta el alcance: va el de las funciones), sin llamar a ningún sub-agente", a["error"] is None and s["texto"].startswith("Hola! Soy Asiri") and "cuotas" not in s["texto"] and "Escriba el número" in s["texto"]
+             and not any(p["nodo"].startswith("Agente ") for p in a["pedidos"]), (a["error"], s))
+    h, ai = mem(a)
+    chequear("Z1b memoria: un solo mensaje de Asiri con el texto final y source asiri_v7 (§3.2)", h and h["content"] == "hola doc buenas tardes q tal" and ai["content"] == s["texto"] and ai["additional_kwargs"]["source"] == "asiri_v7", (h, ai))
+    orq_p = llamados(a, "Orquestador")[0]["entradas"]
+    chequear("Z1c el orquestador recibe el contexto (fecha de Jujuy, pushName, CONVERSACIÓN NUEVA: sí, mensaje actual) y su prompt; NADA de datos bancarios",
+             "FECHA Y HORA ACTUAL (Jujuy): lunes 2026-10-05 09:36" in orq_p["text"] and "CELE" in orq_p["text"] and "CONVERSACIÓN NUEVA (12 h sin mensajes): sí" in orq_p["text"] and orq_p["text"].endswith("MENSAJE ACTUAL DEL PACIENTE:\nhola doc buenas tardes q tal")
+             and orq_p["sistema"] == C.PROMPT_ORQ and "dra.raquel.aurea" not in json.dumps(orq_p) and "Laura Raquel" not in json.dumps(orq_p), orq_p)
+    a = R["Z2 sombra: saludo"]["reps"][0]
+    chequear("Z2 sombra: sin memoria y sin avisos, igual devuelve el texto", not llamados(a, "Guardar en memoria") and not a["avisos"] and a["salida"]["texto"] and a["salida"]["modo"] == "sombra", (a["pedidos"], a["avisos"]))
 
-    # ---------------------------------------------------------------- cierres de conversación (los 2 bugs reales de Irina)
-    print("\nCIERRES (el bug de los 'gracias')")
-    for k, nombre in [("Y1 'Si , gracias' tras confirmar el turno (caso real de Irina)", "Y1"), ("Y2 'Muchas gracias 🫂' tras una respuesta de datos (caso real de Irina)", "Y2"), ("Y3 'Bien\\nMuchas gracias Iris' (caso real)", "Y3")]:
-        a = R[k]["reps"][0]
-        chequear(f"{nombre} cierre puro: SILENCIO, sin llamar al modelo, sin guardar y sin 'ya le transmito a la secretaria' ni 'quedo a disposición'", a["error"] is None and a["salida"]["silencio"] is True and a["salida"]["enviar"] is False and a["salida"]["motivo_chequeo"] == "cierre_puro"
-                 and not any(p["nodo"] in ("Asiri", "Guardar en memoria") for p in a["pedidos"]) and not a["avisos"], (a["error"], a["salida"]))
-    for k, nombre, motivo in [("Y4 'Si, gracias' como respuesta al read-back (es una confirmación, NO un cierre)", "Y4", "era la respuesta al read-back"), ("Y5 'Gracias' con un recordatorio sin confirmar", "Y5", "hay un recordatorio sin confirmar"), ("Y6 'Gracias, ¿cuánto sale?' (agradece pero pregunta)", "Y6", "además hace una pregunta")]:
-        a = R[k]["reps"][0]
-        chequear(f"{nombre} NO es un cierre ({motivo}): el modelo SÍ interviene", any(p["nodo"] == "Asiri" for p in a["pedidos"]) and a["salida"]["silencio"] is False and a["salida"]["enviar"] is True, (a["salida"], [p["nodo"] for p in a["pedidos"]]))
+    print("\nRUTEO y DESPACHO")
+    a = R["Z3 'ola kiero turno pal jueves'"]["reps"][0]
+    t = llamados(a, "Agente Turnos")
+    chequear("Z3 turno → SOLO Turnos, una vez, con el pedido del orquestador, la ejecución del cerebro y modo explícito", len(t) == 1 and t[0]["entradas"]["pedido"] == "quiere turno para el jueves 8/10" and t[0]["entradas"]["exec_id_actual"] == EXEC
+             and t[0]["entradas"]["modo"] == "vivo" and t[0]["entradas"]["tel"] == TEL and not llamados(a, "Agente Pagos") and not llamados(a, "Agente Información"), t)
+    chequear("Z3b el paciente recibe el bloque de la herramienta tal cual (con presentación: conversación nueva)", a["salida"]["texto"].endswith(BLOQUE) and a["salida"]["motivo_chequeo"] is None, a["salida"])
+    chequear("Z3c Turnos recibe los mensajes del paciente (para verificar el DNI) y los turnos del celular", json.loads(t[0]["entradas"]["textos_paciente"])[-1] == "ola kiero turno pal jueves" and json.loads(t[0]["entradas"]["turnos_json"]) == ["viernes 16/10 a las 09:10"], t[0]["entradas"])
+    x = R["Z4 cambiar turno y pasame el alias (multi-pedido)"]; a = x["reps"][0]; s = a["salida"]
+    chequear("Z4 multi-pedido: Turnos y Pagos, uno cada uno", len(llamados(a, "Agente Turnos")) == 1 and len(llamados(a, "Agente Pagos")) == 1, [p["nodo"] for p in a["pedidos"]])
+    chequear("Z4b orden fijo: Pagos (+ datos de la KB 24 pegados por código) antes, read-back de Turnos AL FINAL", s["texto"].endswith(RB) and s["texto"].index("Alias: dra.raquel.aurea") < s["texto"].index("Le confirmo") and "Titular: Laura Raquel Rodríguez" in s["texto"], s["texto"])
+    chequear("Z4c la propuesta de ESTA ejecución queda 'enviada' (su read-back va en el mensaje)", json.loads(x["redis_final"][f"propuesta:{TEL}"])["enviada"] is True, x["redis_final"].get(f"propuesta:{TEL}"))
+    chequear("Z4d la traza para el examen trae la decisión del orquestador y las herramientas de cada sub-agente", s["tools"][0]["tool"] == "orquestador" and any(tl.get("tool") == "gestionar_turno" and tl.get("agente") == "turnos" for tl in s["tools"]), s["tools"])
 
-    # ---------------------------------------------------------------- frases internas filtradas al paciente (examen 06/10)
-    print("\nFRASES INTERNAS")
-    a = R["M1 el modelo antepone una frase interna al bloque"]["reps"][0]
-    chequear("M1 'Le copio el mensaje para que lo confirme:' se quita por código y queda solo el read-back", a["salida"]["texto"] == PROP["readback_text"] and a["salida"]["motivo_chequeo"] is None, a["salida"])
-    a = R["M2 'Pegá este bloque TEXTUAL al paciente:' antes del bloque real"]["reps"][0]
-    chequear("M2 'Pegá este bloque TEXTUAL al paciente:' se quita y el bloque pasa intacto", a["salida"]["texto"] == BLOQUE and a["salida"]["motivo_chequeo"] is None, a["salida"])
+    print("\nEL 'SÍ' (B3: lo decide Turnos con el mensaje actual; llega a Turnos por ESTADO)")
+    a = R["Z5 'ya' con confirmación pendiente; el orquestador dice no_reply"]["reps"][0]
+    t = llamados(a, "Agente Turnos")
+    chequear("Z5 confirmación pendiente vista: Turnos SÍ ve el mensaje aunque el orquestador dijo no_reply, y el paciente recibe el éxito", len(t) == 1 and t[0]["entradas"]["pedido"] == "responde a la confirmación pendiente" and a["salida"]["texto"] == EXITO, (t, a["salida"]))
+    chequear("Z5b el contexto de Turnos trae la CONFIRMACIÓN PENDIENTE y el mensaje actual", "CONFIRMACIÓN PENDIENTE" in t[0]["entradas"]["contexto"] and "hace 6 min" in t[0]["entradas"]["contexto"] and t[0]["entradas"]["contexto"].endswith("MENSAJE ACTUAL DEL PACIENTE:\nya") and t[0]["entradas"]["ultimo_asiri"] == RB, t[0]["entradas"]["contexto"][-500:])
+    x = R["Z6 'ok, lo pienso' con confirmación pendiente"]; a = x["reps"][0]
+    # (20/10, BOT-01) antes: silencio. Ahora el paciente sabe que no se tocó nada (la propuesta se descarta igual, Z6c).
+    chequear("Z6 'ok, lo pienso': Turnos no confirma → «no cambié nada: su turno queda como estaba» (sin escribir nada)",
+             a["salida"]["silencio"] is False and a["salida"]["texto"] == "Perfecto, no cambié nada: su turno queda como estaba." and a["salida"]["descartar_propuesta"] is True, a["salida"])
+    chequear("Z6c (15/10) la confirmación pendiente que no se ejecutó se DESCARTA: el próximo pedido vuelve a preguntar", a["salida"].get("descartar_propuesta") is True and f"propuesta:{TEL}" not in x["redis_final"], x["redis_final"].get(f"propuesta:{TEL}"))
+    x5 = R["Z5 'ya' con confirmación pendiente; el orquestador dice no_reply"]
+    chequear("Z5c el 'sí' que SÍ se ejecutó no dispara el descarte", x5["reps"][0]["salida"].get("descartar_propuesta") is False, x5["reps"][0]["salida"].get("descartar_propuesta"))
+    x20 = R["Z20 confirmación guardada pero el último mensaje de Asiri es otro (no la vio)"]
+    chequear("Z20b confirmación que el paciente NO vio: no se toca", x20["reps"][0]["salida"].get("descartar_propuesta") is False and f"propuesta:{TEL}" in x20["redis_final"], x20["redis_final"].get(f"propuesta:{TEL}"))
+    a = R["Z20 confirmación guardada pero el último mensaje de Asiri es otro (no la vio)"]["reps"][0]
+    chequear("Z20 confirmación guardada que el paciente NO vio: no se fuerza Turnos (el ruteo por estado exige que la haya visto)", not llamados(a, "Agente Turnos") and a["salida"]["silencio"] is True, [p["nodo"] for p in a["pedidos"]])
 
-    a = R["M3 'Decile que dejé anotado su aviso de pago.' (nota interna copiada)"]["reps"][0]
-    chequear("M3 'Decile que dejé anotado…' → 'Dejé anotado…'", a["salida"]["texto"].startswith("Dejé anotado su aviso de pago.") and a["salida"]["enviar"] is True, a["salida"])
+    print("\nURGENCIAS")
+    a = R["Z7 la nena tiene el alambre q le pincha"]["reps"][0]; s = a["salida"]
+    chequear("Z7 urgencia: Urgencias derivó → v7 en silencio, derivar_triaje con la cita, sin memoria (la guarda el triaje) ni avisos propios", s["derivar_triaje"] is True and s["triaje"]["cita"] == "la nena tiene el alambre q le pincha" and s["enviar"] is False and s["texto"] is None and not llamados(a, "Guardar en memoria") and not a["avisos"], s)
+    a = R["Z8 (U3) sí, cámbielo; ah y se me salió el alambre"]["reps"][0]; s = a["salida"]
+    chequear("Z8 (U3) urgencia + cambio ok en el mismo mensaje: se cuenta el cambio y la urgencia va al grupo como [ACCIÓN URGENTE]", s["derivar_triaje"] is False and s["texto"] == EXITO and s["enviar"] is True and any(v["qs"]["resumen"].startswith("[ACCIÓN URGENTE]") for v in a["avisos"]), (s, a["avisos"]))
+    a = R["Z9 Turnos ve una urgencia que el orquestador no vio"]["reps"][0]
+    u = llamados(a, "Agente Urgencias")
+    chequear("Z9 (B4 capa b) Turnos marcó URGENCIA → el código llama a Urgencias aunque el orquestador no lo hizo; caso Mariela", len(u) == 1 and "turnos" in u[0]["entradas"]["pedido"] and a["salida"]["derivar_triaje"] is True, (u, a["salida"]))
+    a = R["Z24 urgencia que no se pudo derivar"]["reps"][0]
+    chequear("Z24 urgencia sin derivar: frase fija «Le paso su mensaje a la doctora…» + [ACCIÓN URGENTE]", a["salida"]["texto"].endswith("Le paso su mensaje a la doctora para que lo vea.") and any(v["qs"]["resumen"].startswith("[ACCIÓN URGENTE]") for v in a["avisos"]), (a["salida"], a["avisos"]))
 
-    # ---------------------------------------------------------------- urgencias → triaje del v6 (videos aprobados por la Dra.)
-    print("\nURGENCIAS (derivar_triaje)")
-    for k in ("U1 urgencia derivada al triaje", "U2 urgencia derivada pero el modelo igual escribe"):
-        a = R[k]["reps"][0]; s_ = a["salida"]
-        chequear(f"{k[:2]} devuelve derivar_triaje con la frase, NO envía texto de Asiri, NO guarda memoria (la guarda el triaje) y sin avisos propios",
-                 a["error"] is None and s_["derivar_triaje"] is True and s_["triaje"]["cita"] == "Se me salió el alambre y me pincha" and s_["enviar"] is False and s_["texto"] is None
-                 and not any(p["nodo"] == "Guardar en memoria" for p in a["pedidos"]) and not a["avisos"], (a["error"], s_, a["avisos"]))
-    a = R["U3 urgencia + cambio de agenda ok en el mismo mensaje"]["reps"][0]
-    chequear("U3 urgencia junto a una escritura ok: se cuenta el cambio (read-back) y la urgencia va al grupo como [ACCIÓN]; no se deriva",
-             a["salida"]["derivar_triaje"] is False and RB in a["salida"]["texto"] and a["salida"]["enviar"] is True and any("urgencia" in v["qs"]["resumen"] and v["qs"]["resumen"].startswith("[ACCIÓN]") for v in a["avisos"]), (a["salida"], a["avisos"]))
-    a = R["U4 sombra: urgencia derivada"]["reps"][0]
-    chequear("U4 sombra: informa derivar_triaje (para medir) sin memoria ni avisos", a["salida"]["derivar_triaje"] is True and not a["avisos"] and not any(p["nodo"] == "Guardar en memoria" for p in a["pedidos"]), a["salida"])
-    a = R["U5 marca de triaje de OTRA ejecución no cuenta"]["reps"][0]
-    chequear("U5 una marca de otra ejecución no deriva este mensaje", a["salida"]["derivar_triaje"] is False and a["salida"]["enviar"] is True, a["salida"])
-    a = R["Y1 'Si , gracias' tras confirmar el turno (caso real de Irina)"]["reps"][0]
-    chequear("U6 el camino de cierre también devuelve derivar_triaje=false (el adaptador del v6 lee siempre el campo)", a["salida"]["derivar_triaje"] is False, a["salida"])
-    sis = next(p for p in R["Z1 charla normal"]["reps"][0]["pedidos"] if p["nodo"] == "Asiri")["entradas"]["sistema"]
-    chequear("U7 el prompt manda urgencias a derivar_triaje con [NO_REPLY] y ya no las pasa a una persona", "derivar_triaje" in sis and "URGENCIAS" in sis and "o hay una urgencia" not in sis, sis[sis.find("URGENCIAS"):sis.find("URGENCIAS") + 300])
+    print("\nFUERA DE ALCANCE, PERSONA, NO ENTENDÍ, AUDIO")
+    a = R["Z10 fuera de alcance: presupuesto en dólares"]["reps"][0]
+    d = llamados(a, "Derivar a secretaria")
+    chequear("Z10 derivar_secretaria: la herramienta de clínica con acción 'derivar', la frase del paciente y modo vivo; el texto fijo", len(d) == 1 and d[0]["entradas"]["accion"] == "derivar" and d[0]["entradas"]["cita_textual"] == "cuanto sale en dolares" and d[0]["entradas"]["modo"] == "vivo"
+             and a["salida"]["texto"].endswith(DERIVA) and not any(p["nodo"].startswith("Agente ") for p in a["pedidos"]), (d, a["salida"]))
+    a = R["Z11 Información devuelve FUERA_DE_ALCANCE"]["reps"][0]
+    d = llamados(a, "Derivar a secretaria")
+    chequear("Z11 un sub-agente FUERA_DE_ALCANCE → el código deriva (una vez), con la frase del paciente; no sale nada del sub-agente", len(d) == 1 and d[0]["entradas"]["cita_textual"] == "cuanto me sale lo mio" and a["salida"]["texto"].endswith(DERIVA), (d, a["salida"]))
+    a = R["Z12 que me atienda la seño"]["reps"][0]
+    hh = llamados(a, "Pasar a humano")
+    chequear("Z12 pidió una persona: 'humano' con la cita; texto fijo; ningún sub-agente", len(hh) == 1 and hh[0]["entradas"]["accion"] == "humano" and hh[0]["entradas"]["cita_textual"] == "que me atienda la seño" and a["salida"]["texto"].endswith(DERIVA) and not any(p["nodo"].startswith("Agente ") for p in a["pedidos"]), (hh, a["salida"]))
+    a = R["Z13 el orquestador escribe texto libre"]["reps"][0]
+    chequear("Z13 el texto libre del orquestador se descarta: sale el texto honesto + [ACCIÓN]; nada de 'le agendo el jueves'", "agendo" not in a["salida"]["texto"] and "inconveniente" in a["salida"]["texto"] and a["salida"]["fallo_agente"] is True and any(v["qs"]["resumen"].startswith("[ACCIÓN]") for v in a["avisos"]), (a["salida"], a["avisos"]))
+    x = R["Z15 1.er no_entendi"]; a = x["reps"][0]
+    chequear("Z15 1.er no_entendi: repregunta fija (sin ofrecer urgencias) y cuenta noentendi:{tel}", "no le entendí" in a["salida"]["texto"] and "urgencia" not in a["salida"]["texto"] and str(x["redis_final"].get(f"noentendi:{TEL}")) == "1" and not llamados(a, "Derivar a secretaria"), (a["salida"], x["redis_final"]))
+    a = R["Z14 2.º no_entendi seguido"]["reps"][0]
+    chequear("Z14 2.º no_entendi en 30 min → derivar a la secretaria", len(llamados(a, "Derivar a secretaria")) == 1 and a["salida"]["texto"].endswith(DERIVA), a["salida"])
+    x = R["Z19 sombra: derivar y no_entendi van a claves v7s:"]; a = x["reps"][0]
+    d = llamados(a, "Derivar a secretaria")
+    chequear("Z19 sombra: el contador va a v7s:noentendi: (no a la clave de vivo) y la derivación recibe modo sombra (no silencia el chat real)", str(x["redis_final"].get(f"v7s:noentendi:{TEL}")) == "2" and f"noentendi:{TEL}" not in x["redis_final"] and len(d) == 1 and d[0]["entradas"]["modo"] == "sombra" and not a["avisos"], (x["redis_final"], d))
+    a = R["Z25 audio"]["reps"][0]
+    chequear("Z25 (B5) audio → frase fija pidiendo que lo escriba", a["salida"]["texto"].endswith("¿Me lo puede escribir, por favor?"), a["salida"])
 
-    # ---------------------------------------------------------------- estructura de las herramientas
-    print("\nHERRAMIENTAS DE ASIRI (qué decide el modelo y qué decide el código)")
-    tools = [n for n in wf["nodes"] if n["type"].endswith("toolWorkflow")]
-    chequear("S1 son 11 herramientas, todas conectadas al agente como ai_tool", len(tools) == 11 and all(any(x["node"] == "Asiri" for x in wf["connections"][n["name"]]["ai_tool"][0]) for n in tools), [n["name"] for n in tools])
-    def campos(n):
-        v = n["parameters"]["workflowInputs"]["value"]
-        return {k: ("modelo" if "$fromAI" in x else "codigo") for k, x in v.items()}
-    prohibidos = {"paciente_id", "id_paciente", "cita_id", "cita_vieja_id", "id", "propuesta", "propuesta_id", "enviada", "exec_id"}
-    chequear("S2 NINGUNA herramienta deja que el modelo elija ids, paciente, cita ni propuesta", not any(prohibidos & set(campos(n)) for n in tools), {n["name"]: list(campos(n)) for n in tools})
-    chequear("S3 teléfono, ejecución y modo SIEMPRE salen del código (nunca del modelo)", all(campos(n).get("tel") == "codigo" and campos(n).get("exec_id_actual") == "codigo" and campos(n).get("modo") == "codigo" for n in tools), [campos(n) for n in tools][:2])
-    por_nombre = {n["name"]: n for n in tools}
-    chequear("S4 ejecutar_propuesta no recibe NADA del modelo (la propuesta sale de Redis)", all(v == "codigo" for v in campos(por_nombre["ejecutar_propuesta"]).values()), campos(por_nombre["ejecutar_propuesta"]))
-    chequear("S5 pasar_a_humano pide la frase literal y el texto del paciente lo pone el código (para verificarla)", campos(por_nombre["pasar_a_humano"]).get("cita_textual") == "modelo" and campos(por_nombre["pasar_a_humano"]).get("texto_paciente") == "codigo", campos(por_nombre["pasar_a_humano"]))
-    chequear("S6 la acción de las herramientas de clínica es fija por herramienta (el modelo no puede cambiar 'aviso' por 'humano')", all(campos(por_nombre[k]).get("accion") == "codigo" for k in ("avisar_grupo", "pasar_a_humano", "registrar_pago", "lista_espera", "derivar_triaje")))
-    chequear("S9 derivar_triaje: el modelo solo aporta la frase; acción 'triaje' fija; pasar_a_humano ya no ofrece 'urgencia'", set(campos(por_nombre["derivar_triaje"]).items()) >= {("accion", "codigo"), ("cita_textual", "modelo"), ("texto_paciente", "codigo")}
-             and "triaje" in por_nombre["derivar_triaje"]["parameters"]["workflowInputs"]["value"]["accion"] and "urgencia" not in por_nombre["pasar_a_humano"]["parameters"]["workflowInputs"]["value"]["motivo"], campos(por_nombre["derivar_triaje"]))
-    chequear("S7 el agente tiene tope de iteraciones y modelo mini con razonamiento bajo", next(n for n in wf["nodes"] if n["name"] == "Asiri")["parameters"]["options"]["maxIterations"] == 5 and next(n for n in wf["nodes"] if n["name"] == "Modelo Asiri")["parameters"]["options"]["reasoningEffort"] == "low")
-    chequear("S8 ningún workflow generado lleva claves ni tokens escritos", not any(s in json.dumps([B.wf_cerebro(), B.wf_ejecutar(), B.wf_clinica(), B.wf_confirmar_turno()]) for s in ("sb_secret", "Bearer ", "apikey", "Token ")))
+    print("\nCIERRE, FALLAS, PRESENTACIÓN, DATOS DE PAGO, CHEQUEO")
+    a = R["Z16 gracias (cierre)"]["reps"][0]
+    chequear("Z16 'gracias' → silencio (lo decidió el orquestador), sin memoria", a["salida"]["silencio"] is True and a["salida"]["enviar"] is False and not llamados(a, "Guardar en memoria"), a["salida"])
+    a = R["Z17 Turnos se cae DESPUÉS de escribir (B7)"]["reps"][0]
+    chequear("Z17 (B7) Turnos se cayó después de escribir: el paciente recibe el éxito del libro, no un error", a["salida"]["texto"] == EXITO and "inconveniente" not in a["salida"]["texto"], a["salida"])
+    a = R["Z18 historial_json + recordatorio (sombra retrospectiva)"]["reps"][0]
+    o = llamados(a, "Orquestador")[0]["entradas"]["text"]; i = llamados(a, "Agente Información")[0]["entradas"]
+    chequear("Z18 con historial_json usa ese historial; el recordatorio entra sin pedir confirmación", "PACIENTE: Hola, mi DNI es 35.123.456" in o and "RECORDATORIOS YA ENVIADOS (sin respuesta; NO le pidas que confirme" in o, o)
+    chequear("Z18b los mensajes del paciente (para verificar el DNI) salen del MISMO historial (historial_json), no de la base", "Hola, mi DNI es 35.123.456" in json.loads(i["textos_paciente"]), i["textos_paciente"])
+    chequear("Z18c Información recibe los DATOS (precio, obra social) SIN los datos bancarios, y las notas del panel solo como tono", "$50.000" in i["datos"] and "No trabajamos con ninguna obra social" in i["datos"] and "dra.raquel.aurea" not in i["datos"] and "Laura Raquel" not in i["datos"] and "nunca agregan temas" in i["datos"] and "Hablar con calidez" in i["datos"], i["datos"])
+    a = R["Z21 precio en conversación nueva"]["reps"][0]
+    chequear("Z21 Información en conversación nueva: se antepone «Soy Asiri…» por código", a["salida"]["texto"] == "Soy Asiri, la secretaria virtual de la Dra. Raquel.\n\nLa primera consulta tiene un valor de $50.000.", a["salida"]["texto"])
+    a = R["Z22 reserva hecha en este mensaje"]["reps"][0]
+    chequear("Z22 reserva de PRIMERA CONSULTA → pedido de pago + datos (como el v6), una sola vez", a["salida"]["texto"].startswith("Listo, le reservé") and "Para confirmarlo definitivamente" in a["salida"]["texto"] and a["salida"]["texto"].count("Alias:") == 1, a["salida"]["texto"])
+    a = R["Z23 Turnos (por error) afirma algo sin escritura"]["reps"][0]
+    chequear("Z23 el chequeo de salida corre sobre la parte de Turnos: una afirmación sin escritura se reemplaza por el texto honesto", a["salida"]["motivo_chequeo"] == "afirma_reprogramar_sin_ok" and "no quedó hecho" in a["salida"]["texto"], a["salida"])
 
     print(f"\n{total - fallas}/{total} {'TODO OK' if not fallas else str(fallas) + ' FALLAS'}")
     sys.exit(1 if fallas else 0)

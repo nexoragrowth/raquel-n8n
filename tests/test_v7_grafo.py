@@ -54,6 +54,16 @@ def esc(id_, redis_p=None, http=None, trigger=None, rep=1, **x):
     return {"id": id_, "trigger": trigger or TRIG, "ahora": AHORA, "redis": redis, "http": http or {}, "repeticiones": rep, **x}
 
 
+SIN_FICHA = {**ESTADO, "ficha": None, "turnos_vistos": None}
+PN = propuesta({"tipo": "reserva", "fecha": "2026-10-22", "hora": "9:20", "nuevo_nombre": "Juan", "nuevo_apellido": "Pérez", "nuevo_dni": "40123456"}, SIN_FICHA)
+CACHE = {f"ficha:{TEL}": json.dumps({"fichas": [{"id": 651, "nombre": "Dana"}], "elegida": 651}), f"turnos_vistos:{TEL}": "[]"}
+
+
+def con_cache(e):
+    e["redis"].update(CACHE)
+    return e
+
+
 def metodos(r):
     return [p["metodo"] + " " + p["url"].replace(D, "") for p in r["pedidos"]]
 
@@ -92,6 +102,13 @@ def main():
         esc("G14 propuesta vencida", {**P, "creada_ms": ahora_ms - 31 * 60_000}),
         esc("G15 familia: reserva para la ficha elegida (777)", propuesta(CAMBIO, {**ESTADO, "ficha": {"fichas": [{"id": 651, "nombre": "Dana"}, {"id": 777, "nombre": "Martina"}], "elegida": 777}, "turnos_vistos": [{**T_VIEJO, "id_paciente": 777}]}),
             {"GET cita vieja": {"data": {**T_VIEJO, "id_paciente": 777}}, "POST reserva": POST_OK, "PUT anular": PUT_OK}),
+        # (06/10) paciente nuevo: alta + reserva con el mismo "sí"
+        con_cache(esc("G16 paciente nuevo: busca DNI, da de alta y reserva en la ficha nueva", PN, {"GET paciente por DNI": {"data": []}, "POST paciente": {"data": {"id": 900}}, "POST reserva": POST_OK})),
+        con_cache(esc("G17 el DNI ya tiene ficha con el mismo nombre: no crea, reserva en esa", PN, {"GET paciente por DNI": {"data": [{"id": 555, "nombre": "Juan", "apellidos": "Perez", "rut": "40.123.456", "habilitado": 1}]}, "POST reserva": POST_OK})),
+        esc("G18 el DNI es de otra persona: nada se escribe, ACCIÓN", PN, {"GET paciente por DNI": {"data": [{"id": 556, "nombre": "Rosa", "apellidos": "Quispe", "rut": "40123456", "habilitado": 1}]}}),
+        esc("G19 la agenda rechaza el DNI (422): alta sin DNI y reserva", PN, {"GET paciente por DNI": {"data": []}, "POST paciente": {"error": {"message": "422 - rut inválido", "statusCode": 422}}, "POST paciente (sin DNI)": {"data": {"id": 901}}, "POST reserva": POST_OK}),
+        esc("G20 el alta falla por red: no reintenta ni reserva, ACCIÓN", PN, {"GET paciente por DNI": {"data": []}, "POST paciente": THROW}),
+        esc("G21 paciente nuevo en sombra", PN, trigger={**TRIG, "modo": "sombra"}),
     ]
     with tempfile.TemporaryDirectory() as d:
         w, e = os.path.join(d, "wf.json"), os.path.join(d, "e.json")
@@ -148,6 +165,29 @@ def main():
     chequear("G13 sombra: el libro queda (marcado simulado) para que el chequeo de salida se pruebe completo", libro[0]["simulado"] is True and libro[0]["ok"] is True and libro[0]["tipo"] == "cambio", libro)
     r = R["G15 familia: reserva para la ficha elegida (777)"]["reps"][0]
     chequear("G15 la reserva es para la ficha 777", r["pedidos"][1]["body"]["id_paciente"] == 777 and r["salida"]["ok"] is True, r["pedidos"])
+
+    k = "G16 paciente nuevo: busca DNI, da de alta y reserva en la ficha nueva"
+    r = R[k]["reps"][0]; s = r["salida"]
+    chequear("G16 sin error del motor", r["error"] is None, r["error"])
+    chequear("G16 GET por DNI → POST paciente → POST reserva, en ese orden", metodos(r) == ["GET /pacientes", "POST /pacientes/", "POST /citas/"], metodos(r))
+    chequear("G16 la búsqueda filtra por rut = DNI", json.loads(r["pedidos"][0]["query"]["q"]) == {"rut": {"eq": "40123456"}}, r["pedidos"][0]["query"])
+    chequear("G16 el alta lleva nombre, apellidos, celular y DNI", r["pedidos"][1]["body"] == {"nombre": "Juan", "apellidos": "Pérez", "celular": TEL, "rut": "40123456"}, r["pedidos"][1]["body"])
+    chequear("G16 la reserva va a la ficha nueva (900)", r["pedidos"][2]["body"]["id_paciente"] == 900, r["pedidos"][2]["body"])
+    chequear("G16 mensaje final con el nombre", s["ok"] is True and s["readback_text"] == "Listo, le reservé el jueves 22/10 a las 09:20 a nombre de Juan Pérez.", s)
+    chequear("G16 borra el cache del celular (la ficha nueva aparece en el próximo ver_turnos)", f"ficha:{TEL}" not in R[k]["redis_final"] and f"turnos_vistos:{TEL}" not in R[k]["redis_final"], list(R[k]["redis_final"]))
+    chequear("G16 aviso FYI con el alta (nombre, DNI y ficha)", len(r["avisos"]) == 1 and r["avisos"][0]["qs"]["resumen"].startswith("[FYI]") and "Paciente nuevo dado de alta: Juan Pérez (DNI 40123456), ficha #900." in r["avisos"][0]["qs"]["resumen"], r["avisos"])
+    k = "G17 el DNI ya tiene ficha con el mismo nombre: no crea, reserva en esa"
+    r = R[k]["reps"][0]
+    chequear("G17 no crea paciente; reserva en la ficha 555; el cache queda", metodos(r) == ["GET /pacientes", "POST /citas/"] and r["pedidos"][1]["body"]["id_paciente"] == 555 and r["salida"]["ok"] is True and f"ficha:{TEL}" in R[k]["redis_final"], (metodos(r), r["salida"]))
+    r = R["G18 el DNI es de otra persona: nada se escribe, ACCIÓN"]["reps"][0]
+    chequear("G18 solo la búsqueda; motivo dni_en_otra_ficha; aviso ACCIÓN aunque no se escribió nada", metodos(r) == ["GET /pacientes"] and r["salida"]["motivo"] == "dni_en_otra_ficha" and len(r["avisos"]) == 1 and r["avisos"][0]["qs"]["resumen"].startswith("[ACCIÓN]"), (metodos(r), r["salida"], r["avisos"]))
+    r = R["G19 la agenda rechaza el DNI (422): alta sin DNI y reserva"]["reps"][0]
+    chequear("G19 reintento sin DNI y reserva en la 901", metodos(r) == ["GET /pacientes", "POST /pacientes/", "POST /pacientes/", "POST /citas/"] and "rut" not in r["pedidos"][2]["body"] and r["pedidos"][3]["body"]["id_paciente"] == 901 and r["salida"]["ok"] is True, (metodos(r), r["salida"]))
+    chequear("G19 el aviso pide cargar el DNI a mano", r["avisos"] and "cargarlo a mano" in r["avisos"][0]["qs"]["resumen"], r["avisos"])
+    r = R["G20 el alta falla por red: no reintenta ni reserva, ACCIÓN"]["reps"][0]
+    chequear("G20 un solo POST (el alta), sin reserva; no_pude_registrar; aviso ACCIÓN", metodos(r) == ["GET /pacientes", "POST /pacientes/"] and r["salida"]["motivo"] == "no_pude_registrar" and r["avisos"] and r["avisos"][0]["qs"]["resumen"].startswith("[ACCIÓN]"), (metodos(r), r["salida"], r["avisos"]))
+    r = R["G21 paciente nuevo en sombra"]["reps"][0]
+    chequear("G21 sombra: cero pedidos y cero avisos; devuelve el mensaje final y lo que habría dado de alta", not r["pedidos"] and not r["avisos"] and r["salida"]["simulado"] is True and "a nombre de Juan Pérez" in r["salida"]["readback_text"] and r["salida"]["habria_hecho"]["alta_paciente"]["dni"] == "40123456", (r["pedidos"], r["salida"]))
 
     print(f"\n{total - fallas}/{total} {'TODO OK' if not fallas else str(fallas) + ' FALLAS'}")
     sys.exit(1 if fallas else 0)
