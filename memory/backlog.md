@@ -3,7 +3,9 @@
 ## ⇢ 2026-10-20 — v7 PARA TODOS (llave `v7:global`, ver current-state)
 - [x] v7 atiende a todos los pacientes (00:10 ART). Apagar: `python scripts/v7_global.py --off`.
 - [x] BOT-01 (respuesta tras un "no", @lid sin celular falso, doble pregunta de Información) + ruteo de pedidos múltiples (Pagos por código, orquestador "medium").
-- [ ] Mirar las primeras ejecuciones reales con el v7 (mañana del 20/10, respuestas a recordatorios) y corregir lo que salga.
+- [x] Control 20/10 10:15: 6 conversaciones reales del v7 sin errores ni avisos; 91 ejecuciones del v6 sin error (ver current-state).
+- [ ] v7 UX: un cambio/cancelación de un turno a < 48 h tiene que decir "menos de 48 h" ANTES de ofrecer horarios (hoy ofrece y después rechaza).
+- [ ] Marcar como equipo el contacto dudoso "¿Irina desde su celular?" (escribió insumos y fotos de instrumentos el 20/10; el bot lo derivó 2 veces).
 - [ ] BOT-07: regresión con IA SOLO de lo tocado (pedidos múltiples, "no" a una confirmación, alta @lid) + cita de prueba lejos, anulada al terminar.
 - [x] Migración Dentalink preparada (commit befd433): esquema `agenda` APLICADO (27 tablas, RLS, solo service_role); `migrar_dentalink.py --apply` fase ocupación (sin datos personales) corrida el 20/10 de madrugada. Caché cruda con datos de fichas BORRADA del scratchpad.
 - [ ] Nocturno: `migrar_dentalink.py --apply --incremental` (programarlo en n8n o cron del VPS; hoy es manual).
