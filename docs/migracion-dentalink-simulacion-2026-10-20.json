@@ -1,0 +1,1695 @@
+{
+ "generado": "2026-10-20T01:43:13",
+ "script": "2026-10-20.1",
+ "hoy": "2026-10-20",
+ "tipo": "completa",
+ "pedidos_dentalink": 1745,
+ "stats_http": {
+  "http_200": 1601,
+  "esperas_reserva": 43,
+  "esperas_ventana": 51,
+  "http_404": 111,
+  "http_400": 1,
+  "http_401": 32
+ },
+ "entidades_incompletas": [],
+ "inventario": {
+  "sucursales": {
+   "filas": 1,
+   "completo": true,
+   "status": 200,
+   "campos": 7,
+   "cobertura_pct": {
+    "ciudad": 100.0,
+    "comuna": 100.0,
+    "direccion": 100.0,
+    "habilitada": 100.0,
+    "id": 100.0,
+    "nombre": 100.0,
+    "telefono": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 1,
+   "ids_repetidos": 0
+  },
+  "especialidades": {
+   "filas": 14,
+   "completo": true,
+   "status": 200,
+   "campos": 4,
+   "cobertura_pct": {
+    "habilitada": 100.0,
+    "id": 100.0,
+    "id_tipo_sucursal": 100.0,
+    "nombre": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 14,
+   "ids_repetidos": 0
+  },
+  "dentistas": {
+   "filas": 2,
+   "completo": true,
+   "status": 200,
+   "campos": 22,
+   "cobertura_pct": {
+    "agenda_online": 100.0,
+    "apellidos": 100.0,
+    "celular": 100.0,
+    "ciudad": 100.0,
+    "comuna": 50.0,
+    "contratos_sucursal": 100.0,
+    "direccion": 100.0,
+    "email": 100.0,
+    "especialidad": 100.0,
+    "especialidades_secundarias": 100.0,
+    "habilitado": 100.0,
+    "horarios_sucursal": 100.0,
+    "id": 100.0,
+    "id_especialidad": 100.0,
+    "id_sucursal": 100.0,
+    "id_usuario": 100.0,
+    "intervalo": 100.0,
+    "nombre": 100.0,
+    "nombre_sucursal": 100.0,
+    "rut": 100.0,
+    "telefono": 50.0,
+    "usuario": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 2,
+   "ids_repetidos": 0
+  },
+  "sillones": {
+   "filas": 2,
+   "completo": true,
+   "status": 200,
+   "campos": 2,
+   "cobertura_pct": {
+    "id": 100.0,
+    "nombre": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 2,
+   "ids_repetidos": 0
+  },
+  "estados_cita": {
+   "filas": 21,
+   "completo": true,
+   "status": 200,
+   "campos": 7,
+   "cobertura_pct": {
+    "anulacion": 100.0,
+    "color": 100.0,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "nombre": 100.0,
+    "reservado": 100.0,
+    "uso_interno": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 21,
+   "ids_repetidos": 0
+  },
+  "aranceles": {
+   "filas": 2,
+   "completo": true,
+   "status": 200,
+   "campos": 3,
+   "cobertura_pct": {
+    "habilitado": 100.0,
+    "id": 100.0,
+    "nombre": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 2,
+   "ids_repetidos": 0
+  },
+  "categorias": {
+   "filas": 18,
+   "completo": true,
+   "status": 200,
+   "campos": 5,
+   "cobertura_pct": {
+    "habilitado": 100.0,
+    "id": 100.0,
+    "id_tipo": 100.0,
+    "nombre": 100.0,
+    "tipo": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 18,
+   "ids_repetidos": 0
+  },
+  "prestaciones": {
+   "filas": 990,
+   "completo": true,
+   "status": 200,
+   "campos": 11,
+   "cobertura_pct": {
+    "codigo": 2.0,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "id_arancel": 0.0,
+    "id_categoria": 100.0,
+    "id_tipo": 100.0,
+    "nombre": 100.0,
+    "nombre_arancel": 100.0,
+    "nombre_categoria": 100.0,
+    "precio": 100.0,
+    "tipo": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 990,
+   "ids_repetidos": 0
+  },
+  "bancos": {
+   "filas": 29,
+   "completo": true,
+   "status": 200,
+   "campos": 3,
+   "cobertura_pct": {
+    "habilitado": 100.0,
+    "id": 100.0,
+    "nombre": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 29,
+   "ids_repetidos": 0
+  },
+  "laboratorios": {
+   "filas": 3,
+   "completo": true,
+   "status": 200,
+   "campos": 6,
+   "cobertura_pct": {
+    "detalle": 66.7,
+    "direccion": 100.0,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "nombre": 100.0,
+    "telefono": 0.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 3,
+   "ids_repetidos": 0
+  },
+  "convenios": {
+   "filas": 0,
+   "completo": true,
+   "status": 200,
+   "campos": 0,
+   "cobertura_pct": {},
+   "rango_fechas": {},
+   "ids_unicos": 0,
+   "ids_repetidos": 0
+  },
+  "usuarios": {
+   "filas": 22,
+   "completo": true,
+   "status": 200,
+   "campos": 11,
+   "cobertura_pct": {
+    "celular": 40.9,
+    "email": 63.6,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "id_dentista": 9.1,
+    "id_sucursal": 77.3,
+    "nombre": 100.0,
+    "nombre_sucursal": 77.3,
+    "rut": 40.9,
+    "telefono": 4.5,
+    "usuario": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 22,
+   "ids_repetidos": 0
+  },
+  "cajas": {
+   "filas": 305,
+   "completo": true,
+   "status": 200,
+   "campos": 14,
+   "cobertura_pct": {
+    "abono_inicial": 100.0,
+    "acumulado": 100.0,
+    "estado": 100.0,
+    "fecha_apertura": 100.0,
+    "fecha_cierre": 98.7,
+    "gastos": 100.0,
+    "id": 100.0,
+    "id_sucursal": 100.0,
+    "id_usuario": 100.0,
+    "nombre_usuario": 100.0,
+    "saldo_anterior": 100.0,
+    "saldo_cierre": 100.0,
+    "saldo_inicial": 100.0,
+    "saldo_total": 100.0
+   },
+   "rango_fechas": {
+    "fecha_apertura": [
+     "2022-11-03",
+     "2026-08-10"
+    ]
+   },
+   "ids_unicos": 305,
+   "ids_repetidos": 0
+  },
+  "pacientes": {
+   "filas": 685,
+   "completo": true,
+   "status": 200,
+   "campos": 24,
+   "cobertura_pct": {
+    "apellidos": 99.9,
+    "celular": 95.2,
+    "ciudad": 72.4,
+    "comuna": 69.8,
+    "direccion": 84.1,
+    "email": 86.0,
+    "es_carga": 100.0,
+    "es_pasaporte": 100.0,
+    "fecha_afiliacion": 99.9,
+    "fecha_deshabilitacion": 4.7,
+    "fecha_nacimiento": 92.8,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "id_genero": 84.7,
+    "id_usuario_deshabilitacion": 4.7,
+    "nombre": 100.0,
+    "nombre_social": 0.3,
+    "numero_ficha": 70.1,
+    "observaciones": 3.9,
+    "rut": 90.1,
+    "sexo": 86.4,
+    "telefono": 3.8,
+    "tiene_cargas": 100.0,
+    "tipo_documento": 100.0
+   },
+   "rango_fechas": {
+    "fecha_afiliacion": [
+     "2022-11-02",
+     "2026-10-19"
+    ]
+   },
+   "ids_unicos": 685,
+   "ids_repetidos": 0
+  },
+  "citas": {
+   "filas": 9281,
+   "completo": true,
+   "status": 200,
+   "campos": 24,
+   "cobertura_pct": {
+    "comentarios": 14.0,
+    "duracion": 100.0,
+    "estado_anulacion": 100.0,
+    "estado_cita": 100.0,
+    "estado_confirmacion": 100.0,
+    "fecha": 100.0,
+    "fecha_actualizacion": 100.0,
+    "hora_fin": 100.0,
+    "hora_inicio": 100.0,
+    "id": 100.0,
+    "id_dentista": 100.0,
+    "id_estado": 100.0,
+    "id_paciente": 100.0,
+    "id_sillon": 100.0,
+    "id_sucursal": 100.0,
+    "id_tratamiento": 100.0,
+    "motivo_atencion": 100.0,
+    "nombre_dentista": 100.0,
+    "nombre_paciente": 100.0,
+    "nombre_sillon": 100.0,
+    "nombre_social_paciente": 0.1,
+    "nombre_sucursal": 100.0,
+    "nombre_tratamiento": 99.9,
+    "tratamiento_sin_asignar": 100.0
+   },
+   "rango_fechas": {
+    "fecha": [
+     "2022-11-01",
+     "2027-08-16"
+    ],
+    "fecha_actualizacion": [
+     "2022-11-03",
+     "2026-10-19"
+    ]
+   },
+   "ids_unicos": 9281,
+   "ids_repetidos": 0
+  },
+  "tratamientos": {
+   "filas": 689,
+   "completo": true,
+   "status": 200,
+   "campos": 22,
+   "cobertura_pct": {
+    "abonado": 100.0,
+    "abono_libre": 100.0,
+    "asignado_realizado": 100.0,
+    "asignado_sin_realizar": 100.0,
+    "bloqueado": 100.0,
+    "comentario": 0.0,
+    "deuda": 100.0,
+    "fecha": 100.0,
+    "finalizado": 100.0,
+    "id": 100.0,
+    "id_convenio": 0.0,
+    "id_dentista": 100.0,
+    "id_paciente": 100.0,
+    "id_sucursal": 100.0,
+    "nombre": 99.3,
+    "nombre_convenio": 0.0,
+    "nombre_dentista": 100.0,
+    "nombre_paciente": 100.0,
+    "nombre_social_paciente": 0.3,
+    "nombre_sucursal": 100.0,
+    "total": 100.0,
+    "total_realizado": 100.0
+   },
+   "rango_fechas": {
+    "fecha": [
+     "2022-11-02",
+     "2026-10-19"
+    ]
+   },
+   "ids_unicos": 689,
+   "ids_repetidos": 0
+  },
+  "pagos": {
+   "filas": 4175,
+   "completo": true,
+   "status": 200,
+   "campos": 21,
+   "cobertura_pct": {
+    "fecha_creacion": 100.0,
+    "fecha_recepcion": 100.0,
+    "fecha_vencimiento": 100.0,
+    "folio": 0.1,
+    "id": 100.0,
+    "id_banco": 58.5,
+    "id_caja": 100.0,
+    "id_medio_pago": 60.3,
+    "id_paciente": 100.0,
+    "id_pagador": 100.0,
+    "id_sucursal": 100.0,
+    "medio_pago": 100.0,
+    "monto_pago": 100.0,
+    "nombre_banco": 58.5,
+    "nombre_paciente": 100.0,
+    "nombre_pagador": 100.0,
+    "nombre_social_paciente": 0.1,
+    "nombre_sucursal": 100.0,
+    "numero_referencia": 60.3,
+    "rut_emisor": 0.0,
+    "tipo_pagador": 100.0
+   },
+   "rango_fechas": {
+    "fecha_recepcion": [
+     "2022-04-06",
+     "2026-10-19"
+    ],
+    "fecha_creacion": [
+     "2022-04-06",
+     "2026-10-19"
+    ]
+   },
+   "ids_unicos": 4175,
+   "ids_repetidos": 0
+  },
+  "evoluciones": {
+   "filas": 5330,
+   "completo": true,
+   "status": 200,
+   "campos": 16,
+   "cobertura_pct": {
+    "datos": 99.9,
+    "fecha": 100.0,
+    "fecha_registro": 100.0,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "id_dentista": 100.0,
+    "id_paciente": 100.0,
+    "id_sucursal": 99.9,
+    "id_tratamiento": 99.9,
+    "id_usuario": 100.0,
+    "nombre_dentista": 100.0,
+    "nombre_paciente": 100.0,
+    "nombre_social_paciente": 0.2,
+    "nombre_sucursal": 99.9,
+    "nombre_tratamiento": 99.8,
+    "nombre_usuario": 100.0
+   },
+   "rango_fechas": {
+    "fecha": [
+     "2022-11-14",
+     "2026-10-19"
+    ],
+    "fecha_registro": [
+     "2022-11-14",
+     "2026-10-19"
+    ]
+   },
+   "ids_unicos": 5313,
+   "ids_repetidos": 17
+  },
+  "recetas": {
+   "filas": 3,
+   "completo": true,
+   "status": 200,
+   "campos": 14,
+   "cobertura_pct": {
+    "creador": 100.0,
+    "detalles": 100.0,
+    "eliminador": 66.7,
+    "fecha_creacion": 100.0,
+    "fecha_eliminacion": 66.7,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "id_creador": 100.0,
+    "id_eliminador": 66.7,
+    "id_paciente": 100.0,
+    "id_tratamiento": 100.0,
+    "nombre_social_paciente": 0.0,
+    "nombre_tratamiento": 66.7,
+    "paciente": 100.0
+   },
+   "rango_fechas": {
+    "fecha_creacion": [
+     "2024-08-27",
+     "2026-07-31"
+    ]
+   },
+   "ids_unicos": 3,
+   "ids_repetidos": 0
+  },
+  "horarios": {
+   "filas": 1,
+   "completo": true,
+   "status": {
+    "404": 1,
+    "200": 1
+   },
+   "campos": 4,
+   "cobertura_pct": {
+    "dias": 100.0,
+    "id_dentista": 100.0,
+    "id_sucursal": 100.0,
+    "intervalo": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 0,
+   "ids_repetidos": 0,
+   "pedidos": 2
+  },
+  "contratos": {
+   "filas": 4,
+   "completo": true,
+   "status": {
+    "200": 2
+   },
+   "campos": 16,
+   "cobertura_pct": {
+    "descto_medio_pago": 100.0,
+    "fecha_inicio": 100.0,
+    "fecha_termino": 0.0,
+    "forma_pago": 100.0,
+    "forma_pago_detalle": 100.0,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "id_dentista": 100.0,
+    "id_sucursal": 100.0,
+    "nombre_dentista": 100.0,
+    "nombre_sucursal": 100.0,
+    "porcentaje": 100.0,
+    "tipo_contrato": 100.0,
+    "tipo_contrato_detalle": 100.0,
+    "tipo_porcentaje": 100.0,
+    "tipo_porcentaje_detalle": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 4,
+   "ids_repetidos": 0,
+   "pedidos": 2
+  },
+  "liquidaciones": {
+   "filas": 4,
+   "completo": true,
+   "status": {
+    "200": 2
+   },
+   "campos": 7,
+   "cobertura_pct": {
+    "activa": 100.0,
+    "fecha_inicio": 100.0,
+    "fecha_termino": 50.0,
+    "id": 100.0,
+    "id_dentista": 100.0,
+    "id_sucursal": 100.0,
+    "monto": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 4,
+   "ids_repetidos": 0,
+   "pedidos": 2
+  },
+  "laboratorio_prestaciones": {
+   "filas": 102,
+   "completo": true,
+   "status": {
+    "200": 3
+   },
+   "campos": 13,
+   "cobertura_pct": {
+    "arancel": 100.0,
+    "categoria": 100.0,
+    "codigo": 17.6,
+    "costo": 100.0,
+    "habilitado": 100.0,
+    "id": 100.0,
+    "id_arancel": 0.0,
+    "id_categoria": 100.0,
+    "id_tipo": 100.0,
+    "nombre": 100.0,
+    "precio": 100.0,
+    "precio_laboratorio": 100.0,
+    "tipo": 100.0
+   },
+   "rango_fechas": {},
+   "ids_unicos": 45,
+   "ids_repetidos": 57,
+   "pedidos": 3
+  },
+  "tratamiento_detalles": {
+   "filas": 5701,
+   "completo": true,
+   "status": {
+    "200": 689
+   },
+   "campos": 21,
+   "cobertura_pct": {
+    "dentista_realizador": 69.0,
+    "descuento_convenio": 100.0,
+    "descuento_total": 100.0,
+    "descuento_usuario": 100.0,
+    "fecha_creacion": 100.0,
+    "fecha_realizacion": 69.0,
+    "futura_realizacion": 100.0,
+    "id": 100.0,
+    "id_dentista_realizador": 69.0,
+    "id_prestacion": 100.0,
+    "id_tratamiento": 100.0,
+    "id_usuario_creador": 100.0,
+    "liquidado": 100.0,
+    "nombre_creador": 100.0,
+    "nombre_prestacion": 100.0,
+    "pagado": 100.0,
+    "pieza": 0.0,
+    "precio": 100.0,
+    "realizado": 100.0,
+    "tipo_prestacion": 100.0,
+    "total": 100.0
+   },
+   "rango_fechas": {
+    "fecha_creacion": [
+     "2022-11-14",
+     "2026-10-19"
+    ],
+    "fecha_realizacion": [
+     "2022-11-23",
+     "2026-10-19"
+    ]
+   },
+   "ids_unicos": 5701,
+   "ids_repetidos": 0,
+   "pedidos": 689
+  },
+  "devoluciones": {
+   "filas": 0,
+   "completo": true,
+   "status": {
+    "200": 305
+   },
+   "campos": 0,
+   "cobertura_pct": {},
+   "rango_fechas": {},
+   "ids_unicos": 0,
+   "ids_repetidos": 0,
+   "pedidos": 305
+  }
+ },
+ "calidad": {
+  "fichas": {
+   "total": 685,
+   "habilitadas": 652,
+   "deshabilitadas": 33,
+   "celular_estado": {
+    "normalizado": 556,
+    "ok": 89,
+    "sintetico": 2,
+    "vacio": 33,
+    "extranjero": 3,
+    "sin_codigo_area": 1,
+    "invalido": 1
+   },
+   "documento_estado": {
+    "ok": 601,
+    "vacio": 68,
+    "pasaporte_u_otro": 13,
+    "dudoso": 3
+   },
+   "email_estado": {
+    "vacio": 96,
+    "ok": 586,
+    "falso": 2,
+    "invalido": 1
+   },
+   "nacimiento_vacio": 49,
+   "nacimiento_relleno_1900": 54,
+   "nacimiento_invalido": 1,
+   "direccion_vacia": 109,
+   "sin_celular_con_telefono": 0,
+   "menores": 285,
+   "edad_desconocida": 104,
+   "duplicadas_marcadas": 15,
+   "grupos_con_duplicados": 15,
+   "duplicado_regla": {
+    "mismo_nombre_y_celular": 13,
+    "mismo_nombre_y_nacimiento": 2
+   },
+   "documento_compartido_nombres_distintos": 0,
+   "celulares_compartidos_por_varias_fichas": 89,
+   "fichas_en_celular_compartido": 195,
+   "max_fichas_por_celular": 4,
+   "origen_probable": {
+    "staff": 659,
+    "bot_v7": 5,
+    "bot_v6": 21
+   },
+   "origen_bot_por_mes_alta": {
+    "2026-10": 3,
+    "2026-09": 2,
+    "2026-08": 5,
+    "2026-07": 2,
+    "2026-06": 3,
+    "2026-05": 10,
+    "2026-04": 1
+   },
+   "posible_prueba": 4,
+   "nombre_vacio": 0,
+   "sin_ninguna_cita": 24,
+   "tipo_documento": {
+    "0": 672,
+    "1": 13
+   },
+   "fichas_creadas_por_mes_ultimos_12": {
+    "2025-10": 3,
+    "2025-11": 5,
+    "2025-12": 5,
+    "2026-01": 12,
+    "2026-02": 18,
+    "2026-03": 10,
+    "2026-04": 19,
+    "2026-05": 20,
+    "2026-06": 12,
+    "2026-07": 12,
+    "2026-08": 17,
+    "2026-09": 8,
+    "2026-10": 9
+   }
+  },
+  "citas": {
+   "total": 9281,
+   "futuras": 178,
+   "pasadas": 9103,
+   "por_estado": {
+    "2 Atendido": 5318,
+    "1 Anulado": 2025,
+    "14 Cambio de fecha": 1545,
+    "8 No asiste": 221,
+    "15 Notificado por WhatsApp": 102,
+    "7 No confirmado": 36,
+    "18 Confirmado por whatsapp": 18,
+    "9 Anulado por sesiones en conflicto": 6,
+    "6 Atendiéndose": 4,
+    "17 Paciente Deshabilitado": 4,
+    "12 Notificado via email": 1,
+    "21 Anulado vía validación": 1
+   },
+   "por_categoria": {
+    "anulada": 3581,
+    "notificada": 103,
+    "pendiente": 36,
+    "confirmada": 18,
+    "atendida": 5318,
+    "no_asistio": 221,
+    "en_curso": 4
+   },
+   "futuras_por_estado": {
+    "15 Notificado por WhatsApp": 96,
+    "7 No confirmado": 25,
+    "14 Cambio de fecha": 25,
+    "1 Anulado": 16,
+    "18 Confirmado por whatsapp": 16
+   },
+   "por_anio": {
+    "2022": 254,
+    "2023": 2010,
+    "2024": 2367,
+    "2025": 2194,
+    "2026": 2447,
+    "2027": 9
+   },
+   "duracion_min": {
+    "40": 4322,
+    "30": 2481,
+    "45": 930,
+    "20": 481,
+    "60": 453,
+    "10": 415,
+    "15": 95,
+    "50": 90
+   },
+   "flags": {
+    "fuera_de_grilla": 1074,
+    "fuera_de_horario": 793,
+    "posible_prueba": 52
+   },
+   "flags_en_futuras_no_anuladas": {
+    "fuera_de_horario": 3
+   },
+   "origen_inferido": {
+    "staff_o_desconocido": 9237,
+    "bot_v6": 42,
+    "bot_v7": 2
+   },
+   "origen_inferido_ultimos_90_dias": {
+    "staff_o_desconocido": 836,
+    "bot_v6": 19,
+    "bot_v7": 2
+   },
+   "motivos_distintos": 28,
+   "motivos_frecuentes": {
+    "En TTO LARGO": 4850,
+    "En TTO CORTO": 963,
+    "Consulta Ortodoncia": 677,
+    "Devolución con escaneo": 671,
+    "Control Contención": 616,
+    "Escaneo + FOTOS": 275,
+    "Consulta": 251,
+    "Inicio tto con Brackets": 176,
+    "No registra motivo": 166,
+    "Escaneo": 157,
+    "Urgencia": 144,
+    "Estudio con escaneo": 125
+   },
+   "sin_tratamiento_asignado": 0,
+   "pacientes_distintos": 661,
+   "hora_actualizacion_por_estado": {
+    "1": {
+     "00": 5,
+     "01": 1,
+     "02": 5,
+     "03": 4,
+     "04": 1,
+     "07": 29,
+     "08": 177,
+     "09": 195,
+     "10": 194,
+     "11": 184,
+     "12": 156,
+     "13": 25,
+     "14": 80,
+     "15": 251,
+     "16": 212,
+     "17": 159,
+     "18": 164,
+     "19": 121,
+     "20": 53,
+     "21": 4,
+     "22": 2,
+     "23": 3
+    },
+    "7": {
+     "08": 3,
+     "09": 3,
+     "10": 3,
+     "11": 2,
+     "12": 7,
+     "15": 7,
+     "16": 6,
+     "17": 1,
+     "18": 1,
+     "19": 3
+    },
+    "15": {
+     "08": 6,
+     "09": 9,
+     "10": 11,
+     "11": 12,
+     "12": 13,
+     "15": 6,
+     "16": 14,
+     "17": 7,
+     "18": 14,
+     "19": 7,
+     "20": 3
+    },
+    "18": {
+     "03": 1,
+     "08": 3,
+     "09": 1,
+     "10": 1,
+     "12": 2,
+     "15": 5,
+     "16": 2,
+     "17": 1,
+     "18": 1,
+     "19": 1
+    },
+    "19": {},
+    "20": {},
+    "22": {}
+   },
+   "dias_antes_del_turno_por_estado": {
+    "1": {
+     "-1": 4,
+     "0": 174,
+     "1": 191,
+     "2": 205,
+     "3": 126,
+     "4": 102,
+     "5": 104,
+     "6": 73,
+     "7": 91,
+     "8": 955
+    },
+    "7": {
+     "-1": 2,
+     "0": 1,
+     "2": 1,
+     "5": 3,
+     "6": 1,
+     "7": 3,
+     "8": 25
+    },
+    "15": {
+     "2": 1,
+     "5": 1,
+     "8": 100
+    },
+    "18": {
+     "-1": 1,
+     "1": 1,
+     "2": 7,
+     "3": 3,
+     "4": 3,
+     "5": 2,
+     "8": 1
+    },
+    "19": {},
+    "20": {},
+    "22": {}
+   },
+   "solapes_no_anuladas": 139,
+   "solapes_futuras": 6
+  },
+  "tratamientos": {
+   "total": 689,
+   "finalizados": 2,
+   "con_deuda": 31,
+   "flags": {
+    "sin_nombre": 5
+   },
+   "nombres_distintos": 112,
+   "nombres_frecuentes": {
+    "Nuevo plan de tratamiento": 505,
+    "Diagnóstico": 19
+   },
+   "fichas_con_plan": 663
+  },
+  "pagos": {
+   "total": 4175,
+   "flags": {
+    "monto_no_positivo": 5
+   },
+   "medio_pago": {
+    "Efectivo": 1657,
+    "Transferencia electrónica": 2442,
+    "USD": 13,
+    "Efectivo USD": 25,
+    "Tarjeta de crédito": 33,
+    "Pago en dólares": 3,
+    "Tarjeta de débito": 1,
+    "Depósito bancario": 1
+   },
+   "tipo_pagador": {
+    "Paciente": 4175
+   }
+  },
+  "evoluciones": {
+   "total": 5313,
+   "flags": {},
+   "con_texto": 5310,
+   "fichas_con_evoluciones": 485
+  },
+  "tratamiento_detalles": {
+   "total": 5701,
+   "flags": {},
+   "realizadas": 3927,
+   "con_pieza_dental": 0
+  },
+  "recetas": {
+   "total": 3,
+   "flags": {}
+  },
+  "cajas": {
+   "total": 305,
+   "flags": {}
+  },
+  "prestaciones": {
+   "total": 990,
+   "flags": {}
+  },
+  "usuarios": {
+   "total": 22,
+   "flags": {},
+   "habilitados": 7
+  },
+  "profesionales": {
+   "total": 2,
+   "flags": {}
+  },
+  "estados_cita_catalogo": [
+   {
+    "id": 22,
+    "nombre": "Confirmado",
+    "anulacion": false,
+    "categoria": "confirmada",
+    "habilitado": true
+   },
+   {
+    "id": 21,
+    "nombre": "Anulado vía validación",
+    "anulacion": true,
+    "categoria": "anulada",
+    "habilitado": true
+   },
+   {
+    "id": 20,
+    "nombre": "Anulado por pcte. via Whatsapp",
+    "anulacion": true,
+    "categoria": "anulada",
+    "habilitado": true
+   },
+   {
+    "id": 19,
+    "nombre": "Confirmado por Whatsapp",
+    "anulacion": false,
+    "categoria": "confirmada",
+    "habilitado": true
+   },
+   {
+    "id": 18,
+    "nombre": "Confirmado por whatsapp",
+    "anulacion": false,
+    "categoria": "confirmada",
+    "habilitado": true
+   },
+   {
+    "id": 17,
+    "nombre": "Paciente Deshabilitado",
+    "anulacion": true,
+    "categoria": "anulada",
+    "habilitado": true
+   },
+   {
+    "id": 16,
+    "nombre": "Anulado por reprogramación",
+    "anulacion": true,
+    "categoria": "anulada",
+    "habilitado": true
+   },
+   {
+    "id": 15,
+    "nombre": "Notificado por WhatsApp",
+    "anulacion": false,
+    "categoria": "notificada",
+    "habilitado": true
+   },
+   {
+    "id": 14,
+    "nombre": "Cambio de fecha",
+    "anulacion": true,
+    "categoria": "anulada",
+    "habilitado": true
+   },
+   {
+    "id": 13,
+    "nombre": "Agenda Online",
+    "anulacion": false,
+    "categoria": "pendiente",
+    "habilitado": true
+   },
+   {
+    "id": 12,
+    "nombre": "Notificado via email",
+    "anulacion": false,
+    "categoria": "notificada",
+    "habilitado": true
+   },
+   {
+    "id": 11,
+    "nombre": "Confirmado por email",
+    "anulacion": false,
+    "categoria": "confirmada",
+    "habilitado": true
+   },
+   {
+    "id": 10,
+    "nombre": "Anulado por pcte. via email",
+    "anulacion": true,
+    "categoria": "anulada",
+    "habilitado": true
+   },
+   {
+    "id": 9,
+    "nombre": "Anulado por sesiones en conflicto",
+    "anulacion": true,
+    "categoria": "anulada",
+    "habilitado": true
+   },
+   {
+    "id": 8,
+    "nombre": "No asiste",
+    "anulacion": false,
+    "categoria": "no_asistio",
+    "habilitado": true
+   },
+   {
+    "id": 7,
+    "nombre": "No confirmado",
+    "anulacion": false,
+    "categoria": "pendiente",
+    "habilitado": true
+   },
+   {
+    "id": 6,
+    "nombre": "Atendiéndose",
+    "anulacion": false,
+    "categoria": "en_curso",
+    "habilitado": true
+   },
+   {
+    "id": 5,
+    "nombre": "En sala de espera",
+    "anulacion": false,
+    "categoria": "en_curso",
+    "habilitado": true
+   },
+   {
+    "id": 3,
+    "nombre": "Confirmado por teléfono",
+    "anulacion": false,
+    "categoria": "confirmada",
+    "habilitado": true
+   },
+   {
+    "id": 2,
+    "nombre": "Atendido",
+    "anulacion": false,
+    "categoria": "atendida",
+    "habilitado": true
+   },
+   {
+    "id": 1,
+    "nombre": "Anulado",
+    "anulacion": true,
+    "categoria": "anulada",
+    "habilitado": true
+   }
+  ],
+  "horarios": [
+   {
+    "profesional_id": 1,
+    "dia": 3,
+    "desde": "15:00:00",
+    "hasta": "19:20:00",
+    "intervalo": 10
+   },
+   {
+    "profesional_id": 1,
+    "dia": 1,
+    "desde": "15:00:00",
+    "hasta": "19:20:00",
+    "intervalo": 10
+   },
+   {
+    "profesional_id": 1,
+    "dia": 5,
+    "desde": "08:30:00",
+    "hasta": "11:40:00",
+    "intervalo": 10
+   },
+   {
+    "profesional_id": 1,
+    "dia": 4,
+    "desde": "08:00:00",
+    "hasta": "11:40:00",
+    "intervalo": 10
+   },
+   {
+    "profesional_id": 1,
+    "dia": 2,
+    "desde": "08:00:00",
+    "hasta": "11:40:00",
+    "intervalo": 10
+   }
+  ]
+ },
+ "carga_simulada": {
+  "sucursales": {
+   "fase_tabla": "ocupacion",
+   "filas": 1,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 6
+   }
+  },
+  "especialidades": {
+   "fase_tabla": "ocupacion",
+   "filas": 14,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 3
+   }
+  },
+  "profesionales": {
+   "fase_tabla": "ocupacion",
+   "filas": 2,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 9,
+    "pacientes": 7
+   }
+  },
+  "sillones": {
+   "fase_tabla": "ocupacion",
+   "filas": 2,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 1
+   }
+  },
+  "estados_cita": {
+   "fase_tabla": "ocupacion",
+   "filas": 21,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 7
+   }
+  },
+  "horarios": {
+   "fase_tabla": "ocupacion",
+   "filas": 7,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 10
+   }
+  },
+  "aranceles": {
+   "fase_tabla": "ocupacion",
+   "filas": 2,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 2
+   }
+  },
+  "categorias_prestacion": {
+   "fase_tabla": "ocupacion",
+   "filas": 18,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 4
+   }
+  },
+  "prestaciones": {
+   "fase_tabla": "ocupacion",
+   "filas": 990,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 9
+   }
+  },
+  "bancos": {
+   "fase_tabla": "ocupacion",
+   "filas": 29,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 2
+   }
+  },
+  "laboratorios": {
+   "fase_tabla": "ocupacion",
+   "filas": 3,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 5
+   }
+  },
+  "convenios": {
+   "fase_tabla": "pacientes",
+   "filas": 0,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "pacientes": 2
+   }
+  },
+  "usuarios": {
+   "fase_tabla": "ocupacion",
+   "filas": 22,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 6,
+    "pacientes": 4
+   }
+  },
+  "cajas": {
+   "fase_tabla": "pacientes",
+   "filas": 305,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "pacientes": 13
+   }
+  },
+  "fichas": {
+   "fase_tabla": "ficha_minima",
+   "filas": 685,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ficha_minima": 10,
+    "pacientes": 25,
+    "clinica": 1
+   }
+  },
+  "tratamientos": {
+   "fase_tabla": "pacientes",
+   "filas": 689,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "pacientes": 17,
+    "clinica": 1
+   }
+  },
+  "citas": {
+   "fase_tabla": "ocupacion",
+   "filas": 9281,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 17,
+    "ficha_minima": 2,
+    "pacientes": 2,
+    "clinica": 1
+   }
+  },
+  "tratamiento_detalles": {
+   "fase_tabla": "pacientes",
+   "filas": 5701,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "pacientes": 18,
+    "clinica": 1
+   }
+  },
+  "pagos": {
+   "fase_tabla": "pacientes",
+   "filas": 4175,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "pacientes": 18
+   }
+  },
+  "evoluciones": {
+   "fase_tabla": "clinica",
+   "filas": 5313,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "clinica": 11
+   }
+  },
+  "recetas": {
+   "fase_tabla": "clinica",
+   "filas": 3,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "clinica": 10
+   }
+  },
+  "dentalink_otros": {
+   "fase_tabla": "ocupacion",
+   "filas": 53,
+   "se_carga_con_esta_fase": true,
+   "columnas_por_fase": {
+    "ocupacion": 5
+   }
+  }
+ },
+ "descubrimiento": {
+  "rutas": {
+   "/sucursales": {
+    "status": 200,
+    "n_primera_pagina": 1,
+    "mensaje": ""
+   },
+   "/dentistas": {
+    "status": 200,
+    "n_primera_pagina": 2,
+    "mensaje": ""
+   },
+   "/citas": {
+    "status": 200,
+    "n_primera_pagina": 50,
+    "mensaje": ""
+   },
+   "/citas/estados": {
+    "status": 200,
+    "n_primera_pagina": 21,
+    "mensaje": ""
+   },
+   "/pacientes": {
+    "status": 200,
+    "n_primera_pagina": 50,
+    "mensaje": ""
+   },
+   "/tratamientos": {
+    "status": 200,
+    "n_primera_pagina": 50,
+    "mensaje": ""
+   },
+   "/pagos": {
+    "status": 200,
+    "n_primera_pagina": 50,
+    "mensaje": ""
+   },
+   "/evoluciones": {
+    "status": 200,
+    "n_primera_pagina": 50,
+    "mensaje": ""
+   },
+   "/prestaciones": {
+    "status": 200,
+    "n_primera_pagina": 50,
+    "mensaje": ""
+   },
+   "/aranceles": {
+    "status": 200,
+    "n_primera_pagina": 2,
+    "mensaje": ""
+   },
+   "/cajas": {
+    "status": 200,
+    "n_primera_pagina": 50,
+    "mensaje": ""
+   },
+   "/usuarios": {
+    "status": 200,
+    "n_primera_pagina": 22,
+    "mensaje": ""
+   },
+   "/especialidades": {
+    "status": 200,
+    "n_primera_pagina": 14,
+    "mensaje": ""
+   },
+   "/sillones": {
+    "status": 200,
+    "n_primera_pagina": 2,
+    "mensaje": ""
+   },
+   "/convenios": {
+    "status": 200,
+    "n_primera_pagina": 0,
+    "mensaje": ""
+   },
+   "/recetas": {
+    "status": 200,
+    "n_primera_pagina": 3,
+    "mensaje": ""
+   },
+   "/laboratorios": {
+    "status": 200,
+    "n_primera_pagina": 3,
+    "mensaje": ""
+   },
+   "/bancos": {
+    "status": 200,
+    "n_primera_pagina": 29,
+    "mensaje": ""
+   },
+   "/categorias": {
+    "status": 200,
+    "n_primera_pagina": 18,
+    "mensaje": ""
+   },
+   "/archivos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/horarios": {
+    "status": 400,
+    "n_primera_pagina": null,
+    "mensaje": "Debe definir los parametros requeridos para obtener los horarios."
+   },
+   "/bloqueos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/presupuestos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/tareas": {
+    "status": 401,
+    "n_primera_pagina": null,
+    "mensaje": "No tiene autorizacion."
+   },
+   "/devoluciones": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/abonos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/mediospago": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/gastos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/documentos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/formularios": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/odontogramas": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/fichas": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/campanas": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/encuestas": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/notificaciones": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/descuentos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/feriados": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/motivos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/citas/motivos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/agendas": {
+    "status": 200,
+    "n_primera_pagina": 0,
+    "mensaje": ""
+   },
+   "/dentistas/1/horarios": {
+    "status": 200,
+    "n_primera_pagina": 1,
+    "mensaje": ""
+   },
+   "/dentistas/1/bloqueos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/dentistas/1/contratos": {
+    "status": 200,
+    "n_primera_pagina": 1,
+    "mensaje": ""
+   },
+   "/dentistas/1/liquidaciones": {
+    "status": 200,
+    "n_primera_pagina": 3,
+    "mensaje": ""
+   },
+   "/dentistas/1/adicionales": {
+    "status": 401,
+    "n_primera_pagina": null,
+    "mensaje": "No tiene autorizacion."
+   },
+   "/sucursales/1/horarios": {
+    "status": 200,
+    "n_primera_pagina": 1,
+    "mensaje": ""
+   },
+   "/sucursales/1/bloqueos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/sucursales/1/cajas": {
+    "status": 200,
+    "n_primera_pagina": 50,
+    "mensaje": ""
+   },
+   "/sucursales/1/usuarios": {
+    "status": 200,
+    "n_primera_pagina": 17,
+    "mensaje": ""
+   },
+   "/sucursales/1/sillones": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/agendas/bloqueos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/horarios/bloqueos": {
+    "status": 404,
+    "n_primera_pagina": null,
+    "mensaje": ""
+   },
+   "/especialidades/1": {
+    "status": 200,
+    "n_primera_pagina": 1,
+    "mensaje": ""
+   }
+  },
+  "por_paciente": {
+   "archivos": {
+    "pacientes_muestra": 30,
+    "status": {
+     "404": 27,
+     "200": 3
+    },
+    "filas": 3,
+    "pacientes_con_datos": 3
+   },
+   "apoderados": {
+    "pacientes_muestra": 30,
+    "status": {
+     "404": 30
+    },
+    "filas": 0,
+    "pacientes_con_datos": 0
+   },
+   "cargas": {
+    "pacientes_muestra": 30,
+    "status": {
+     "404": 30
+    },
+    "filas": 0,
+    "pacientes_con_datos": 0
+   },
+   "adicionales": {
+    "pacientes_muestra": 30,
+    "status": {
+     "200": 30
+    },
+    "filas": 28,
+    "pacientes_con_datos": 28
+   },
+   "convenios": {
+    "pacientes_muestra": 30,
+    "status": {
+     "200": 30
+    },
+    "filas": 0,
+    "pacientes_con_datos": 0
+   },
+   "devoluciones": {
+    "pacientes_muestra": 30,
+    "status": {
+     "200": 30
+    },
+    "filas": 0,
+    "pacientes_con_datos": 0
+   },
+   "tareas": {
+    "pacientes_muestra": 30,
+    "status": {
+     "401": 30
+    },
+    "filas": 0,
+    "pacientes_con_datos": 0
+   },
+   "notificacionesGes": {
+    "pacientes_muestra": 30,
+    "status": {
+     "200": 30
+    },
+    "filas": 0,
+    "pacientes_con_datos": 0
+   }
+  }
+ }
+}
