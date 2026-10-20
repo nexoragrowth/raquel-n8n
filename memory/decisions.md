@@ -784,3 +784,143 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 **Razón**: pedido de Lucas ("post 1 hora sin que hable un humano que vuelva a modo bot, siempre sirvió"). La Dra. ya se quejó de 4 h ("queda mudo demasiado"). Al desacoplar Chatwoot se perdió el workflow que lo hacía y la ventana quedó en 24 h, y además el nodo que prende el flag está roto desde el 05/10.
 **Alternativas descartadas**: reactivar `Auto Reactivar` con cron (depende de Chatwoot, y la ventana por timestamp no necesita cron).
 **Revisable**: sí. Pendiente de aplicar con OK de Lucas.
+
+
+## 2026-10-06 — Banlist del v7: se saca la regla "dirección sin que la pidan"
+
+**Decisión**: `v7/banlist_usted.js` ya no bloquea por mencionar la dirección. Quedan las reglas de los incidentes graves: invitar a ir ahora o sin turno, instrucciones clínicas/medicación, diagnóstico y "le aviso si se libera".
+**Razón**: en ~650 turnos de examen el banlist del v7 bloqueó 4 veces, todas por esa regla y en la variante con orquestador; en la que leí, el bot había ofrecido mandar la dirección, la paciente dijo "sí" y el filtro lo reemplazó por un texto genérico más un aviso a la clínica (peor que no filtrar). Dar la dirección no es un riesgo; "no dar la dirección salvo que la pidan" sigue en el prompt. Pedido de Lucas: explicarle al bot las reglas del negocio en vez de depender de listas.
+**Revisable**: sí. La prueba retrospectiva sobre 90 días medirá falsos positivos de las reglas que quedan; si bloquean más de lo que atajan, se sacan.
+
+
+## 2026-10-06 — Nombre y regla del diseño elegido: "Asiri orquestador"
+
+**Decisión**: el v7 se llama "Asiri orquestador" (no "agente único"): una sola IA que entiende al paciente, decide qué workflow usar y es la ÚNICA que le escribe. Las herramientas son workflows que devuelven DATOS o textos armados por código; si alguna lleva una IA chica adentro (ej. elegir entre nombres parecidos), es para decidir y devolver un dato, nunca prosa para el paciente.
+**Razón**: examen del 06/10 sobre 8 escenarios comunes: orquestador 20/24 repeticiones vs "orquestador con especialistas que escriben" 13/24 y más lento (mediana del peor turno 12,4 s vs 17,1 s). Las fallas de la variante con especialistas salieron de dos modelos escribiendo en fila (el padre reescribía la confirmación del especialista; el código tuvo que corregir 17 de 83 respuestas vs 9 de 82). Mismo patrón que Joaquín Basconi (agente + workflows; sus IA internas devuelven datos).
+**Alternativas descartadas**: especialistas con su propio agente que redactan (`cerebro_ma`, `cerebro_mixto`): quedan en el repo, archivados, sin desplegar más.
+**Revisable**: sí, con datos de la prueba retrospectiva y del piloto.
+
+
+## 2026-10-07 — Pacientes nuevos: el alta la hace el código dentro de gestionar_turno
+
+**Decisión**: un turno para alguien sin ficha se reserva igual. El modelo solo copia nombre, apellido y DNI que dio el paciente a `gestionar_turno`; el read-back los muestra y, con el "sí", el código busca el DNI, da el alta en Dentalink y reserva en la misma ejecución. Si la agenda rechaza el DNI, un reintento sin DNI y aviso para cargarlo a mano; ante cualquier duda (DNI de otra persona, error de red) no se escribe y se avisa ACCIÓN.
+**Razón**: la retrospectiva del 06/10 marcó que era la única falta funcional del v7 frente al v6 (`crear_paciente_dentalink`), y los leads de anuncios son pacientes nuevos: derivarlos a la clínica corta la conversión. Buscar el DNI antes de crear evita las fichas duplicadas del v6; el DNI ahora sí llega a la agenda (GAP 7 / AGE-26 del v6).
+**Alternativas descartadas**: herramienta aparte `crear_paciente` para el modelo (otra decisión probabilística y otro paso donde se puede cortar la charla); derivar el alta a la secretaria (pierde al lead fuera de horario).
+**Revisable**: sí. El nombre del campo del DNI (`rut`) no está verificado contra la API real hasta la primera alta en vivo.
+
+
+## 2026-10-07 — "No se preocupe" de la banlist solo en contexto clínico
+
+**Decisión**: la regla "no se preocupe / no te preocupes" de `v7/banlist_usted.js` bloquea solo si el mensaje del paciente o la respuesta hablan de síntomas, aparato o dientes (o si no se conoce el mensaje del paciente). El resto de la banlist no cambia.
+**Razón**: en la retrospectiva del 07/10 bloqueó una cortesía ("Disculpa, no vi los mensajes" → "No se preocupe…") y el paciente recibió "déjeme consultarlo con la clínica". El riesgo real (incidente del 09/05) es opinar sobre un síntoma; eso sigue bloqueado (test con el texto de Mariela).
+**Revisable**: sí, con los bloqueos que registren el examen y la sombra.
+
+## 2026-10-07 — Horarios nombrados sin buscar: los busca el código
+
+**Decisión**: si la respuesta de Asiri nombra horarios que no salieron de la agenda y en la conversación no hay ningún bloque, el cerebro llama `buscar_horarios` antes de la salida y el chequeo pega el bloque real. Si no se puede, texto honesto + [ACCIÓN] a la clínica.
+**Razón**: el chequeo ya frenaba bien el horario inventado, pero el reemplazo ("déjeme confirmar los horarios…") dejaba la conversación colgada (2/80 en la retrospectiva). Mismo camino que cuando el modelo se olvida de pegar el bloque.
+**Alternativas descartadas**: reintentar el agente con una corrección (más lento y otra vez probabilístico).
+**Revisable**: sí.
+
+## 2026-10-07 — El orquestador entiende, elige y pega: los textos clave los arma el código
+
+**Decisión**: además del bloque de horarios, el read-back y el mensaje final, `gestionar_turno` arma por código las preguntas de los momentos clave (cambiar o sumar, pedido de datos del paciente nuevo, para quién es, cuál turno) y una versión con otras palabras si el paciente contestó sin elegir. El modelo las pega; solo redacta libre en charla e información de los DATOS.
+**Razón**: las fallas que quedaban eran de redacción del modelo en esos momentos (repetir la misma pregunta palabra por palabra en AGE-03). Lucas: "que el orquestador no tenga que laburar". No se agregó otra IA adentro de las herramientas (los especialistas que redactan ya midieron peor: 13/24 vs 20/24).
+**Revisable**: sí, con el examen completo y el piloto.
+
+## 2026-10-07 — "Que funcione como una app": el sí ejecuta lo que el paciente vio, sin preguntas de más
+
+**Decisión**: (1) si el paciente ya tiene turno y pide otro, no se pregunta "¿cambiar o sumar?": se arma la confirmación de otro turno "además de su turno del…" y, si quería cambiarlo, lo dice ahí. (2) El "sí" a una confirmación ejecuta la confirmación guardada que el paciente vio, aunque el modelo mande otros datos. (3) Un "sí" a secas lo ejecuta el código sin pasar por el modelo.
+**Razón**: captura de Lucas del examen: después de un "Sí" claro, Asiri volvió a preguntar "¿pasarlo o sacar uno más?" porque el modelo cambió el pedido entre las dos llamadas. La pregunta extra confundía y alargaba la charla; el "sí" directo además ahorra 4-8 s (una o dos vueltas del modelo).
+**Alternativas descartadas**: mantener la pregunta cambiar/sumar con textos armados por código (seguía siendo un mensaje más y una fuente de ambigüedad).
+**Revisable**: sí. Choca con la KB 17 ("un solo turno a futuro") si la Dra. la confirma: en ese caso, "pide otro turno y ya tiene uno" pasaría a ser cambio por defecto (la confirmación lo diría igual de explícito).
+
+## 2026-10-07 — Pasar a una persona solo por urgencia o pedido explícito
+
+**Decisión**: el bot se calla y pasa la charla a una persona solo si el paciente lo pide explícitamente (secretaria, doctora, una persona); las urgencias van al triaje. Una queja o un pedido de baja de datos se avisan a la clínica como [ACCIÓN] y el bot sigue atendiendo. Una duda o algo ambiguo nunca se deriva: se pregunta. Avisar a la clínica (comprobantes, presupuestos, turnos de menos de 48 h) no es escalar: el bot sigue.
+**Razón**: pedido de Lucas: el v7 tiene que ser el sistema con el que el paciente resuelve su relación con el consultorio; escalar por ambigüedad es un fracaso de conversión. La verificación anterior de "pidió una persona" aceptaba cualquier mensaje con "Dra." o "secretaria".
+**Revisable**: sí (si la Dra. quiere que las quejas callen al bot).
+
+## 2026-10-07 — Se saca la banlist de frases (v6 y v7)
+
+**Decisión**: sin banlist regex en la salida, ni en el v7 ni en el v6 ("lo controlamos con prompt; el banlist es bullshit, quitámelo en todo" — Lucas). v7: `banlist_usted.js` y su test borrados; la Salida ya no la usa. v6: `scripts/apply_quitar_banlist_v6.py` deja `Banlist Validator` como paso sin control (mismo nombre y salida de "no bloqueó", porque Split en Mensajes, Hay humano ahora? y Gate Humano Final lo leen) y desconecta/deshabilita la rama Banlist Shadow; el --apply lo corre Lucas (backup PRE, check_triaje, verificación).
+**Razón**: en ~400 corridas de examen y 160 de retrospectiva la banlist del v7 solo frenó mensajes inocentes ("no se preocupe" de cortesía, "pase por favor su DNI", la dirección pedida) y su reemplazo ("déjeme consultarlo con la clínica") confundía al paciente; nunca frenó algo realmente peligroso.
+**Qué cuida ahora lo que cuidaba**: el prompt (nunca invitar a ir ahora o sin turno; sin indicaciones clínicas ni diagnósticos; no prometer avisos) + el triaje de urgencias ANTES del modelo + el chequeo de salida (afirmaciones y horarios contra la agenda). Riesgo aceptado: si el modelo escribiera "acérquese ahora mismo", ya no lo frena el código (test Z7 sacado).
+**Alternativas descartadas**: afinar los patrones (se intentó: "no se preocupe" solo clínico, "pase por" solo a un lugar, limpiar solo la frase) — seguían apareciendo falsos positivos.
+**Revisable**: sí, si aparece en vivo una respuesta peligrosa.
+
+
+## 2026-10-08 — Las herramientas del v7 solo escriben con `modo === 'vivo'` explícito
+
+**Decisión**: todo lo que escribe afuera (Dentalink, recordatorios, avisos al grupo, memoria) exige `modo: 'vivo'` explícito; un modo ausente, vacío o cualquier otro valor es sombra. Aplica en `confirmar_turno` (nuevo IF "¿Es sombra?" antes del PUT y del UPDATE del recordatorio), `agenda_core.pasoInicial`, `clinica_core.decidir` y la Salida del cerebro; los `|| 'vivo'` del cerebro (sí directo, cierre) pasan a `'sombra'`. Tests: C10 (sombra) y C11 (sin modo) en `test_v7_grafo_herramientas.py`; los tests que daban "vivo" por hecho ahora lo pasan.
+**Razón**: incidente del 06/10. El trigger de `confirmar_turno` no declaraba `modo`, n8n descartaba el campo y la herramienta confirmaba de verdad durante la retrospectiva en sombra: 11 citas reales quedaron en 18 y el recordatorio de la 9064, marcado. Con "sombra = `modo === 'sombra'`", un campo que no llega era vivo; ahora un campo que no llega no escribe.
+**Alternativas descartadas**: solo agregar `modo` al trigger de confirmar (arregla este caso pero no el próximo workflow que se olvide el campo).
+**Revisable**: no. Cualquier herramienta nueva que escriba tiene que declarar `modo` en su trigger y tener un test de sombra.
+
+## 2026-10-08 — Asiri solo turnos e información del consultorio; lo demás, a la secretaria y modo humano si insiste
+**Decisión (Lucas, feedback de la 4.ª corrida de reales)**: Asiri no conversa fuera de su función (turnos, confirmar/cancelar, info del consultorio). Fuera de tema (presupuestos, pagos en otra moneda, proveedores, temas personales o de terceros): una sola respuesta «Le paso con la secretaria para que lo atienda.» + avisar_grupo ACCION. Si insiste (2.º aviso ACCIÓN en 30 min), modo humano (tomar=true): el bot se calla en ese chat hasta que la clínica lo reactive (por ahora el Auto Reactivar del v6). Saludo → SIEMPRE el menú del panel; con turnos sin confirmar, el menú + una línea «responda Confirmo». Turno no encontrado con el nombre que dan → mostrar los turnos que figuran en el celular y preguntar.
+**Razón**: REAL-08 (proveedor interrogado), REAL-09 (8 mensajes, 7 avisos), REAL-12 (saludo sin menú: lo había cambiado yo esa mañana). "Llevemos al usuario a donde queremos; la única función es la que le creamos" — Lucas.
+**Revisable**: el modo humano "para siempre" se resuelve con el pipeline de estados del panel (próxima etapa).
+
+## 2026-10-08 — Asiri nunca pide confirmación de asistencia
+**Decisión (Lucas)**: "el bot no pide confirmación; hacer recordatorios y ahí confirma". Pedir confirmación es tarea exclusiva del workflow de Recordatorios. Asiri solo confirma cuando el paciente lo dice (confirmar_turno). Saludo → solo el menú del panel, sin línea de "tiene pendiente confirmar". El contexto del modelo dice "RECORDATORIOS YA ENVIADOS (sin respuesta; NO le pidas que confirme…)" en vez de "PENDIENTES DE CONFIRMAR" (que lo empujaba a preguntar, REAL-13). Prompt: "Vos nunca pidas que confirme su asistencia". Tests B6-B8, H6.
+**Revisable**: no.
+
+## 2026-10-08 — Health Check auto-reparable (post-incidente webhook vacío 06-08/10)
+**Decisión**: el Health Check (`Yjl6kyLnALhIfbFX`) detecta y repara solo el webhook/eventos de la instancia `raquel` (POST /instance/connect con el token de la instancia, body armado con lo que la instancia ya tenía), con corte de reintentos (3 fallas → 1 cada 2 h), aviso si se repara 2+ veces en 24 h, alerta de "sin tráfico" en horas hábiles (con feriados) y nodos HTTP que no cortan la ejecución ante timeout. Lógica en `v7/health_core.js` (test `tests/test_health_core.mjs`), aplica `scripts/apply_health_check_autoreparable.py` (el `--apply` lo corre Lucas). Canal de mail si falla el WhatsApp: opcional con `--mail-a` (decide Lucas). Panel: `reconectarInstancia()` ya no manda body `{}` (causa raíz probable: Connect pisa el webhook con ""); pendiente deploy + env `EVOLUTION_WEBHOOK_URL` en Vercel.
+**OJO**: la URL del webhook está FIJA en `health_core.WEBHOOK`. Si se cambia a propósito (v7, secreto por clínica), cambiar ahí primero y re-aplicar; si no, el Health Check la revierte en ≤ 30 min. La alerta "sin tráfico" depende de que alguien siga escribiendo `mensajes_entrantes_live` (hoy el nodo Inbox Live del v6): prerrequisito del cutover al v7.
+**Descartado**: `errorWorkflow` = Error Handler (sale por el mismo WhatsApp y al grupo de la doctora, hasta 48/día; en su lugar try/catch → "[FALLO TECNICO]" a Lucas); `saveDataSuccessExecution: none` (rompe la simulación y el diagnóstico; la exposición del token en ejecuciones ya existía); chequear `active` del v6 desde el workflow (necesita una API key de n8n dentro de n8n).
+**Revisable**: sí — quedan abiertos el canal fuera de WhatsApp (mail / monitor externo tipo healthchecks.io para "n8n caído"), el destinatario después de febrero y si se deja esta alerta de sin tráfico o la del Vigía.
+
+## 2026-10-08 — La IA decide qué quiso decir el paciente; el código ejecuta y garantiza (nada de regex como juez de intención)
+**Decisión (Lucas: "no vas a saber nunca cómo va a hablar el paciente, es jujeño; por eso la capa de inteligencia")**: una regex sobre el texto del paciente NUNCA decide la intención ni bloquea una acción que el modelo eligió. El modelo decide (eligiendo una herramienta); el código hace la acción exacta y, si duda, falla del lado seguro (no afirma cosas falsas), no del lado de "no hago nada".
+**Aplicado**: datos bancarios → herramienta `datos_pago` (el modelo la llama con las palabras que sea; el código pega los datos exactos; único veto por código: dólares). `registrar_pago` ya no se bloquea por falta de palabras "de pago": registra y el aviso muestra las palabras TEXTUALES del paciente ("Asiri lo tomó como aviso de pago: «…»") en vez de afirmar "transfirió". Tests C6d-g, Z32-Z39.
+**Regex que quedan (fallan del lado seguro, no juzgan intención)**: saludo/cierre → si no reconoce, contesta el modelo; `pidio_persona` → si no verifica, avisa sin silenciar; red flags de urgencia → capa extra antes del modelo, que también deriva.
+**Revisable**: no. Toda regex nueva sobre el texto del paciente tiene que justificar por qué falla del lado seguro.
+
+## 2026-10-08 — v7 = orquestador + sub-agentes con alcance estricto (reemplaza "un agente con herramientas")
+**Decisión (Lucas, textual)**: "odio las regex; para algo tenemos el agente orquestador, para orquestar agentes; ponele bien los puntos y los límites a los sub agentes; 0 conversaciones; lo único que hacemos es agendar, reprogramar, cancelar, recordar, confirmar, recepcionar pagos, dar información del negocio y el servicio, y asistir urgencias con la info que tenemos; lo que salga de ahí es mala directriz".
+**Diseño**: Orquestador (entiende y delega, no conversa) + sub-agentes Turnos / Pagos / Información / Urgencias, cada uno con sus herramientas-código (Dentalink, avisos, triaje). Fuera de alcance → derivación fija + aviso; insiste → modo humano. Ninguna regex decide la intención del paciente; el código queda solo para ejecutar y verificar (read-back, ejecución con el sí, chequeo de salida, modo sombra, datos bancarios). Doc: `docs/v7-orquestador-subagentes-2026-10-08.md`.
+**Antes**: el 07/10 se había elegido un solo agente porque la variante con especialistas fue más lenta y no resolvió mejor; Lucas prioriza robustez ante cómo escribe el paciente sobre la velocidad.
+**Revisable**: no sin Lucas.
+
+
+## 2026-10-08 — Orquestador = UNA llamada con salida JSON + despacho por código (construido, sin desplegar)
+**Decisión**: el v7 "cerebro" pasa a ser ORQUESTADOR + sub-agentes (Turnos, Pagos, Información, Urgencias). El orquestador es la IA que entiende al paciente, pero en UNA llamada (Basic LLM Chain, salida `{"pasos":[…]}`); el código despacha (una llamada por sub-agente y por mensaje) y compone la respuesta con los textos de las herramientas. Turnos, Pagos y Urgencias devuelven un CÓDIGO (no redactan); Información es la única que redacta (lista cerrada de temas). El "sí" lo decide Turnos (`confirma`) con el MENSAJE ACTUAL; el código manda a Turnos todo mensaje que llega con una confirmación pendiente vista (ruteo por estado). Fuera de alcance → derivar (contador propio `deriva:`; 2.º en 30 min → modo humano).
+**Razón**: crítica técnica del diseño (latencia de 4-6 llamadas en fila, llamadas repetidas al mismo sub-agente, el orquestador redactando) y crítica de alcance (menú, Información abierta, falso "sí" por dos modelos en fila). Detalle: `docs/v7-orquestador-subagentes-2026-10-08.md` §8.
+**Se borraron** (código de juicio de intención): reconocedor de "sí" y "sí directo" (`agenda_core`), cierre/saludo/pedido de info (`historial_core`), VERIF y motivos queja/baja (`clinica_core`), veto de dólares sobre el texto, DIJO_AVISO/RE_PRESENTA/RE_DECILE de la Salida. Queda validación de DATOS (cita en el mensaje, dígitos del DNI) que falla del lado seguro.
+**Alternativas descartadas**: orquestador AI Agent con sub-agentes como herramientas (2 llamadas más del orquestador, no se puede probar offline, puede redactar); agente único (Lucas: "para algo tenemos el orquestador").
+**Revisable**: sí, con la batería de ruteo con el modelo real y la sombra (p95, examen ≥ 38/45).
+
+## 2026-10-14 — Toda cita de prueba se anula al terminar la prueba
+- **Decisión (Lucas):** al cerrar cualquier prueba, se anulan en Dentalink las citas que existan por ella (creadas a mano, reservadas o reprogramadas por el bot) y se borra su recordatorio sembrado. Si otra prueba necesita una cita, se crea de nuevo.
+- **Razón:** una cita de prueba ocupa un horario que podría tomar un paciente real.
+- **Descartado:** mantener una cita de prueba fija con la nota "NO ANULAR NI MOVER" (lo que se hacía desde el 07/10).
+- **Revisable:** no. Agregado a la regla 9 de `.claude/CLAUDE.md`.
+
+## 2026-10-15 — Toda acción que cambia la agenda se confirma antes con el paciente (regla dura)
+- **Decisión (Lucas):** "ante cualquier acción destructiva consulta": agendar, cancelar y reprogramar (y cualquier otra que escriba en la agenda) requieren un read-back explícito ("Le confirmo… ¿Procedo?") y el "sí" del paciente ANTES de ejecutarse. Vale para el v6 mientras atienda y para el v7.
+- **Razón:** incidente del 14/10 (el v6 anuló un turno vigente al leer "tuve que cancelar el turno", que hablaba de uno anterior).
+- **Revisable:** no.
+
+## 2026-10-16 — Precios por WhatsApp: solo la consulta (Dra.)
+- **Decisión (Dra., grupo 16/10 8:27):** en precios y formas de pago solo el valor de la consulta ($50.000) y "aceptamos efectivo y transferencia". La cuota mensual y el retenedor NO se dicen (los informa la secretaria). Reemplaza la D7 del plan ("cuota solo a contactos con ficha"): la cuota no se da a nadie por WhatsApp.
+- **Aplicado:** `scripts/apply_precios_solo_consulta.py` (KB 23/36/39 + embeddings; v6 "Sub-Agent General" DATOS OFICIALES; backups data/kb_backup_precios_1792151368.json y workflows/history/O155MqHgOSaNZ9ye_PRE/POST_precios_solo_consulta_1792151368.json; v6 versionId 4053a7d9). Probado en vivo v6 y v7: "$50.000 … efectivo y transferencia", sin cuota ni retenedor.
+- **Revisable:** solo por la Dra.
+
+## 2026-10-20 — El v7 (orquestador) atiende a TODOS los pacientes
+- **Decisión (Lucas, 19/10):** "poneme asiri nueva" para todos, ya. Mecanismo: llave Redis global `v7:global = 'vivo'` leída por el v6 (`scripts/apply_v7_para_todos.py`, `scripts/v7_global.py`). La marca por número sigue: `v7:tel:<tel> = 'off'` deja a un número en el v6.
+- **Razón:** el v6 resuelve un pedido por mensaje (Router → un sub-agente); los pedidos múltiples terminan en la secretaria (escalación 375).
+- **Descartado:** seguir parchando el v6 pedido por pedido; esperar a BOT-01/BOT-07 antes de prender (se corrigieron BOT-01 en caliente la misma noche).
+- **Revisable:** sí — vuelta atrás inmediata con `v7_global.py --off`.
+
+## 2026-10-20 — Orquestador del v7 con razonamiento "medium" (era "low")
+- **Razón:** con "low", 2 de 4 pedidos múltiples en vivo se rutearon mal (318950, 318965). Más una red por código: si el pedido del orquestador menciona alias/CBU y no hay Pagos, Pagos entra igual.
+- **Costo:** algo más de latencia del orquestador (el buffer de 22 s ya la absorbe).
+- **Revisable:** sí, si la latencia molesta o si un modelo mejor rutea igual de bien con menos.
+
+## 2026-10-20 — Lista semilla: cargados los 11 que clasificó Lucas (sin OK explícito de la Dra.)
+- **Qué:** `cargar_lista_semilla.py --apply --ok-dra` cargó los 11 contactos que Lucas clasificó él mismo el 14/10 (2 interno, 6 proveedor, 3 colega; ninguno con ficha). Las 14 propuestas que armó Claude solo por el nombre y los 12 dudosos NO se cargaron (el bot les sigue respondiendo; se clasifican desde el panel).
+- **Ojo:** el flag `--ok-dra` se pasó por orden de Lucas del 20/10 ("todo lo de segmentación"), NO porque la Dra. haya respondido: su OK nunca quedó registrado. Contárselo a la Dra. con la lista; si objeta a alguno, se lo vuelve a paciente desde el panel o `cargar_lista_semilla.py --deshacer --apply` cierra los 11.
+- **Red:** proveedores y colegas tienen la red de seguridad (urgencia → aviso al grupo); los 2 internos no.
+- **Revisable:** sí (Dra.).

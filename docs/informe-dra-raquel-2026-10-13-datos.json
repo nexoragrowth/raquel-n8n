@@ -1,0 +1,197 @@
+{
+  "graficos": [
+    {
+      "id": "lo_que_hace_asiri",
+      "titulo": "Lo que hizo Asiri en los últimos 30 días",
+      "tipo": "barras_horizontales",
+      "etiquetas": [
+        "Recordatorios enviados",
+        "Turnos confirmados en Dentalink",
+        "Personas a las que les ofreció horarios",
+        "Turnos nuevos reservados esperando el pago",
+        "Cancelaciones",
+        "Cambios de turno"
+      ],
+      "valores": [106, 64, 21, 6, 4, 2],
+      "nota_fuente": "13/09–13/10/2026. Recordatorios y confirmaciones: tabla recordatorios_enviados (enviado_at y confirmado_at), sin 1 fila de prueba. Horarios ofrecidos, reservas, cancelaciones y cambios: texto de los mensajes de Asiri (no se consultó Dentalink)."
+    },
+    {
+      "id": "conversaciones_resultado",
+      "titulo": "Cómo terminaron las conversaciones (últimos 30 días)",
+      "tipo": "torta",
+      "etiquetas": [
+        "Solo Asiri",
+        "Asiri y el equipo",
+        "Solo el equipo",
+        "Sin respuesta de nadie"
+      ],
+      "valores": [75, 111, 236, 84],
+      "nota_fuente": "13/09–13/10/2026, 506 conversaciones. Mensajes entrantes de mensajes_entrantes_live sin números de prueba ni grupos; una conversación se corta tras 12 h sin que el paciente escriba. 'Equipo' = mensajes enviados desde el celular de la clínica. 'Sin respuesta' incluye agradecimientos que no la necesitan."
+    },
+    {
+      "id": "resueltas_sin_persona",
+      "titulo": "Conversaciones que Asiri resolvió sin ninguna persona (%)",
+      "tipo": "barras",
+      "etiquetas": [
+        "Cuando responden a un recordatorio",
+        "Cuando nadie del equipo estaba en la charla",
+        "Todas las conversaciones"
+      ],
+      "valores": [36.2, 27.7, 14.8],
+      "nota_fuente": "13/09–13/10/2026. Resuelta = al menos una respuesta de Asiri y ningún mensaje del equipo ni aviso al grupo hasta 12 h después del último mensaje. 'Recordatorio' = se le envió uno en las 72 h previas. 'Nadie del equipo' = sin mensajes del equipo en la hora previa (73 de 264). Todas: 75 de 506."
+    },
+    {
+      "id": "avisos_grupo_tipo",
+      "titulo": "Avisos reales al grupo, por tipo (últimos 30 días)",
+      "tipo": "barras_horizontales",
+      "etiquetas": [
+        "Comprobante de pago",
+        "Otros pagos y cuotas",
+        "Turnos y agenda",
+        "Urgencia (protocolo)",
+        "Proveedor o no paciente",
+        "Protocolo: no era urgencia",
+        "Aviso de acción de Asiri",
+        "Filtro de frases (ya retirado)",
+        "Consulta de información",
+        "Estudios",
+        "Pidió hablar con una persona"
+      ],
+      "valores": [24, 15, 13, 11, 7, 6, 4, 4, 3, 1, 1],
+      "nota_fuente": "13/09–13/10/2026, 89 avisos de escalaciones_log sin las 31 pruebas. El tipo se asignó por palabras clave del motivo (aproximado)."
+    },
+    {
+      "id": "mensajes_por_dia",
+      "titulo": "Mensajes que entraron por día (del 06 al 08/10 no llegaron a Asiri)",
+      "tipo": "barras",
+      "etiquetas": [
+        "28/09",
+        "29/09",
+        "30/09",
+        "01/10",
+        "02/10",
+        "03/10",
+        "04/10",
+        "05/10",
+        "06/10",
+        "07/10",
+        "08/10",
+        "09/10",
+        "10/10",
+        "11/10",
+        "12/10",
+        "13/10"
+      ],
+      "valores": [83, 60, 89, 85, 101, 6, 1, 103, 32, 0, 56, 51, 5, 5, 14, 46],
+      "nota_fuente": "mensajes_entrantes_live (from_me = false), sin números de prueba ni grupos. Del 06/10 09:59 al 08/10 10:41 los mensajes no llegaron a Asiri ni al panel. 03, 04, 10 y 11/10 son fin de semana; el 12/10 fue feriado."
+    },
+    {
+      "id": "temas_pacientes",
+      "titulo": "Sobre qué escriben los pacientes (muestra revisada caso por caso)",
+      "tipo": "barras_horizontales",
+      "etiquetas": [
+        "Cierre o agradecimiento",
+        "Confirmar asistencia",
+        "Cambiar o reprogramar",
+        "Pedir turno",
+        "Seguimiento con la secretaria",
+        "Urgencias",
+        "Saludo",
+        "Aviso de llegada o demora",
+        "Formas de pago, cuotas o alias",
+        "Estudios o radiografías",
+        "Consulta sobre un turno ya dado",
+        "Precio de tratamiento o presupuesto",
+        "Cancelar",
+        "Obra social o reintegro",
+        "Comprobantes (texto)",
+        "Otros",
+        "Horarios",
+        "Tratamientos",
+        "Precio de la consulta",
+        "Pide más información (anuncio)",
+        "Menores",
+        "Dirección"
+      ],
+      "valores": [67, 65, 56, 50, 41, 22, 21, 20, 19, 14, 12, 8, 7, 7, 6, 6, 5, 5, 4, 3, 1, 1],
+      "nota_fuente": "Muestra aleatoria de 440 mensajes de pacientes, 18/07–13/10/2026, revisados leyendo cada conversación (con ayuda de IA). Un tema por mensaje."
+    },
+    {
+      "id": "quienes_escriben",
+      "titulo": "Quiénes escriben al número de la clínica (estimado)",
+      "tipo": "torta",
+      "etiquetas": [
+        "Pacientes de la clínica",
+        "Contactos nuevos",
+        "No pacientes (proveedores, laboratorios, colegas, personal)",
+        "Equipo y números de prueba",
+        "Sin determinar"
+      ],
+      "valores": [132, 60, 51, 8, 3],
+      "nota_fuente": "254 números que escribieron entre el 18/07 y el 13/10/2026. 85 se clasificaron por regla (recibieron un recordatorio o una cita antes de escribir); el resto, leyendo cada conversación. Estimado."
+    },
+    {
+      "id": "info_faltante",
+      "titulo": "Temas sin información cargada: veces que aparecen en mensajes de pacientes",
+      "tipo": "barras_horizontales",
+      "etiquetas": [
+        "Valores de cuota, aparatos y presupuesto",
+        "Estudios (dónde, envío, órdenes)",
+        "Pagos (otro día, alias, dólares, planes)",
+        "Tipo, duración y modalidad del turno (estimado)",
+        "Horario real y días de cierre",
+        "Tratamientos no cargados y derivaciones",
+        "Obra social, reintegro y factura",
+        "Pedido de más información (falla la entrega)",
+        "Aparatos, insumos y envíos",
+        "Lista de espera o adelantar",
+        "Cómo entrar al consultorio (timbre)",
+        "Certificados o constancias"
+      ],
+      "valores": [58, 47, 43, 39, 36, 28, 26, 20, 16, 9, 8, 3],
+      "nota_fuente": "18/07–13/10/2026. Conteo aproximado por palabras clave en los mensajes de pacientes. El tema de tipos de turno se estimó extrapolando la muestra de 440 mensajes."
+    },
+    {
+      "id": "embudo_nuevos",
+      "titulo": "Contactos nuevos: del primer mensaje al tratamiento (estimado)",
+      "tipo": "barras",
+      "etiquetas": [
+        "Contactos nuevos",
+        "Preguntaron precio o información",
+        "Pidieron turno",
+        "Consiguieron turno",
+        "Turno vigente o cumplido",
+        "Fueron a la primera consulta",
+        "Recibieron presupuesto",
+        "Empezaron tratamiento"
+      ],
+      "valores": [57, 45, 35, 25, 20, 14, 7, 3],
+      "nota_fuente": "18/07–13/10/2026. Quién es contacto nuevo, la asistencia, el presupuesto y el inicio de tratamiento se estimaron leyendo los chats; el turno se tomó de recordatorios, la plantilla de cita y los mensajes. Sin datos de Dentalink. La cohorte de octubre todavía no maduró."
+    },
+    {
+      "id": "retrospectiva",
+      "titulo": "Comparación con 80 primeros mensajes reales (diseño anterior de Asiri nueva, juez automático)",
+      "tipo": "torta",
+      "etiquetas": [
+        "Asiri nueva mejor",
+        "Igual",
+        "Asiri actual mejor"
+      ],
+      "valores": [46, 13, 21],
+      "nota_fuente": "Corrida del 07/10/2026 sobre el primer mensaje de 80 conversaciones reales (18/07–05/10), sin historial y en modo prueba. Juez: otra IA (gpt-5-mini), no una persona. Calificando cada respuesta sola: Asiri actual 0 malas; Asiri nueva 5 (2 por cómo estaba armada la prueba)."
+    },
+    {
+      "id": "examen",
+      "titulo": "Pruebas con pacientes simulados: % de conversaciones que salieron bien (diseño anterior)",
+      "tipo": "linea",
+      "etiquetas": [
+        "06/10 noche",
+        "07/10 tarde",
+        "07/10 tarde-noche",
+        "07/10 noche"
+      ],
+      "valores": [73.3, 85.3, 91.0, 94.9],
+      "nota_fuente": "tests/examen_v7.py: 25-26 situaciones repetidas 3 veces con un paciente simulado y una ficha de prueba, en modo prueba. Aprobadas: 55/75, 64/75, 71/78 y 74/78. Mide el diseño anterior de Asiri nueva (retirado el 08/10)."
+    }
+  ]
+}

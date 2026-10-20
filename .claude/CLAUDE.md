@@ -25,7 +25,7 @@ Caso bandera de Nexora (consultorios/clinicas). Primera cuota cobrada. Doctora p
 - Comprobantes de pago → recibe + deriva al grupo (NO valida monto)
 - Cualquier otra cosa → silencio o derivar
 
-**JAMAS hace** (banlist regex post-output):
+**JAMAS hace** (lo cuida el prompt; la banlist regex post-output se SACÓ el 2026-10-07 por decisión de Lucas, ver regla 5):
 - Decir "venite" / "los esperamos" / "ahora mismo a la clinica"
 - Dar instrucciones operativas/medicas ("guarda", "trae", "toma X", "saca")
 - Dar diagnostico u opinion ("no te preocupes", "es normal", "que macana")
@@ -55,11 +55,11 @@ Auditorias completas en `<vault>/projects/audit-memoria-v6.md` y `audit-base-con
 2. **Cero PUTs al workflow sin backup previo**. Ver `scripts/` para patrones.
 3. **Preservar `webhookId: evo-webhook-v2` siempre** (leccion #1 vault: si lo perdes, Evolution apunta a UUID null y rompe todo).
 4. **PUT al API solo acepta** `name, nodes, connections, settings, staticData`. Settings solo permite `saveExecutionProgress, saveManualExecutions, saveDataErrorExecution, saveDataSuccessExecution, executionTimeout, errorWorkflow, timezone, executionOrder, callerPolicy, callerIds`. Cualquier otra key → 400.
-5. **Defensa en profundidad sobre prompt**: cada regla critica debe estar en al menos 2 capas (prompt + gate deterministico). El banlist regex es la ultima linea.
+5. **Defensa en profundidad sobre prompt**: cada regla critica debe estar en al menos 2 capas (prompt + código determinístico: triaje de urgencias ANTES del modelo, chequeo de salida contra la agenda, herramientas que deciden por código). **La banlist de frases (regex post-output) se SACÓ el 2026-10-07 en v6 y v7 por decisión de Lucas**: en las pruebas frenó solo mensajes inocentes y el reemplazo genérico confundía al paciente. No volver a ponerla sin su OK.
 6. **MVP es agendar + recordar + escalar todo lo demas**. Cualquier intento de meter features extra (vision, RAG abierto, sub-agents creativos), parar.
 7. **fromMe filter universal**: cualquier mensaje saliente del numero de la clinica que NO sea del bot → aplica label humano + silence flag Redis. No depender de Chatwoot solo.
 8. **Nunca afirmar que una feature "funciona" sin haber ejecutado el camino completo de punta a punta** (UI → backend → efecto real). Leer el código de la UI no alcanza (caso 2/9: se dijo que el panel enviaba mensajes; los webhooks de n8n nunca existieron).
-9. **Cero residuos de test en chats reales**: al terminar CUALQUIER prueba con un teléfono real (Lucas incluido) se limpian memoria (`n8n_chat_histories`), logs y label humano en el mismo turno, con `scripts/limpiar_numero_demo.py`. Un mensaje de test viejo en el contexto contaminó una prueba real del triaje (4/9). Y `python scripts/check_triaje.py` antes de cualquier PUT.
+9. **Cero residuos de test en chats reales**: al terminar CUALQUIER prueba con un teléfono real (Lucas incluido) se limpian memoria (`n8n_chat_histories`), logs y label humano en el mismo turno, con `scripts/limpiar_numero_demo.py`. Un mensaje de test viejo en el contexto contaminó una prueba real del triaje (4/9). Y `python scripts/check_triaje.py` antes de cualquier PUT. **Cero citas de prueba en la agenda (Lucas, 14/10)**: toda cita que exista por una prueba (creada a mano, por el bot o reprogramada) se ANULA en Dentalink al terminar, en el mismo turno (`scripts/crear_cita_prueba_examen.py --anular <id> --apply`), y se borra su recordatorio sembrado (`tests/seed_examen_v7.py --limpiar`). Ese lugar es para un paciente real; si otra prueba la necesita, se crea de nuevo.
 
 ## Accesos y endpoints
 
@@ -118,7 +118,7 @@ D:\Dev\dra-raquel\
 
 - Lucas (founder/owner) revisa cambios antes de aplicar. NUNCA hacer PUT al workflow vivo sin mostrar el diff primero.
 - Cada cambio significativo deja un script `.py` en `scripts/` con nombre `apply_<descripcion>.py` + backup pre/post en `workflows/history/`.
-- Tests sinteticos en `tests/` para validar intent classifier y banlist antes de cada PUT.
+- Tests sinteticos en `tests/` para validar intent classifier antes de cada PUT.
 - Sessions log se escribe al VAULT (no acá), respetando regla global.
 
 ## Next steps (al 2026-05-11)

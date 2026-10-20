@@ -1,5 +1,26 @@
 # Backlog — raquel-n8n
 
+## ⇢ 2026-10-20 — v7 PARA TODOS (llave `v7:global`, ver current-state)
+- [x] v7 atiende a todos los pacientes (00:10 ART). Apagar: `python scripts/v7_global.py --off`.
+- [x] BOT-01 (respuesta tras un "no", @lid sin celular falso, doble pregunta de Información) + ruteo de pedidos múltiples (Pagos por código, orquestador "medium").
+- [ ] Mirar las primeras ejecuciones reales con el v7 (mañana del 20/10, respuestas a recordatorios) y corregir lo que salga.
+- [ ] BOT-07: regresión con IA SOLO de lo tocado (pedidos múltiples, "no" a una confirmación, alta @lid) + cita de prueba lejos, anulada al terminar.
+- [ ] Migración Dentalink → esquema propio en Supabase v3: preparación en curso (agente), revisar y correr `--apply` del espejo; corte con OK de la Dra.
+- [ ] Commit del trabajo acumulado (hay mucho sin commitear desde el 13/10, p. ej. `scripts/flag_v7.py`, `check_triaje_grafo.py`, `sql/`, `segmentacion/`): ANTES revisar archivo por archivo que no haya datos de pacientes (repo PÚBLICO; ojo `docs/informe-dra-raquel-2026-10-13-datos.json`).
+
+## ⇢ ORDEN DE TRABAJO (desde 2026-10-08) — una cosa a la vez, en este orden. Se tacha acá.
+Contexto: soporte a la Dra. hasta febrero 2027 (después queda sola); la clínica NO usa el panel; el panel tiene que servir para revenderlo.
+1. [x] 2026-10-08 10:17 ART aplicado (13 nodos, backup Yjl6kyLnALhIfbFX_PRE_health_autoreparable_1791465465). Pendientes: (a) mail como 2.º canal (`--mail-a`, decidir destinatarios), (b) desplegar el panel con el arreglo de `reconectarInstancia()` + `EVOLUTION_WEBHOOK_URL` en su .env de producción (era la CAUSA: el botón Reconectar mandaba body vacío y Evolution GO borraba el webhook). — **Health Check que se repara solo** (webhook de Evolution vacío → lo repone; WhatsApp desconectado → alerta; no entra nada en 6 h hábiles → alerta). En construcción → Lucas corre `scripts/apply_health_check_autoreparable.py --apply`.
+2. [ ] (08/10: ORQUESTADOR + sub-agentes CONSTRUIDO en el repo, suite offline verde, sin desplegar — doc §8; falta: batería de ruteo con el modelo real y decisiones §8.6) **v7 funcional**: Lucas despliega (`python scripts/crear_v7_en_n8n.py --aplicar`) → re-correr SOLO las 6 que fallaron (REAL-05, 06, 08, 09, 10, 12) → arreglar lo que falle → v7 en el celular de Lucas (`docs/plan-conexion-v7-celular-lucas-2026-10-06.md`).
+3. [ ] **Panel útil para la clínica: bandeja "Atención"** (urgencias, pagos, pidió persona, insiste → tarjetas con Tomar/Resolver; reemplaza al grupo de WhatsApp como lugar de trabajo). Sin tocar n8n. Base: panel actual (`nexora-whatsapp-agent`), propuesta en `docs/propuesta-pipeline-panel-2026-10-08.md` F1.
+4. [ ] **Tipos de contacto + Silenciados + filtros** en Conversaciones (clasificar proveedor/interno/no paciente; el bot todavía no los lee).
+5. [ ] **El bot respeta los tipos** (`bot_silenciado` en v6/v7, con OK de Lucas) + selector habilitado en el mismo deploy.
+6. [ ] **Pipeline de pacientes** (Nuevo → Agendó → Paciente → En tratamiento / Perdido) + embudo.
+7. [ ] **Panel vendible**: sin marca de la Dra. (config por clínica), demo con datos inventados, login por usuario + roles + auditoría, alta de clínica con script. Plan: `docs/plan-producto-clinicas-2026-10-08.md` (decisiones abiertas: base, separación, precio, a quién se le muestra, cuenta demo Dentalink).
+7b. [ ] (13/10, pedido de Lucas) **Segmentación de contactos** (doctora, secretaria, colegas, proveedores → el bot NO les habla; foco en pacientes, potenciales y nuevos; portar contacto_roles/cola de clasificación del CRM de iPhones), **flujo de conversión con cuestionario de descubrimiento** (etapas adaptadas; llevar a "¿le reservo la primera consulta?", sin charla ni interrogatorio) y **reemplazo progresivo de Dentalink** (paridad de lo que se usa; espejo → doble escritura → sistema propio). Plan en curso: `docs/plan-contactos-conversion-dentalink-2026-10-13.md`. **14/10:** lista semilla generada (`scripts/lista_semilla_contactos.py` → `data/contactos/lista_semilla_2026-10-14.html`, 52 con pistas de 131 sin ficha); **Cerrada el 14/10** (`data/contactos/lista_semilla_final_2026-10-14.json`: 25 silencian, 12 dudosos); falta OK de la Dra. + D1 (Supabase Pro) → migración de tipos + PUT-B Día 1 (en preparación, dry-run).
+8. [ ] **Manual de operación para la clínica** (qué hacer con cada alerta, cómo prender/apagar el bot, modo humano) antes de febrero.
+Al costado (no bloquean): commit del panel (modo humano 1 h + KPI + arreglo del login en bucle), Irina revisa a mano los mensajes del 06/10 al 08/10.
+
 ## P0 — hallazgos 2026-10-05 (verificados, nada aplicado; detalle en current-state)
 - [x] 2026-10-05 05:49Z **El bot no enviaba respuestas** (01:09 → 02:49 ART; `Loop Mensajes` conectado
       por la salida equivocada tras el desacople). Aplicado `apply_fix_loop_mensajes_salida.py --apply`.
@@ -476,6 +497,21 @@
 - P1: alerta del Vigía cuando `Activar Takeover (fromMe)` falle: 182 fallos seguidos pasaron como "success" por continueOnFail.
 - [x] 2026-10-06 P0 modo humano arreglado en v6 y Helper, verificado en vivo (ver current-state). Resta: desplegar el panel con HUMANO_MS de 1 h.
 
+## 2026-10-07 — v7 pacientes nuevos
+- [x] 2026-10-07 P1 Registrar pacientes nuevos dentro de `gestionar_turno` (alta + reserva con el mismo "sí", anti-duplicado por DNI, reintento sin DNI, sombra). Offline en verde; falta desplegar.
+- [ ] P0 Lucas: `python scripts/crear_v7_en_n8n.py --aplicar` → `python tests/examen_v7.py --solo AGE-01` (celular sintético sin ficha, sombra) → `--rapido`.
+- [ ] P1 Primera alta en VIVO con OK de Lucas (paciente de prueba en Dentalink) para verificar el campo `rut` del POST y el filtro `rut` del GET; después deshabilitar esa ficha. Hasta entonces el alta está probada offline y en sombra, no en la agenda real.
+- [ ] P2 Backfill: las fichas que creó el v6 sin DNI (AGE-26) siguen sin `rut`; el v7 las reconoce por nombre + apellido, pero conviene cargarles el DNI.
+- [ ] P0 Lucas: desplegar los arreglos de la 3.ª retrospectiva (bloque faltante por código, banlist "no se preocupe", texto final de gestionar_turno, prompt) → AGE-01 + `--rapido`.
+- [x] 2026-10-07 P1 "¿Se puede pagar otro día?" → lo responde la ficha 1 de la KB (primera consulta: pago anticipado; si no abona de inmediato se agenda provisorio y el comprobante se pide con el recordatorio). No hace falta preguntarle a la Dra.
+- [ ] P2 Examen: crear un segundo turno de prueba en la familia (ficha Test - Jana) con recordatorio para poder evaluar CON-04 ("Confirmo los dos").
+- [ ] P0 Lucas: la cita de prueba 9189 (16/10 10:30) desapareció de Dentalink → ¿quién? recrearla (`crear_cita_prueba_examen.py --fecha 2026-10-16 --hora 10:30 --apply`) + `seed_examen_v7.py`.
+- [x] 2026-10-07 P0 Lucas: `python scripts/apply_quitar_banlist_v6.py --apply` (banlist fuera del v6; v7 ya sin banlist en el repo).
+- [ ] P0 Lucas: `crear_v7_en_n8n.py --aplicar` + `probar_v7.py --activar-subs` (la variante `cerebro_min` está inactiva y n8n no la ejecuta) → re-correr la comparación low vs minimal.
+- [ ] P1 KB: cargar el horario de atención de la secretaria (teléfono/WhatsApp); hoy no está y Asiri no puede responderlo.
+- [ ] P3 (bajada por Lucas 07/10: "no me importa la velocidad, me importa una buena ejecución y resolución de problemas con herramientas") Velocidad v7: mensajes con varias herramientas 14-22 s y el primer bloque ~12 s (objetivo < 10 s). Ideas: que el bloque de horarios salga sin una segunda vuelta del modelo (respuesta directa de la herramienta), herramientas en paralelo, menos GETs post-modelo en el cerebro.
+- [x] 2026-10-07 P2 Retrospectiva: el juez ve hasta 1.500 caracteres de cada respuesta (antes 600: la respuesta aprobada para anuncios parecía "cortada").
+
 ## 2026-10-06 noche — v7 (sesión nube)
 - [ ] P0 Lucas: `python scripts/crear_v7_en_n8n.py --aplicar` desde la rama `claude/inspiring-mayer-ki0b7p` (sube triaje, regla del staff, arreglo de propuesta consumida, hint de fichas, webhook de prueba en sombra forzada). El permiso de la sesión nube lo bloquea.
 - [ ] P0 Lucas: `OPENAI_API_KEY` en el entorno de la nube (paciente simulado) + una cita de prueba para "Test - Lucas" en Dentalink → `python tests/examen_v7.py --todos --reps 3`.
@@ -483,3 +519,22 @@
 - [ ] P1 Verificar con la Dra.: ¿se puede "abonar el día de la consulta"? Asiri lo afirmó sin herramienta (AGE-04 en sombra). Si no, agregar la política de seña a DATOS DEL CONSULTORIO.
 - [ ] P2 Recorte v7: fusionar ver_turnos+elegir_ficha+proponer+confirmar_turno en "v7 Tool - agenda" con `accion`; un solo JSON de estado por teléfono en vez de 7 GETs post-modelo; "¿Es un cierre?" antes de Datos+Identificar (hoy un "gracias" paga 3 Postgres + 1 GET Dentalink).
 - [ ] P2 Cerrar el webhook "v7 Test (sombra)" al terminar las pruebas (`probar_v7.py --desactivar`); hoy está ACTIVO.
+- P0: WhatsApp desconectado de Evolution API (aviso de Lucas, 06/10 noche): reconectar y mirar por qué no alertó el Health Check.
+
+## 2026-10-08 — incidente de confirmar en sombra
+- [x] 2026-10-08 P0 Lucas: desplegar el arreglo de modo explícito (verificado en n8n 09:36 UTC) (`python scripts/crear_v7_en_n8n.py --aplicar`). Hasta entonces, nada de examen/retrospectiva/escenarios contra el v7 de n8n.
+- [x] 2026-10-08 P0 Lucas: `python scripts/revertir_confirmaciones_sombra.py --apply` (TODO OK, fila 355 en NULL) (solo queda el recordatorio de la 9064; las 11 citas ya las corrigió alguien a mano el 07/10).
+- [x] 2026-10-08 (Lucas: avisado, sin consecuencias) P0 Lucas: averiguar quién corrigió las 11 citas el 07/10 14:51–15:13 y, si fue la clínica, explicarles qué pasó (fue el bot de prueba, ningún paciente recibió nada, ya está arreglado).
+- [ ] P1 Antes del próximo examen: la cita de prueba 9199 quedó en 18 por el mismo bug (07/10 23:53); volverla a 7 o tenerlo en cuenta en CON-*.
+- [ ] P0 Lucas: desplegar los arreglos de la 3.ª corrida de reales (`python scripts/crear_v7_en_n8n.py --aplicar`) → re-correr las 16 reales → examen completo como regresión.
+- [ ] P2 Escenario REAL-07 mal armado (objetivo reprogramar, primer mensaje real = urgencia "no encuentra el bracket"); REAL-09 espera registrar_pago sin pago. Corregir los escenarios.
+- [ ] P0 Lucas: desplegar los arreglos de la 4.ª corrida (fecha invertida, datos de pago solo con pedido real, tope de avisos en sombra, registrar_pago solo con pagos) → re-correr las 16 reales → examen completo.
+- [ ] P0 Lucas: desplegar el feedback del 08/10 (menú siempre, fuera de tema → secretaria + modo humano si insiste, turno no encontrado → mostrar los que figuran) junto con los arreglos de la 4.ª corrida → re-correr las 16 reales → examen completo.
+- [ ] P1 Bracket perdido/aparato (REAL-07): hoy va al triaje de urgencias; Lucas quiere que termine en un turno para ponerlo. Pendiente su OK explícito porque toca la regla de urgencias.
+- [ ] P2 (después del v7, orden de Lucas 08/10) Panel: pipeline de estados de contacto (requiere secretaria, urgencia, humano…) para que nadie quede en modo humano para siempre; etiquetas (proveedor / no paciente → Asiri no responde), integrado con Dentalink. Después, de a poco, que las herramientas lean de Supabase propio en vez de Dentalink.
+- [x] 2026-10-08 09:13 ART webhook repuesto (POST /instance/connect con el TOKEN DE LA INSTANCIA; con la clave global da 401). Falta verificar entrada con un mensaje de prueba. — Evolution GO: la instancia `raquel` estaba conectada pero con webhook vacío → no entra ningún mensaje a n8n desde el 06/10 ~10:00 ART. Lucas corre `python scripts/apply_webhook_evolution.py --apply` (POST /instance/connect con webhookUrl evolution-v2) + prueba de entrada + limpieza (regla 9). Causa probable: el manager borra el webhook al reconectar con el campo en blanco.
+- [ ] P1 Health Check: alertar si la instancia tiene webhook vacío o si no entra ningún mensaje en N horas hábiles (estuvo 2 días "sano" sin tráfico).
+- [ ] P1 Irina: revisar a mano los mensajes de pacientes del 06/10 al 08/10 (ni el bot ni el panel los vieron).
+
+- [x] 2026-10-16 v7: pedido de pago solo en la primera consulta (plan §3.2 #1), desplegado.
+- [x] 2026-10-15 v6 y v7: confirmar antes de cancelar (regla de Lucas), probado en vivo.
