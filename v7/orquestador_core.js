@@ -30,6 +30,7 @@ const OrquestadorCore = (() => {
     CUAL_TURNO: '¿Cuál de estos turnos?',
     SIN_TURNOS: 'No veo turnos vigentes con este número de celular.',
     OFERTA_PRIMERA: '¿Quiere que le busque un turno para la primera consulta?',
+    HOLA_ANUNCIO: 'Hola! Soy Asiri, la secretaria virtual de la Dra. Raquel Rodríguez, especialista en ortodoncia 🤗',
     RESERVA_PAGO: 'Para confirmarlo definitivamente necesitamos el pago de la consulta hasta 72 hs antes (transferencia o efectivo). Le paso los datos por si le resulta cómodo transferir; en ese caso nos envía el comprobante por este medio, por favor:',
     RESERVA_PAGO_CORTO: 'Para confirmarlo definitivamente necesitamos el pago de la consulta hasta 72 hs antes (transferencia o efectivo); si transfiere, nos envía el comprobante por este medio, por favor.',
   };
@@ -383,7 +384,14 @@ const OrquestadorCore = (() => {
     if (!partes.length && plan.fallo_orquestador) { partes = [TEXTOS.ERROR]; avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no pudo responder (falló el orquestador): revisar y contestar a mano. «' + cita + '»' }); }
     let esMenu = false;
     if (!partes.length && plan.fija === 'menu') { partes = [e.menu || MENU]; esMenu = true; }
-    if (!partes.length && plan.fija === 'anuncio') { partes = [String(e.anuncio || '').trim() || e.menu || MENU]; esMenu = true; }   // KB 40 ya trae la presentación
+    // (20/10, Lucas: "no hace falta explicar de más: la consulta sale 50 mil") Saludo del anuncio CORTO: quién es Asiri + el precio tal como
+    // está en la KB 21 (no escrito a mano) + la oferta de turno. "¿Qué incluye?" lo responde Información con la KB 21 completa.
+    // Si la KB 21 no trae un precio, va la presentación larga (KB 40); si tampoco está, el menú.
+    if (!partes.length && plan.fija === 'anuncio') {
+      const precio = (String(e.consulta || '').match(/^[^.]*?\$\s?\d[\d.]*/) || [])[0];
+      partes = [precio ? TEXTOS.HOLA_ANUNCIO + '\n\n' + precio.trim() + '.\n\n' + TEXTOS.OFERTA_PRIMERA : (String(e.anuncio || '').trim() || e.menu || MENU)];
+      esMenu = true;
+    }
     if (!partes.length && plan.fija === 'pedir_texto') partes = [TEXTOS.PEDIR_TEXTO];
     if (!partes.length && e.prop_pendiente === true && !hayOk && e.prop && String(e.prop.exec_id) !== String(e.execId)) {
       partes = [SIN_CAMBIOS[e.prop.tipo] || 'Perfecto, no hice ningún cambio en la agenda.'];

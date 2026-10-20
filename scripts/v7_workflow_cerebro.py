@@ -75,7 +75,7 @@ const prop_pendiente = !!(propE && propE.enviada === true && AgendaCore.pendient
 let ident = {}; try { ident = $('Identificar paciente').first().json || {}; } catch (x) { ident = { ok: false, motivo: 'sin_respuesta' }; }
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', ultimo_asiri, conversacion_nueva, prop_pendiente,
+return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', ultimo_asiri, conversacion_nueva, prop_pendiente,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
@@ -107,7 +107,7 @@ const c = OrquestadorCore.componer({ modo: e.modo, texto_paciente: e.texto, exec
   derivar_res: r('Derivar a secretaria'), humano_res: r('Pasar a humano'), libros, hechos, prop, ofertas: pj('Redis GET ofertas', 'ofertas_raw', []),
   vistos: [].concat(pj('Redis GET turnos_vistos', 'vistos_raw', []) || [], recTurnos), bloque: String($('Redis GET bloque').first().json.bloque_raw || ''),
   bloque_exec: String($('Redis GET bloque_exec').first().json.bloque_exec_raw || ''), triaje: pj('Redis GET triaje', 'triaje_raw', null),
-  menu: ctx.menu, anuncio: ctx.anuncio || '', datosPago: ctx.datos_pago, conversacion_nueva: ctx.conversacion_nueva === true, prop_pendiente: ctx.prop_pendiente === true });
+  menu: ctx.menu, anuncio: ctx.anuncio || '', consulta: ctx.consulta || '', datosPago: ctx.datos_pago, conversacion_nueva: ctx.conversacion_nueva === true, prop_pendiente: ctx.prop_pendiente === true });
 const vivo = e.modo === 'vivo';   // (08/10) solo avisa y guarda memoria con modo 'vivo' EXPLÍCITO
 if (vivo) for (const a of c.avisos) { try { await this.helpers.httpRequest({ method: 'POST', url: '""" + GRUPO + """', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }
 const texto = c.texto; const silencio = c.silencio === true;

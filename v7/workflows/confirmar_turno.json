@@ -6,7 +6,7 @@
     "inputSource": "jsonExample",
     "jsonExample": "{\"tel\": \"5490000000651\", \"exec_id_actual\": \"1234\", \"modo\": \"vivo\", \"fecha\": \"\"}"
    },
-   "id": "088d625d-92ed-467c-bbdc-78a3ebc68365",
+   "id": "681f7104-8268-4a04-9995-0accb4fe1baa",
    "name": "Entrada",
    "type": "n8n-nodes-base.executeWorkflowTrigger",
    "typeVersion": 1.1,
@@ -23,7 +23,7 @@
      "queryReplacement": "={{ $json.tel }}"
     }
    },
-   "id": "c63d8249-fd1e-4f92-985b-429d93723bc0",
+   "id": "920608b5-a659-4d0c-bd21-814b58955a30",
    "name": "Recordatorios abiertos",
    "type": "n8n-nodes-base.postgres",
    "typeVersion": 2.5,
@@ -48,7 +48,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "761bd3c1-57c6-467e-93cd-5dba56e30f66",
+   "id": "63fb0797-2cbe-4b69-9fe6-6e371ee96e92",
    "name": "Redis GET turnos_vistos",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -69,7 +69,7 @@
    "parameters": {
     "jsCode": "// confirmar_core.js — v7 · confirmar un turno (el caso más frecuente: \"Confirmo\" tras el recordatorio). Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// Misma regla que el resto: el modelo solo dice la fecha del turno; el código elige la cita (recordatorio abierto o turno visto), la verifica contra la agenda y confirma (id_estado 18).\n// Idempotente: si ya estaba confirmada, lo dice sin error.\nconst ConfirmarCore = (() => {\n  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\n  const normHora = (h) => { const m = /^(\\d{1,2}):(\\d{2})/.exec(String(h || '')); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };\n  const corto = (iso, hora) => `${DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()]} ${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))} a las ${hora}`;\n  const vigente = (t) => ![1, 14].includes(Number(t.id_estado)) && Number(t.estado_anulacion || 0) === 0;\n  const no = (motivo, para_asiri, extra) => ({ ok: false, motivo, para_asiri, ...(extra || {}) });\n  const ESTADO_CONFIRMADO = 18;   // \"Confirmado por WhatsApp\" (el que usa el v6)\n\n  // rows: filas abiertas de recordatorios_enviados (confirmado_at y cancelado_at nulos); turnosVistos: lo que dejó ver_turnos (o null); fecha: 'YYYY-MM-DD' o ''.\n  function elegir(rows, turnosVistos, fecha, hoyISO) {\n    const abiertas = (rows || []).filter((r) => r && r.id_cita_dentalink && r.fecha_turno && String(r.fecha_turno).slice(0, 10) >= hoyISO)\n      .map((r) => ({ cita_id: Number(r.id_cita_dentalink), paciente_id: Number(r.id_paciente_dentalink) || null, fecha: String(r.fecha_turno).slice(0, 10), hora: normHora(r.hora_turno), origen: 'recordatorio' }));\n    // (07/10) El modelo a veces da vuelta día y mes (\"jueves 10/12\" → 2026-10-12; escenarios reales REAL-14/15). Si la fecha no coincide se prueba invertida,\n    // y si hay UN solo recordatorio pendiente, \"confirmo\" es para ese.\n    const invertida = (f) => (/^\\d{4}-\\d{2}-\\d{2}$/.test(String(f || '')) ? `${f.slice(0, 4)}-${f.slice(8, 10)}-${f.slice(5, 7)}` : f);\n    let sel = fecha ? abiertas.filter((c) => c.fecha === fecha) : abiertas;\n    if (fecha && !sel.length) sel = abiertas.filter((c) => c.fecha === invertida(fecha));\n    if (fecha && !sel.length && abiertas.length === 1) sel = abiertas;\n    if (sel.length === 1) return { ok: true, cand: sel[0] };\n    if (sel.length > 1) {\n      return { fin: no('varios_recordatorios', 'Hay varios recordatorios pendientes. Si el paciente confirma todos, llamá a confirmar_turno una vez por cada fecha (formato YYYY-MM-DD); si no está claro, preguntale cuál.',\n        { fechas: sel.map((c) => corto(c.fecha, c.hora)), fechas_iso: sel.map((c) => c.fecha) }) };\n    }\n    if (fecha && Array.isArray(turnosVistos)) {\n      const t = turnosVistos.find((x) => (x.fecha === fecha || x.fecha === invertida(fecha)) && vigente(x));\n      if (t) return { ok: true, cand: { cita_id: Number(t.id), paciente_id: Number(t.id_paciente) || null, fecha: t.fecha, hora: normHora(t.hora_inicio), origen: 'agenda' } };\n    }\n    if (!abiertas.length && !fecha) {\n      return { fin: no('sin_recordatorio', 'No hay un recordatorio pendiente. Llamá a ver_turnos; si el paciente tiene un turno vigente que quiere confirmar, llamá a confirmar_turno con su fecha (YYYY-MM-DD).') };\n    }\n    return { fin: no('sin_turno_en_esa_fecha', 'No encuentro un turno pendiente de confirmar en esa fecha. Mostrale sus turnos con ver_turnos.') };\n  }\n  // resp = respuesta cruda de GET /citas/{id}\n  function verificar(cand, resp) {\n    if (!resp || resp.error) return { fin: no('error_tecnico', 'No pude consultar la agenda; no se confirmó nada. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).') };\n    const d = resp.data || resp;\n    const coincide = Number(d.id) === cand.cita_id && d.fecha === cand.fecha && (!cand.hora || normHora(d.hora_inicio) === cand.hora) && (!cand.paciente_id || Number(d.id_paciente) === cand.paciente_id);\n    if (!coincide) return { fin: no('cita_cambio', 'El turno cambió desde el recordatorio: no se confirmó nada. Mostrale sus turnos con ver_turnos.') };\n    if (!vigente(d)) return { fin: no('cita_no_vigente', 'Ese turno ya no está vigente (anulado). No lo confirmes; ofrecé reprogramarlo si corresponde.') };\n    return { ok: true, ya: Number(d.id_estado) === ESTADO_CONFIRMADO };\n  }\n  // resp = respuesta cruda de PUT /citas/{id} {id_estado: 18}\n  function evaluarConfirmacion(cand, resp) {\n    const confirmado = !!(resp && resp.data && Number(resp.data.id_estado) === ESTADO_CONFIRMADO);\n    // Dentalink contesta 400 \"el nuevo estado es igual al original\" si ya estaba confirmada: es un éxito.\n    const msg = JSON.stringify((resp && resp.error) || '');\n    if (confirmado) return { ok: true, ya: false };\n    if (/igual|mismo|same|already/i.test(msg)) return { ok: true, ya: true };\n    return { fin: no('no_pude_confirmar', 'No pude confirmar el turno en la agenda: sigue como estaba. Decíselo y avisá a la clínica con avisar_grupo (ACCION).') };\n  }\n  // (07/10, Lucas) Para el paciente es lo mismo si ya figuraba confirmado o se confirmó recién: \"ya estaba confirmado\" sonaba a corrección cuando él acababa de confirmar.\n  const mensaje = (cand) => `Perfecto, su turno del ${corto(cand.fecha, cand.hora)} está confirmado.`;\n  return { elegir, verificar, evaluarConfirmacion, mensaje, ESTADO_CONFIRMADO };\n})();\nif (typeof module !== 'undefined') module.exports = ConfirmarCore;\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Jujuy' }).format(new Date());\nconst e = $('Entrada').first().json;\nconst rows = $('Recordatorios abiertos').all().map((i) => i.json).filter((r) => r && r.id_cita_dentalink);\nlet vistos = null; try { vistos = JSON.parse($input.first().json.turnos_raw || 'null'); } catch (x) { vistos = null; }\nconst r = ConfirmarCore.elegir(rows, vistos, e.fecha || '', hoy);\nreturn [{ json: r.fin ? { terminado: true, resultado: r.fin } : { terminado: false, cand: r.cand } }];"
    },
-   "id": "8eb70ca5-8b82-43f2-89eb-7342ab6faf1f",
+   "id": "9fd954ee-5bd0-4927-8939-cf602917fa2d",
    "name": "Elegir cita",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -88,7 +88,7 @@
      },
      "conditions": [
       {
-       "id": "aad48e4e-c61a-4ae8-8246-cc1cdbdab8f4",
+       "id": "257a4706-2a20-442d-936c-82cb4546df5b",
        "leftValue": "={{ $json.terminado === true }}",
        "rightValue": "",
        "operator": {
@@ -102,7 +102,7 @@
     },
     "options": {}
    },
-   "id": "0c15851b-6131-4b6a-b828-9ac9e041b80b",
+   "id": "7a8150cd-1a87-4900-8486-d20e8d8148a7",
    "name": "¿Termina? (elegir)",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -121,7 +121,7 @@
      "timeout": 8000
     }
    },
-   "id": "cfe8ddae-ff6d-4ea8-a222-c0a7086e77b9",
+   "id": "68d5410f-ec87-4754-bd35-150b8f51eb92",
    "name": "GET cita",
    "type": "n8n-nodes-base.httpRequest",
    "typeVersion": 4.2,
@@ -142,7 +142,7 @@
    "parameters": {
     "jsCode": "// confirmar_core.js — v7 · confirmar un turno (el caso más frecuente: \"Confirmo\" tras el recordatorio). Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// Misma regla que el resto: el modelo solo dice la fecha del turno; el código elige la cita (recordatorio abierto o turno visto), la verifica contra la agenda y confirma (id_estado 18).\n// Idempotente: si ya estaba confirmada, lo dice sin error.\nconst ConfirmarCore = (() => {\n  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\n  const normHora = (h) => { const m = /^(\\d{1,2}):(\\d{2})/.exec(String(h || '')); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };\n  const corto = (iso, hora) => `${DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()]} ${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))} a las ${hora}`;\n  const vigente = (t) => ![1, 14].includes(Number(t.id_estado)) && Number(t.estado_anulacion || 0) === 0;\n  const no = (motivo, para_asiri, extra) => ({ ok: false, motivo, para_asiri, ...(extra || {}) });\n  const ESTADO_CONFIRMADO = 18;   // \"Confirmado por WhatsApp\" (el que usa el v6)\n\n  // rows: filas abiertas de recordatorios_enviados (confirmado_at y cancelado_at nulos); turnosVistos: lo que dejó ver_turnos (o null); fecha: 'YYYY-MM-DD' o ''.\n  function elegir(rows, turnosVistos, fecha, hoyISO) {\n    const abiertas = (rows || []).filter((r) => r && r.id_cita_dentalink && r.fecha_turno && String(r.fecha_turno).slice(0, 10) >= hoyISO)\n      .map((r) => ({ cita_id: Number(r.id_cita_dentalink), paciente_id: Number(r.id_paciente_dentalink) || null, fecha: String(r.fecha_turno).slice(0, 10), hora: normHora(r.hora_turno), origen: 'recordatorio' }));\n    // (07/10) El modelo a veces da vuelta día y mes (\"jueves 10/12\" → 2026-10-12; escenarios reales REAL-14/15). Si la fecha no coincide se prueba invertida,\n    // y si hay UN solo recordatorio pendiente, \"confirmo\" es para ese.\n    const invertida = (f) => (/^\\d{4}-\\d{2}-\\d{2}$/.test(String(f || '')) ? `${f.slice(0, 4)}-${f.slice(8, 10)}-${f.slice(5, 7)}` : f);\n    let sel = fecha ? abiertas.filter((c) => c.fecha === fecha) : abiertas;\n    if (fecha && !sel.length) sel = abiertas.filter((c) => c.fecha === invertida(fecha));\n    if (fecha && !sel.length && abiertas.length === 1) sel = abiertas;\n    if (sel.length === 1) return { ok: true, cand: sel[0] };\n    if (sel.length > 1) {\n      return { fin: no('varios_recordatorios', 'Hay varios recordatorios pendientes. Si el paciente confirma todos, llamá a confirmar_turno una vez por cada fecha (formato YYYY-MM-DD); si no está claro, preguntale cuál.',\n        { fechas: sel.map((c) => corto(c.fecha, c.hora)), fechas_iso: sel.map((c) => c.fecha) }) };\n    }\n    if (fecha && Array.isArray(turnosVistos)) {\n      const t = turnosVistos.find((x) => (x.fecha === fecha || x.fecha === invertida(fecha)) && vigente(x));\n      if (t) return { ok: true, cand: { cita_id: Number(t.id), paciente_id: Number(t.id_paciente) || null, fecha: t.fecha, hora: normHora(t.hora_inicio), origen: 'agenda' } };\n    }\n    if (!abiertas.length && !fecha) {\n      return { fin: no('sin_recordatorio', 'No hay un recordatorio pendiente. Llamá a ver_turnos; si el paciente tiene un turno vigente que quiere confirmar, llamá a confirmar_turno con su fecha (YYYY-MM-DD).') };\n    }\n    return { fin: no('sin_turno_en_esa_fecha', 'No encuentro un turno pendiente de confirmar en esa fecha. Mostrale sus turnos con ver_turnos.') };\n  }\n  // resp = respuesta cruda de GET /citas/{id}\n  function verificar(cand, resp) {\n    if (!resp || resp.error) return { fin: no('error_tecnico', 'No pude consultar la agenda; no se confirmó nada. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).') };\n    const d = resp.data || resp;\n    const coincide = Number(d.id) === cand.cita_id && d.fecha === cand.fecha && (!cand.hora || normHora(d.hora_inicio) === cand.hora) && (!cand.paciente_id || Number(d.id_paciente) === cand.paciente_id);\n    if (!coincide) return { fin: no('cita_cambio', 'El turno cambió desde el recordatorio: no se confirmó nada. Mostrale sus turnos con ver_turnos.') };\n    if (!vigente(d)) return { fin: no('cita_no_vigente', 'Ese turno ya no está vigente (anulado). No lo confirmes; ofrecé reprogramarlo si corresponde.') };\n    return { ok: true, ya: Number(d.id_estado) === ESTADO_CONFIRMADO };\n  }\n  // resp = respuesta cruda de PUT /citas/{id} {id_estado: 18}\n  function evaluarConfirmacion(cand, resp) {\n    const confirmado = !!(resp && resp.data && Number(resp.data.id_estado) === ESTADO_CONFIRMADO);\n    // Dentalink contesta 400 \"el nuevo estado es igual al original\" si ya estaba confirmada: es un éxito.\n    const msg = JSON.stringify((resp && resp.error) || '');\n    if (confirmado) return { ok: true, ya: false };\n    if (/igual|mismo|same|already/i.test(msg)) return { ok: true, ya: true };\n    return { fin: no('no_pude_confirmar', 'No pude confirmar el turno en la agenda: sigue como estaba. Decíselo y avisá a la clínica con avisar_grupo (ACCION).') };\n  }\n  // (07/10, Lucas) Para el paciente es lo mismo si ya figuraba confirmado o se confirmó recién: \"ya estaba confirmado\" sonaba a corrección cuando él acababa de confirmar.\n  const mensaje = (cand) => `Perfecto, su turno del ${corto(cand.fecha, cand.hora)} está confirmado.`;\n  return { elegir, verificar, evaluarConfirmacion, mensaje, ESTADO_CONFIRMADO };\n})();\nif (typeof module !== 'undefined') module.exports = ConfirmarCore;\nconst cand = $('Elegir cita').first().json.cand;\nconst r = ConfirmarCore.verificar(cand, $input.first().json);\nreturn [{ json: r.fin ? { terminado: true, resultado: r.fin } : { terminado: false, cand, ya: r.ya } }];"
    },
-   "id": "61e1ab25-4772-437e-869b-ca1ad5251966",
+   "id": "6d5bf028-440d-4371-a412-3019fccc650d",
    "name": "Verificar",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -161,7 +161,7 @@
      },
      "conditions": [
       {
-       "id": "662e2c7a-7f69-480c-98f0-77813c3fb400",
+       "id": "9081141c-e333-46c3-9a31-784054dcbaa8",
        "leftValue": "={{ $json.terminado === true }}",
        "rightValue": "",
        "operator": {
@@ -175,7 +175,7 @@
     },
     "options": {}
    },
-   "id": "d38ada24-81b9-453f-86f7-0e5fa9a54a66",
+   "id": "5b1cc908-e88c-45aa-a74d-508d424c033d",
    "name": "¿Termina? (verificar)",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -194,7 +194,7 @@
      },
      "conditions": [
       {
-       "id": "99137b06-c914-4dc8-bfd5-49a2f0ca81c7",
+       "id": "05bc481e-edb0-463b-a8f8-4a4d401e3e62",
        "leftValue": "={{ $('Entrada').first().json.modo !== 'vivo' }}",
        "rightValue": "",
        "operator": {
@@ -208,7 +208,7 @@
     },
     "options": {}
    },
-   "id": "1d50f50f-92ce-46ef-b090-773c551b197e",
+   "id": "522350f1-b039-4979-84f0-f217c5d5e5cc",
    "name": "¿Es sombra?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -227,7 +227,7 @@
      },
      "conditions": [
       {
-       "id": "ea3642cb-6871-4c4f-9a60-4bae077c2d76",
+       "id": "016f2f50-b705-4d63-9fdb-f57e60a43549",
        "leftValue": "={{ $json.ya === true }}",
        "rightValue": "",
        "operator": {
@@ -241,7 +241,7 @@
     },
     "options": {}
    },
-   "id": "7c2146c9-cb8f-44e3-9997-ccb98fdf23a4",
+   "id": "bce403ec-bd8a-4cfc-8444-fc67f022fbf8",
    "name": "¿Ya estaba confirmada?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -263,7 +263,7 @@
     "specifyBody": "json",
     "jsonBody": "={{ JSON.stringify({ id_estado: 18 }) }}"
    },
-   "id": "c5c85b7c-84ac-4882-aa1c-200496d41493",
+   "id": "a94938ac-a352-4541-9d9e-28c1412f0ea9",
    "name": "PUT confirmar",
    "type": "n8n-nodes-base.httpRequest",
    "typeVersion": 4.2,
@@ -284,7 +284,7 @@
    "parameters": {
     "jsCode": "// confirmar_core.js — v7 · confirmar un turno (el caso más frecuente: \"Confirmo\" tras el recordatorio). Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// Misma regla que el resto: el modelo solo dice la fecha del turno; el código elige la cita (recordatorio abierto o turno visto), la verifica contra la agenda y confirma (id_estado 18).\n// Idempotente: si ya estaba confirmada, lo dice sin error.\nconst ConfirmarCore = (() => {\n  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\n  const normHora = (h) => { const m = /^(\\d{1,2}):(\\d{2})/.exec(String(h || '')); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };\n  const corto = (iso, hora) => `${DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()]} ${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))} a las ${hora}`;\n  const vigente = (t) => ![1, 14].includes(Number(t.id_estado)) && Number(t.estado_anulacion || 0) === 0;\n  const no = (motivo, para_asiri, extra) => ({ ok: false, motivo, para_asiri, ...(extra || {}) });\n  const ESTADO_CONFIRMADO = 18;   // \"Confirmado por WhatsApp\" (el que usa el v6)\n\n  // rows: filas abiertas de recordatorios_enviados (confirmado_at y cancelado_at nulos); turnosVistos: lo que dejó ver_turnos (o null); fecha: 'YYYY-MM-DD' o ''.\n  function elegir(rows, turnosVistos, fecha, hoyISO) {\n    const abiertas = (rows || []).filter((r) => r && r.id_cita_dentalink && r.fecha_turno && String(r.fecha_turno).slice(0, 10) >= hoyISO)\n      .map((r) => ({ cita_id: Number(r.id_cita_dentalink), paciente_id: Number(r.id_paciente_dentalink) || null, fecha: String(r.fecha_turno).slice(0, 10), hora: normHora(r.hora_turno), origen: 'recordatorio' }));\n    // (07/10) El modelo a veces da vuelta día y mes (\"jueves 10/12\" → 2026-10-12; escenarios reales REAL-14/15). Si la fecha no coincide se prueba invertida,\n    // y si hay UN solo recordatorio pendiente, \"confirmo\" es para ese.\n    const invertida = (f) => (/^\\d{4}-\\d{2}-\\d{2}$/.test(String(f || '')) ? `${f.slice(0, 4)}-${f.slice(8, 10)}-${f.slice(5, 7)}` : f);\n    let sel = fecha ? abiertas.filter((c) => c.fecha === fecha) : abiertas;\n    if (fecha && !sel.length) sel = abiertas.filter((c) => c.fecha === invertida(fecha));\n    if (fecha && !sel.length && abiertas.length === 1) sel = abiertas;\n    if (sel.length === 1) return { ok: true, cand: sel[0] };\n    if (sel.length > 1) {\n      return { fin: no('varios_recordatorios', 'Hay varios recordatorios pendientes. Si el paciente confirma todos, llamá a confirmar_turno una vez por cada fecha (formato YYYY-MM-DD); si no está claro, preguntale cuál.',\n        { fechas: sel.map((c) => corto(c.fecha, c.hora)), fechas_iso: sel.map((c) => c.fecha) }) };\n    }\n    if (fecha && Array.isArray(turnosVistos)) {\n      const t = turnosVistos.find((x) => (x.fecha === fecha || x.fecha === invertida(fecha)) && vigente(x));\n      if (t) return { ok: true, cand: { cita_id: Number(t.id), paciente_id: Number(t.id_paciente) || null, fecha: t.fecha, hora: normHora(t.hora_inicio), origen: 'agenda' } };\n    }\n    if (!abiertas.length && !fecha) {\n      return { fin: no('sin_recordatorio', 'No hay un recordatorio pendiente. Llamá a ver_turnos; si el paciente tiene un turno vigente que quiere confirmar, llamá a confirmar_turno con su fecha (YYYY-MM-DD).') };\n    }\n    return { fin: no('sin_turno_en_esa_fecha', 'No encuentro un turno pendiente de confirmar en esa fecha. Mostrale sus turnos con ver_turnos.') };\n  }\n  // resp = respuesta cruda de GET /citas/{id}\n  function verificar(cand, resp) {\n    if (!resp || resp.error) return { fin: no('error_tecnico', 'No pude consultar la agenda; no se confirmó nada. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).') };\n    const d = resp.data || resp;\n    const coincide = Number(d.id) === cand.cita_id && d.fecha === cand.fecha && (!cand.hora || normHora(d.hora_inicio) === cand.hora) && (!cand.paciente_id || Number(d.id_paciente) === cand.paciente_id);\n    if (!coincide) return { fin: no('cita_cambio', 'El turno cambió desde el recordatorio: no se confirmó nada. Mostrale sus turnos con ver_turnos.') };\n    if (!vigente(d)) return { fin: no('cita_no_vigente', 'Ese turno ya no está vigente (anulado). No lo confirmes; ofrecé reprogramarlo si corresponde.') };\n    return { ok: true, ya: Number(d.id_estado) === ESTADO_CONFIRMADO };\n  }\n  // resp = respuesta cruda de PUT /citas/{id} {id_estado: 18}\n  function evaluarConfirmacion(cand, resp) {\n    const confirmado = !!(resp && resp.data && Number(resp.data.id_estado) === ESTADO_CONFIRMADO);\n    // Dentalink contesta 400 \"el nuevo estado es igual al original\" si ya estaba confirmada: es un éxito.\n    const msg = JSON.stringify((resp && resp.error) || '');\n    if (confirmado) return { ok: true, ya: false };\n    if (/igual|mismo|same|already/i.test(msg)) return { ok: true, ya: true };\n    return { fin: no('no_pude_confirmar', 'No pude confirmar el turno en la agenda: sigue como estaba. Decíselo y avisá a la clínica con avisar_grupo (ACCION).') };\n  }\n  // (07/10, Lucas) Para el paciente es lo mismo si ya figuraba confirmado o se confirmó recién: \"ya estaba confirmado\" sonaba a corrección cuando él acababa de confirmar.\n  const mensaje = (cand) => `Perfecto, su turno del ${corto(cand.fecha, cand.hora)} está confirmado.`;\n  return { elegir, verificar, evaluarConfirmacion, mensaje, ESTADO_CONFIRMADO };\n})();\nif (typeof module !== 'undefined') module.exports = ConfirmarCore;\nconst cand = $('Verificar').first().json.cand;\nconst r = ConfirmarCore.evaluarConfirmacion(cand, $input.first().json);\nreturn [{ json: r.fin ? { terminado: true, resultado: r.fin } : { terminado: false, cand, ya: r.ya, escribio: true } }];"
    },
-   "id": "cfc6d18e-4b50-4b53-a4b8-39b0f47efea8",
+   "id": "78b62f8c-85e7-4de4-ac34-6bfb9f015287",
    "name": "Evaluar confirmación",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -303,7 +303,7 @@
      },
      "conditions": [
       {
-       "id": "d316ee18-0093-45e9-b9d9-6deb6283991d",
+       "id": "926fd7bf-0de6-4703-891d-2b815c36153a",
        "leftValue": "={{ $json.terminado === true }}",
        "rightValue": "",
        "operator": {
@@ -317,7 +317,7 @@
     },
     "options": {}
    },
-   "id": "99069aa7-b241-471c-a6b7-f1b0c5c8073e",
+   "id": "007d94bb-af09-42d0-bb3b-96818d4c5088",
    "name": "¿Termina? (confirmar)",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -336,7 +336,7 @@
      },
      "conditions": [
       {
-       "id": "ae3a2955-b601-44a9-a4c7-bafaf4953585",
+       "id": "954ef11a-a2cd-4372-9e6e-c5bb72387063",
        "leftValue": "={{ $json.cand.origen === 'recordatorio' }}",
        "rightValue": "",
        "operator": {
@@ -350,7 +350,7 @@
     },
     "options": {}
    },
-   "id": "e1dd53b1-bbab-4c21-ab1a-40011348a2a7",
+   "id": "58bb69e8-971f-4071-b755-78a78312fbf9",
    "name": "¿Viene de un recordatorio?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -367,7 +367,7 @@
      "queryReplacement": "={{ $json.cand.cita_id }}"
     }
    },
-   "id": "0a519694-f431-4b45-b61f-757e453d6f41",
+   "id": "cb3da6f5-0012-44d6-9c41-6cf750dc8b63",
    "name": "Marcar recordatorio",
    "type": "n8n-nodes-base.postgres",
    "typeVersion": 2.5,
@@ -388,7 +388,7 @@
    "parameters": {
     "jsCode": "// confirmar_core.js — v7 · confirmar un turno (el caso más frecuente: \"Confirmo\" tras el recordatorio). Fuente de verdad en el repo (se inlinea en nodos Code de n8n).\n// Misma regla que el resto: el modelo solo dice la fecha del turno; el código elige la cita (recordatorio abierto o turno visto), la verifica contra la agenda y confirma (id_estado 18).\n// Idempotente: si ya estaba confirmada, lo dice sin error.\nconst ConfirmarCore = (() => {\n  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\n  const normHora = (h) => { const m = /^(\\d{1,2}):(\\d{2})/.exec(String(h || '')); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };\n  const corto = (iso, hora) => `${DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()]} ${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))} a las ${hora}`;\n  const vigente = (t) => ![1, 14].includes(Number(t.id_estado)) && Number(t.estado_anulacion || 0) === 0;\n  const no = (motivo, para_asiri, extra) => ({ ok: false, motivo, para_asiri, ...(extra || {}) });\n  const ESTADO_CONFIRMADO = 18;   // \"Confirmado por WhatsApp\" (el que usa el v6)\n\n  // rows: filas abiertas de recordatorios_enviados (confirmado_at y cancelado_at nulos); turnosVistos: lo que dejó ver_turnos (o null); fecha: 'YYYY-MM-DD' o ''.\n  function elegir(rows, turnosVistos, fecha, hoyISO) {\n    const abiertas = (rows || []).filter((r) => r && r.id_cita_dentalink && r.fecha_turno && String(r.fecha_turno).slice(0, 10) >= hoyISO)\n      .map((r) => ({ cita_id: Number(r.id_cita_dentalink), paciente_id: Number(r.id_paciente_dentalink) || null, fecha: String(r.fecha_turno).slice(0, 10), hora: normHora(r.hora_turno), origen: 'recordatorio' }));\n    // (07/10) El modelo a veces da vuelta día y mes (\"jueves 10/12\" → 2026-10-12; escenarios reales REAL-14/15). Si la fecha no coincide se prueba invertida,\n    // y si hay UN solo recordatorio pendiente, \"confirmo\" es para ese.\n    const invertida = (f) => (/^\\d{4}-\\d{2}-\\d{2}$/.test(String(f || '')) ? `${f.slice(0, 4)}-${f.slice(8, 10)}-${f.slice(5, 7)}` : f);\n    let sel = fecha ? abiertas.filter((c) => c.fecha === fecha) : abiertas;\n    if (fecha && !sel.length) sel = abiertas.filter((c) => c.fecha === invertida(fecha));\n    if (fecha && !sel.length && abiertas.length === 1) sel = abiertas;\n    if (sel.length === 1) return { ok: true, cand: sel[0] };\n    if (sel.length > 1) {\n      return { fin: no('varios_recordatorios', 'Hay varios recordatorios pendientes. Si el paciente confirma todos, llamá a confirmar_turno una vez por cada fecha (formato YYYY-MM-DD); si no está claro, preguntale cuál.',\n        { fechas: sel.map((c) => corto(c.fecha, c.hora)), fechas_iso: sel.map((c) => c.fecha) }) };\n    }\n    if (fecha && Array.isArray(turnosVistos)) {\n      const t = turnosVistos.find((x) => (x.fecha === fecha || x.fecha === invertida(fecha)) && vigente(x));\n      if (t) return { ok: true, cand: { cita_id: Number(t.id), paciente_id: Number(t.id_paciente) || null, fecha: t.fecha, hora: normHora(t.hora_inicio), origen: 'agenda' } };\n    }\n    if (!abiertas.length && !fecha) {\n      return { fin: no('sin_recordatorio', 'No hay un recordatorio pendiente. Llamá a ver_turnos; si el paciente tiene un turno vigente que quiere confirmar, llamá a confirmar_turno con su fecha (YYYY-MM-DD).') };\n    }\n    return { fin: no('sin_turno_en_esa_fecha', 'No encuentro un turno pendiente de confirmar en esa fecha. Mostrale sus turnos con ver_turnos.') };\n  }\n  // resp = respuesta cruda de GET /citas/{id}\n  function verificar(cand, resp) {\n    if (!resp || resp.error) return { fin: no('error_tecnico', 'No pude consultar la agenda; no se confirmó nada. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).') };\n    const d = resp.data || resp;\n    const coincide = Number(d.id) === cand.cita_id && d.fecha === cand.fecha && (!cand.hora || normHora(d.hora_inicio) === cand.hora) && (!cand.paciente_id || Number(d.id_paciente) === cand.paciente_id);\n    if (!coincide) return { fin: no('cita_cambio', 'El turno cambió desde el recordatorio: no se confirmó nada. Mostrale sus turnos con ver_turnos.') };\n    if (!vigente(d)) return { fin: no('cita_no_vigente', 'Ese turno ya no está vigente (anulado). No lo confirmes; ofrecé reprogramarlo si corresponde.') };\n    return { ok: true, ya: Number(d.id_estado) === ESTADO_CONFIRMADO };\n  }\n  // resp = respuesta cruda de PUT /citas/{id} {id_estado: 18}\n  function evaluarConfirmacion(cand, resp) {\n    const confirmado = !!(resp && resp.data && Number(resp.data.id_estado) === ESTADO_CONFIRMADO);\n    // Dentalink contesta 400 \"el nuevo estado es igual al original\" si ya estaba confirmada: es un éxito.\n    const msg = JSON.stringify((resp && resp.error) || '');\n    if (confirmado) return { ok: true, ya: false };\n    if (/igual|mismo|same|already/i.test(msg)) return { ok: true, ya: true };\n    return { fin: no('no_pude_confirmar', 'No pude confirmar el turno en la agenda: sigue como estaba. Decíselo y avisá a la clínica con avisar_grupo (ACCION).') };\n  }\n  // (07/10, Lucas) Para el paciente es lo mismo si ya figuraba confirmado o se confirmó recién: \"ya estaba confirmado\" sonaba a corrección cuando él acababa de confirmar.\n  const mensaje = (cand) => `Perfecto, su turno del ${corto(cand.fecha, cand.hora)} está confirmado.`;\n  return { elegir, verificar, evaluarConfirmacion, mensaje, ESTADO_CONFIRMADO };\n})();\nif (typeof module !== 'undefined') module.exports = ConfirmarCore;\nconst e = $('Entrada').first().json;\n// Se llega acá por varios caminos (el UPDATE de Postgres pisa el ítem): el estado se lee del ÚLTIMO nodo de decisión que corrió.\nconst corrio = (n) => { try { return $(n).isExecuted === true; } catch (x) { return false; } };\nconst j = corrio('Evaluar confirmación') ? $('Evaluar confirmación').first().json : (corrio('Verificar') ? $('Verificar').first().json : $('Elegir cita').first().json);\nconst r = j.resultado ? j.resultado : (() => { const c = j.cand; const ya = j.ya === true; return { ok: true, ya, readback_text: ConfirmarCore.mensaje(c, ya), cita: c.cita_id }; })();\n// (07/10) También se deja en el libro un turno que la agenda ya tenía confirmado (verificado con el GET): el chequeo de salida necesita saber que\n// \"su turno … está confirmado\" es verdad; sin esto lo tomaba como afirmación falsa (examen CON-01 y MULTI-01).\nconst sombra = e.modo !== 'vivo';\nconst escribio = !!(r.ok === true && (j.escribio === true || j.ya === true || sombra));   // en sombra el libro queda marcado simulado (el chequeo de salida lo necesita)\nconst libro = { ok: r.ok === true, simulado: sombra || undefined, parcial: false, tipo: 'confirmacion', readback_text: r.readback_text || null, nueva_cita: null, vieja_anulada: null };\nconst salida = { ok: r.ok === true, simulado: sombra || undefined, motivo: r.motivo || null, ya_estaba_confirmada: r.ya === true, readback_text: r.readback_text || null, para_asiri: r.para_asiri || (r.ok === true ? '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es readback_text: mandáselo tal cual. Si en el mismo mensaje pidió otras cosas (precio, otro turno, datos), resolvelas en esa misma respuesta, después de este texto. Si hay otros recordatorios pendientes, confirmá cada uno con su fecha.' : null), fechas: r.fechas || null, fechas_iso: r.fechas_iso || null };\nreturn [{ json: { tel: e.tel, escribio, libro_key: 'escrituras:' + e.tel + ':' + e.exec_id_actual, libro_entry: libro, salida } }];"
    },
-   "id": "8b750590-381f-436d-95cf-8515076b0592",
+   "id": "af3899b2-f704-4a75-a76f-d46aeab2688d",
    "name": "Final",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -407,7 +407,7 @@
      },
      "conditions": [
       {
-       "id": "c3ad451c-7f1c-4bef-ba1a-2b9a914ff539",
+       "id": "ece0d91c-904b-4eb6-8328-cc1f5b235292",
        "leftValue": "={{ $json.escribio === true }}",
        "rightValue": "",
        "operator": {
@@ -421,7 +421,7 @@
     },
     "options": {}
    },
-   "id": "aab178cd-fefb-449c-8b0b-7d64f619bf9f",
+   "id": "4103993e-b8f8-4860-a218-54aa6c66a066",
    "name": "¿Escribió?",
    "type": "n8n-nodes-base.if",
    "typeVersion": 2.2,
@@ -438,7 +438,7 @@
     "keyType": "string",
     "options": {}
    },
-   "id": "72f5c95b-ed91-4d6b-ad6d-c69c23e29493",
+   "id": "e1aadb17-3647-4033-affe-d55f60fa5b06",
    "name": "Redis GET libro",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -459,7 +459,7 @@
    "parameters": {
     "jsCode": "const f = $('Final').first().json;\nlet arr = []; try { arr = JSON.parse($input.first().json.libro_raw || '[]'); } catch (e) { arr = []; }\nif (!Array.isArray(arr)) arr = [arr];\narr.push(f.libro_entry);\nreturn [{ json: { libro_key: f.libro_key, libro_json: JSON.stringify(arr) } }];"
    },
-   "id": "e93fcb1d-f103-4e78-8071-f6a25f418d58",
+   "id": "955e8172-d636-4ecd-8218-b22e66299d66",
    "name": "Sumar al libro",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -477,7 +477,7 @@
     "expire": true,
     "ttl": 300
    },
-   "id": "58ecc8f3-fa67-4dd8-83c0-4acd54b7dcb5",
+   "id": "010f00f4-28ab-451b-a591-b669aef1326b",
    "name": "Redis SET libro",
    "type": "n8n-nodes-base.redis",
    "typeVersion": 1,
@@ -497,7 +497,7 @@
    "parameters": {
     "jsCode": "return [{ json: $('Final').first().json.salida }];"
    },
-   "id": "1f72e14a-7ece-4ebe-826e-94474a5fc14c",
+   "id": "a255e5e4-a995-439f-8b40-ab0cf4601344",
    "name": "Devolver",
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,

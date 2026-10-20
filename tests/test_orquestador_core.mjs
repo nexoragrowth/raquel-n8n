@@ -211,10 +211,14 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
 { const KB40 = 'Hola! Soy Asiri, la secretaria virtual de la Dra. Raquel 🤗 gracias por comunicarte con nosotros ✨\n\nLa Dra. Raquel Rodríguez es especialista en ortodoncia…';
   const p = O.despachar(orq([{ a: 'presentacion_anuncio' }]), {});
   t('AN1 "¡Hola! Quiero más información" → fija anuncio, sin agentes', p.fija === 'anuncio' && !p.hay_agentes, p);
-  const c = O.componer(base({ plan: p, res: {}, reunion: {}, anuncio: KB40, conversacion_nueva: true }));
-  t('AN2 se manda la KB 40 tal cual, sin anteponer otra presentación', c.texto === KB40 && (c.texto.match(/Soy Asiri/g) || []).length === 1, c.texto);
+  const KB21 = 'La primera consulta tiene un valor de $50.000 e incluye evaluación + diagnóstico presuntivo. El presupuesto del tratamiento NO se da en esta consulta.';
+  const c = O.componer(base({ plan: p, res: {}, reunion: {}, anuncio: KB40, consulta: KB21, conversacion_nueva: true }));
+  t('AN2 (Lucas 20/10) saludo CORTO: quién es Asiri + el precio de la KB 21 + la oferta de turno; sin la presentación larga',
+    c.texto === O.TEXTOS.HOLA_ANUNCIO + '\n\n' + 'La primera consulta tiene un valor de $50.000.' + '\n\n' + O.TEXTOS.OFERTA_PRIMERA && (c.texto.match(/Soy Asiri/g) || []).length === 1, c.texto);
+  const c1 = O.componer(base({ plan: p, res: {}, reunion: {}, anuncio: KB40, consulta: 'Consulta: consultar con la secretaria.' }));
+  t('AN2b la KB 21 sin precio: va la presentación larga (KB 40)', c1.texto === KB40, c1.texto);
   const c2 = O.componer(base({ plan: p, res: {}, reunion: {}, anuncio: '' }));
-  t('AN3 sin KB 40 cargada: el menú (nunca un mensaje vacío)', c2.texto === O.MENU, c2.texto);
+  t('AN3 sin KB 21 ni KB 40: el menú (nunca un mensaje vacío)', c2.texto === O.MENU, c2.texto);
   const p4 = O.despachar(orq([{ a: 'presentacion_anuncio' }, { a: 'informacion', pedido: 'atiende niños' }]), {});
   t('AN4 saludo de anuncio + una pregunta: responde la pregunta (Información), no la presentación sola', p4.informacion === 'atiende niños' && p4.fija !== 'anuncio', p4); }
 
