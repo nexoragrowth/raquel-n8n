@@ -24,7 +24,13 @@ SQL_RECORDATORIOS = ("SELECT id_cita_dentalink, fecha_turno, hora_turno FROM rec
 # Datos del negocio para INFORMACIÓN (la KB 24 bancaria la lee solo el código de la Salida: ningún modelo ve el alias ni el CBU).
 KB_EXTRA = ["45", "41", "29", "30", "37", "42", "44", "3", "22", "23", "1", "26", "28", "43", "32", "33"]
 # (20/10, BOT-06) KB 40 = presentación para los leads de anuncio (la que mandaba el v6 con "¡Hola! Quiero más información"): la pega el CÓDIGO tal cual.
+# (20/10, panel "Conocimiento") Además de los ids fijos, las entradas que la clínica marcó en el panel "Asiri puede decírselo a los pacientes"
+# (metadata.asiri = true, no archivadas): hasta KB_ASIRI_MAX, cada una recortada a KB_ASIRI_LARGO caracteres, como DATOS de Información.
+KB_ASIRI_MAX, KB_ASIRI_LARGO = 12, 600
 SQL_DATOS = ("SELECT id::text AS id, contenido FROM knowledge_base WHERE id IN (20, 21, 24, 25, 36, 39, 40, " + ", ".join(KB_EXTRA) + ") UNION ALL "
+             "(SELECT 'asiri:' || id::text AS id, left(contenido, " + str(KB_ASIRI_LARGO) + ") AS contenido FROM knowledge_base "
+             "WHERE metadata->>'asiri' = 'true' AND coalesce(metadata->>'archivado', '') <> 'true' AND id NOT IN (20, 21, 24, 25, 36, 39, 40, " + ", ".join(KB_EXTRA) + ") "
+             "ORDER BY id LIMIT " + str(KB_ASIRI_MAX) + ") UNION ALL "
              "SELECT 'dir:' || clave AS id, valor AS contenido FROM agente_directrices WHERE clave IN ('notas_para_asiri', 'menu_bienvenida') ORDER BY 1")
 # (20/10, D3 del plan del 13/10; escalaciones reales 380–386) ¿Quién escribió PRIMERO en este chat? Si fue la clínica y el contacto no tiene ficha,
 # es una charla de la clínica (plomero, proveedor, técnico): Asiri no se mete. Es estructura (fuente del mensaje), no lectura del texto del paciente.
@@ -60,7 +66,9 @@ const j = new Date(ahoraMs - 3 * 3600 * 1000);
 const ahora = DIAS[j.getUTCDay()] + ' ' + j.toISOString().slice(0, 10) + ' ' + j.toISOString().slice(11, 16);
 const datos = [kb['20'] && '- Horarios de atención: ' + kb['20'], kb['21'] && '- Primera consulta: ' + kb['21'], kb['36'] && '- Cuota mensual del tratamiento: ' + kb['36'],
   kb['39'] && '- Control de contención: ' + kb['39'], kb['25'] && '- Dirección (solo si la piden): ' + kb['25']]
-  .concat(""" + json.dumps(KB_EXTRA) + """.filter((k) => kb[k]).map((k) => '- ' + kb[k])).filter(Boolean).join('\\n');
+  .concat(""" + json.dumps(KB_EXTRA) + """.filter((k) => kb[k]).map((k) => '- ' + kb[k]))
+  .concat(Object.keys(kb).filter((k) => k.startsWith('asiri:')).sort((a, b) => Number(a.slice(6)) - Number(b.slice(6))).map((k) => '- ' + kb[k]))   // cargadas por la clínica desde el panel
+  .filter(Boolean).join('\\n');
 const notas = kb['dir:notas_para_asiri'] || '';
 // (B2 de la crítica) Las notas del panel cambian el TONO, nunca el alcance: Información responde solo su lista cerrada de temas.
 const datos_info = 'DATOS DEL CONSULTORIO (son los únicos datos que podés dar)\\n' + (datos || '(sin datos cargados: respondé FUERA_DE_ALCANCE)')

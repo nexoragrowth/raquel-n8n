@@ -168,6 +168,9 @@ def main():
             redis={f"ofertas:{TEL}": OFERTAS, f"turnos_vistos:{TEL}": VISTOS}),
         esc("Z24 urgencia que no se pudo derivar", orq({"a": "urgencias", "pedido": "dolor"}), texto="me duele mucho la muela", subwf={"Agente Urgencias": sub("urgencias", "", "derivar_fallo", codigo=None)}),
         esc("Z25 audio", orq({"a": "pedir_texto"}), texto="[audio]"),
+        # (20/10, panel Conocimiento) una entrada que la clínica marcó "Asiri puede decírselo a los pacientes" le llega a Información
+        esc("Z27 entrada marcada por la clínica", orq({"a": "informacion", "pedido": "hacen blanqueamiento?"}), texto="hacen blanqueamiento?", subwf={"Agente Información": I_PRECIO},
+            pg={"Datos del consultorio": KB + [{"id": "asiri:50", "contenido": "La clínica hace blanqueamiento dental con turno previo."}]}),
         # (20/10, D3) charla que inició la clínica con un contacto SIN ficha (plomero de las escalaciones 384/385)
         esc("Z26 charla de la clínica, sin ficha", orq({"a": "derivar_secretaria", "cita": "Yo por la tarde puedo pasar", "motivo": "proveedor: grifo"}), texto="Yo por la tarde puedo pasar",
             subwf={"Identificar paciente": {"ok": False, "motivo": "sin_ficha"}}, pg={"Primer mensaje": [{"fuente": "wa_outbound", "tipo": "ai"}]}),
@@ -271,6 +274,10 @@ def main():
     chequear("Z22 reserva de PRIMERA CONSULTA → pedido de pago + datos (como el v6), una sola vez", a["salida"]["texto"].startswith("Listo, le reservé") and "Para confirmarlo definitivamente" in a["salida"]["texto"] and a["salida"]["texto"].count("Alias:") == 1, a["salida"]["texto"])
     a = R["Z23 Turnos (por error) afirma algo sin escritura"]["reps"][0]
     chequear("Z23 el chequeo de salida corre sobre la parte de Turnos: una afirmación sin escritura se reemplaza por el texto honesto", a["salida"]["motivo_chequeo"] == "afirma_reprogramar_sin_ok" and "no quedó hecho" in a["salida"]["texto"], a["salida"])
+    a = R["Z27 entrada marcada por la clínica"]["reps"][0]
+    ti = llamados(a, "Agente Información")
+    chequear("Z27 la entrada marcada en el panel (metadata.asiri) llega a Información como DATO del consultorio",
+             len(ti) == 1 and "- La clínica hace blanqueamiento dental con turno previo." in ti[0]["entradas"]["datos"], ti[0]["entradas"]["datos"][-300:] if ti else ti)
     a = R["Z26 charla de la clínica, sin ficha"]["reps"][0]
     chequear("Z26 charla que inició la clínica con un contacto sin ficha: silencio, NO llama a Derivar a secretaria (sin aviso al grupo)",
              a["salida"]["silencio"] is True and not a["salida"]["texto"] and not llamados(a, "Derivar a secretaria"), (a["salida"], llamados(a, "Derivar a secretaria")))
