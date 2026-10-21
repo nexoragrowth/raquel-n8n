@@ -4,7 +4,7 @@
 -- Esta función hace ese cálculo en la base: UNA fila (el último mensaje) por teléfono, con la cantidad de no leídos, más los mensajes de las últimas
 -- p_recientes_horas (el panel los usa para no duplicar mensajes que ya llegaron por la memoria en vivo). Solo lectura. Solo service_role la ejecuta.
 drop function if exists public.panel_ultimos_mensajes(integer, integer);
-create or replace function public.panel_ultimos_mensajes(p_recientes_horas integer default 6, p_limite_chats integer default 2000, p_no_leidos_dias integer default 7)
+create or replace function public.panel_ultimos_mensajes(p_recientes_horas integer default 6, p_limite_chats integer default 800, p_no_leidos_dias integer default 7)
 returns table (telefono text, rol text, mensaje text, fuente text, "timestamp" timestamptz, metadata jsonb, es_ultimo boolean, no_leidos integer)
 language sql
 stable
