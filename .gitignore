@@ -40,3 +40,10 @@ Thumbs.db
 # Datos reales de pacientes (exports de conversaciones para analisis con IA): NUNCA al repo
 data/
 docs/dataset_conversaciones*.json
+
+# permisos y rutas locales de Claude Code (IP del VPS, ruta de la clave SSH)
+.claude/settings.local.json
+
+# documento PRIVADO de accesos (nunca al repo)
+Asiri-Accesos/
+ACCESOS.private*

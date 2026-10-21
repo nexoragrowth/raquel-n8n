@@ -39,7 +39,7 @@ KEY = os.environ.get("N8N_API_KEY") or ""
 
 POSTGRES_CRED = {"id": "TpYhZX4UT61xAKSV", "name": "Postgres Supabase Nexora v3"}
 OPENAI_CRED = {"id": "nYujqfon7GGDnJUO", "name": "OpenAi account"}
-EVO_TOKEN = "fe27778f-6608-4a71-9385-e5c5c1eebf14"
+EVO_TOKEN = os.environ.get("EVOLUTION_INSTANCE_TOKEN") or ""   # (21/10) ya no vive en el repo: token de la instancia, desde .env
 
 CLASIFICAR_CODE = """// Mismo criterio que lib/escalaciones.ts del panel (senal/ruido/operativo + temas).
 // Si se edita un lado, editar el otro tambien -- son la misma logica en 2 lenguajes.

@@ -2023,7 +2023,7 @@ el numero del bot del numero personal de ella.
    - `webhook` en `evogo_users` configurado a `https://n8n.raquelrodriguez.com.ar/webhook/evolution-v2`.
    - `CONNECT_ON_STARTUP: "true"` activado en `/docker/evolution-go/docker-compose.yml`.
 2. **Actualización de Workflows en n8n para Evolution GO**:
-   - Evolution GO utiliza peticiones HTTP REST estándar (`POST /send/text`, `POST /message/downloadmedia`, `POST /message/presence`) con el token de instancia `apikey: fe27778f-6608-4a71-9385-e5c5c1eebf14`.
+   - Evolution GO utiliza peticiones HTTP REST estándar (`POST /send/text`, `POST /message/downloadmedia`, `POST /message/presence`) con el token de instancia `apikey: <TOKEN_DE_INSTANCIA>`.
    - Nodos actualizados a `n8n-nodes-base.httpRequest` nativos en **TODOS los workflows activos**:
      - `Agente IA v6` (`O155MqHgOSaNZ9ye`): Enviar Mensaje, Obtener Media/Imagen (`/message/downloadmedia`), Typing status (`/message/presence`), Admin Confirm.
      - `Recordatorio de Turno 48HS` (`7RqTApkvVavRmq3R`).

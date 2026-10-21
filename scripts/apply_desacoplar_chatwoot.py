@@ -142,8 +142,8 @@ try {
     method: 'GET',
     url: 'https://eoizfjsyejixjzwgzwkt.supabase.co/rest/v1/pacientes?select=human_takeover&telefono=eq.' + phone,
     headers: {
-      'apikey': 'sb_secret_99fBw8bH9gR-E7W8J_V1fG',
-      'Authorization': 'Bearer sb_secret_99fBw8bH9gR-E7W8J_V1fG'
+      'apikey': '@@SB_SERVICE_KEY@@',
+      'Authorization': 'Bearer @@SB_SERVICE_KEY@@'
     },
     json: true,
   });
@@ -178,7 +178,7 @@ if (output && output !== '[NO_REPLY]') {
 }
 return [];
 """
-    gate_final["parameters"]["jsCode"] = gate_final_code
+    gate_final["parameters"]["jsCode"] = gate_final_code.replace("@@SB_SERVICE_KEY@@", env("SUPABASE_V3_SERVICE_ROLE_KEY"))   # (21/10) la clave ya no vive en el repo
 
     # --- 4. OUTBOUND fromMe: Activar Takeover (fromMe) ---
     outbound_pg = {
@@ -221,8 +221,8 @@ if (["video", "pregunta", "cerrar"].includes(d.ruta)) {
       method: "GET",
       url: "https://eoizfjsyejixjzwgzwkt.supabase.co/rest/v1/pacientes?select=human_takeover&telefono=eq." + (ev.phone || ""),
       headers: {
-        apikey: "sb_secret_99fBw8bH9gR-E7W8J_V1fG",
-        Authorization: "Bearer sb_secret_99fBw8bH9gR-E7W8J_V1fG"
+        apikey: "@@SB_SERVICE_KEY@@",
+        Authorization: "Bearer @@SB_SERVICE_KEY@@"
       },
       json: true,
     });
@@ -235,7 +235,7 @@ if (["video", "pregunta", "cerrar"].includes(d.ruta)) {
 
 """
         td_code = td_code.replace(old_part, new_part)
-        triaje_decidir["parameters"]["jsCode"] = td_code
+        triaje_decidir["parameters"]["jsCode"] = td_code.replace("@@SB_SERVICE_KEY@@", env("SUPABASE_V3_SERVICE_ROLE_KEY"))
 
     # --- FILTRAR NODOS ---
     to_delete = del_inbound | del_recheck | del_outbound
