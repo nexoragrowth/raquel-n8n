@@ -39,9 +39,11 @@ HERRAMIENTAS = [
                       "confirma": "true SOLO si el MENSAJE ACTUAL del paciente acepta la CONFIRMACIÓN PENDIENTE; si no, vacío."}),
     # (21/10, incidente familia con dos turnos el mismo día) UNA llamada confirma todos los que correspondan: sin datos = todos los recordatorios
     # pendientes (lo que hacía el v6 con "Confirmo"); con fecha / hora / nombre = solo los que coinciden.
-    ("confirmar_turno", "confirmar_turno", "Confirma la asistencia cuando el paciente responde a un recordatorio. UNA sola llamada: vacía confirma TODOS los recordatorios pendientes (\"Confirmo\", \"sí, ambos\", \"Pedro 9:50 e Hilario 10:30\"). Si confirma solo uno de varios, pasá su fecha y/o hora y/o nombre.",
-     ESCRIBE, {"fecha": "Opcional. Fecha YYYY-MM-DD del turno, solo si confirma UNO de varios.", "hora": "Opcional. Hora HH:MM del turno, solo si confirma UNO de varios el mismo día.",
-               "nombre": "Opcional. Nombre del paciente (familia), solo si confirma el turno de UNO de varios."}),
+    # (21/10, Lucas) Cualquier forma de "sí" a un recordatorio confirma TODO: "Confirmo", "hola siii vamos a ir con martin", "ahí estaremos", "dale 👍".
+    # Solo se limita si el paciente dice EXPLÍCITAMENTE que confirma uno solo o que otro no va. Nombrar con quién va NO limita.
+    ("confirmar_turno", "confirmar_turno", "Confirma la asistencia cuando el paciente responde a un recordatorio con cualquier forma de sí (\"Confirmo\", \"hola siii vamos a ir con martin\", \"ahí estaremos\", \"dale 👍\", \"Pedro 9:50 e Hilario 10:30\"). UNA sola llamada y VACÍA: confirma TODOS sus recordatorios pendientes. Pasá fecha/hora/nombre SOLO si dice explícitamente que confirma uno solo o que otro no va (\"solo el de Pedro\", \"Hilario no puede\"); nombrar con quién va NO limita.",
+     ESCRIBE, {"fecha": "Vacío casi siempre. Solo si el paciente dice que confirma UNO solo: su fecha YYYY-MM-DD.", "hora": "Vacío casi siempre. Solo si confirma UNO solo de dos el mismo día: su hora HH:MM.",
+               "nombre": "Vacío casi siempre. Solo si dice que confirma el turno de UNO solo (\"solo el de Pedro\"): ese nombre. Nombrar con quién va NO cuenta."}),
     ("lista_espera", "clinica", "Anota para la clínica que el paciente quiere adelantar su turno si se libera uno. Una vez por pedido.",
      {**CLINICA, "accion": "'espera'"}, {"texto": "Opcional: hasta qué fecha o qué horarios le sirven."}),
     ("registrar_pago", "clinica", "Registra que el paciente avisó un pago o mandó un comprobante (la secretaria lo verifica). No valida montos.", {**CLINICA, "accion": "'pago'"}, {}),

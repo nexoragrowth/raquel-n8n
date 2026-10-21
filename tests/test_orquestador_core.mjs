@@ -207,6 +207,18 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const r2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { etapa: 'ejecutado', ok: false, motivo: 'ya_ejecutada' }, { confirma: 'true' })] }, {});
   t('T10b "ya_ejecutada" sola (un "sí" repetido) sigue diciendo que ya quedó registrado', r2.texto === 'Ese pedido ya quedó registrado.', r2); }
 
+// (21/10, prueba con modelos reales) respuesta a un recordatorio: Turnos siempre ve el mensaje (estado, no texto)
+{ const p = O.despachar(orq([{ a: 'no_reply' }]), { recordatorio_pendiente: true });
+  t('RC1 "dale gracias 👍" que el orquestador tomó por cierre: con recordatorio pendiente, Turnos igual lo ve con la instrucción de confirmar', !!p.turnos && p.turnos.startsWith('responde al recordatorio') && p.turnos_por_estado === true && p.hay_agentes, p);
+  const p2 = O.despachar(orq([{ a: 'turnos', pedido: 'confirma asistencia de los dos' }]), { recordatorio_pendiente: true });
+  t('RC2 si el orquestador ya mandó a Turnos, se le suma la instrucción (no buscar horarios salvo otro turno)', p2.turnos.startsWith('confirma asistencia de los dos — responde al recordatorio') && p2.turnos.includes('no busques horarios'), p2.turnos);
+  const p3 = O.despachar(orq([{ a: 'pasar_a_humano', cita: 'quiero hablar con alguien' }]), { recordatorio_pendiente: true });
+  t('RC3 pidió una persona: no se fuerza Turnos', !p3.turnos && p3.fija === 'humano', p3);
+  const p4 = O.despachar(orq([{ a: 'no_reply' }]), { recordatorio_pendiente: true, charla_de_la_clinica: true });
+  t('RC4 charla de la clínica: tampoco', !p4.turnos, p4);
+  const p5 = O.despachar(orq([{ a: 'no_reply' }]), {});
+  t('RC5 sin recordatorio pendiente: un cierre sigue siendo silencio', !p5.turnos && p5.fija === 'no_reply', p5); }
+
 // (21/10, incidente familia: dos turnos el mismo día) confirmaciones: todas al mensaje, nunca dos preguntas
 { const PL = 'Perfecto, quedaron confirmados sus turnos del viernes 23/10 a las 09:50 (Pedro) y viernes 23/10 a las 10:30 (Hilario).';
   const s1 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('confirmar_turno', { ok: true, readback_text: PL })] }, {});

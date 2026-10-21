@@ -168,6 +168,12 @@ def main():
             redis={f"ofertas:{TEL}": OFERTAS, f"turnos_vistos:{TEL}": VISTOS}),
         esc("Z24 urgencia que no se pudo derivar", orq({"a": "urgencias", "pedido": "dolor"}), texto="me duele mucho la muela", subwf={"Agente Urgencias": sub("urgencias", "", "derivar_fallo", codigo=None)}),
         esc("Z25 audio", orq({"a": "pedir_texto"}), texto="[audio]"),
+        # (21/10) respuesta a un recordatorio que el orquestador tomó por cierre ("dale gracias 👍"): Turnos igual la ve por ESTADO
+        esc("Z28 'dale gracias' a un recordatorio", orq({"a": "no_reply"}), texto="dale gracias 👍",
+            subwf={"Agente Turnos": sub("turnos", "Perfecto, quedaron confirmados sus turnos del viernes 23/10 a las 09:50 (Pedro) y viernes 23/10 a las 10:30 (Hilario).", "confirmado")},
+            pg={"Historial": [{"message": json.dumps({"type": "ai", "content": "✨ ÁUREA ✨ Le recordamos su turno… responda CONFIRMO.", "additional_kwargs": {"source": "reminder_note"}}), "created_at": "2026-10-05T11:30:00Z"}],
+                "Recordatorios": [{"id_cita_dentalink": 9116, "fecha_turno": "2026-10-23", "hora_turno": "09:50:00"}, {"id_cita_dentalink": 9120, "fecha_turno": "2026-10-23", "hora_turno": "10:30:00"}]}),
+        esc("Z28b 'gracias' sin recordatorio de por medio", orq({"a": "no_reply"}), texto="gracias"),
         # (20/10, panel Conocimiento) una entrada que la clínica marcó "Asiri puede decírselo a los pacientes" le llega a Información
         esc("Z27 entrada marcada por la clínica", orq({"a": "informacion", "pedido": "hacen blanqueamiento?"}), texto="hacen blanqueamiento?", subwf={"Agente Información": I_PRECIO},
             pg={"Datos del consultorio": KB + [{"id": "asiri:50", "contenido": "La clínica hace blanqueamiento dental con turno previo."}]}),
@@ -274,6 +280,12 @@ def main():
     chequear("Z22 reserva de PRIMERA CONSULTA → pedido de pago + datos (como el v6), una sola vez", a["salida"]["texto"].startswith("Listo, le reservé") and "Para confirmarlo definitivamente" in a["salida"]["texto"] and a["salida"]["texto"].count("Alias:") == 1, a["salida"]["texto"])
     a = R["Z23 Turnos (por error) afirma algo sin escritura"]["reps"][0]
     chequear("Z23 el chequeo de salida corre sobre la parte de Turnos: una afirmación sin escritura se reemplaza por el texto honesto", a["salida"]["motivo_chequeo"] == "afirma_reprogramar_sin_ok" and "no quedó hecho" in a["salida"]["texto"], a["salida"])
+    a = R["Z28 'dale gracias' a un recordatorio"]["reps"][0]
+    tt = llamados(a, "Agente Turnos")
+    chequear("Z28 respuesta a un recordatorio que el orquestador tomó por cierre: Turnos la ve (pedido 'responde al recordatorio') y el paciente recibe la confirmación",
+             len(tt) == 1 and tt[0]["entradas"]["pedido"].startswith("responde al recordatorio") and "quedaron confirmados" in (a["salida"]["texto"] or ""), (tt[0]["entradas"]["pedido"] if tt else tt, a["salida"].get("texto")))
+    a = R["Z28b 'gracias' sin recordatorio de por medio"]["reps"][0]
+    chequear("Z28b sin recordatorio pendiente un 'gracias' sigue en silencio y no llama a Turnos", a["salida"]["silencio"] is True and not llamados(a, "Agente Turnos"), a["salida"])
     a = R["Z27 entrada marcada por la clínica"]["reps"][0]
     ti = llamados(a, "Agente Información")
     chequear("Z27 la entrada marcada en el panel (metadata.asiri) llega a Información como DATO del consultorio",

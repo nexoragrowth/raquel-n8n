@@ -61,6 +61,10 @@ const rec = $('Recordatorios').all().map((i) => i.json).filter((r) => r && r.id_
   const f = String(r.fecha_turno).slice(0, 10);
   return DIAS[new Date(f + 'T12:00:00Z').getUTCDay()] + ' ' + Number(f.slice(8)) + '/' + Number(f.slice(5, 7)) + ' a las ' + String(r.hora_turno || '').slice(0, 5);
 });
+// (21/10, Lucas: "si tira un recordatorio y el paciente dice que sí, de la forma que sea, se le confirma") ¿Está respondiendo a un recordatorio?
+// ESTADO, no texto: hay recordatorios abiertos y el último mensaje que NO es del paciente es un recordatorio (source reminder_note).
+let ultimoNoPaciente = null; for (const f of filas) { const m = msg(f); if (!m || m.type === 'human') continue; ultimoNoPaciente = m; break; }
+const recordatorio_pendiente = rec.length > 0 && !!(ultimoNoPaciente && (ultimoNoPaciente.additional_kwargs || {}).source === 'reminder_note');
 const kb = {}; for (const r of $('Datos del consultorio').all().map((i) => i.json)) if (r && r.id !== undefined) kb[String(r.id)] = String(r.contenido || '').trim();
 const j = new Date(ahoraMs - 3 * 3600 * 1000);
 const ahora = DIAS[j.getUTCDay()] + ' ' + j.toISOString().slice(0, 10) + ' ' + j.toISOString().slice(11, 16);
@@ -90,13 +94,13 @@ let primero = null; try { primero = $('Primer mensaje').first().json || null; } 
 const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && ident.ok !== true && ident.motivo === 'sin_ficha';
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', charla_de_la_clinica, ultimo_asiri, conversacion_nueva, prop_pendiente,
+return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, conversacion_nueva, prop_pendiente,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
 JS_DESPACHO = """const ctx = $('Armar contexto').first().json;
 let o = {}; try { o = $('Orquestador').first().json || {}; } catch (x) { o = { error: 'sin salida' }; }
-return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true }) }];"""
+return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true }) }];"""
 
 JS_RES = """const r = (n) => { try { const x = $(n); return x.isExecuted ? (x.first().json || null) : null; } catch (y) { return null; } };
 const res = { turnos: r('Agente Turnos'), pagos: r('Agente Pagos'), informacion: r('Agente Información'), urgencias: r('Agente Urgencias') };

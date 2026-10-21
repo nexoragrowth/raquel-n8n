@@ -96,6 +96,14 @@ const OrquestadorCore = (() => {
     // (B3) Ruteo por ESTADO, no por texto: con una confirmación pendiente que el paciente vio, Turnos SIEMPRE ve este mensaje y decide `confirma`
     // con el MENSAJE ACTUAL. Así un "👍" que el orquestador tomó por cierre no deja morir la propuesta.
     if (c.prop_pendiente && plan.fija !== 'humano' && !plan.turnos) { plan.turnos = 'responde a la confirmación pendiente'; plan.turnos_por_estado = true; }
+    // (21/10, Lucas + prueba con modelos reales: "dale gracias 👍" a un recordatorio quedó en silencio porque el orquestador lo tomó por cierre, y
+    // "si vamos los dos" además ofreció horarios) Ruteo por ESTADO, como la B3: si está respondiendo a un recordatorio, Turnos SIEMPRE ve el mensaje y
+    // decide (la IA, no una regex) si es un sí; con la instrucción de confirmar y no buscar horarios salvo que pida otro turno.
+    if (c.recordatorio_pendiente && plan.fija !== 'humano' && !c.charla_de_la_clinica) {
+      const NOTA_REC = 'responde al recordatorio: si su mensaje es una forma de sí (aunque sea informal), confirmar_turno UNA vez y vacío; no busques horarios salvo que pida OTRO turno';
+      if (!plan.turnos) { plan.turnos = NOTA_REC; plan.turnos_por_estado = true; }
+      else if (!plan.turnos.includes('responde al recordatorio')) plan.turnos += ' — ' + NOTA_REC;
+    }
     // (20/10, D3; escalaciones reales 380–386: plomero, proveedor, técnico) Charla que inició la CLÍNICA con un contacto SIN ficha: Asiri no
     // responde, no deriva y no avisa al grupo (la secretaria ya está en esa charla). Solo una urgencia que vea el orquestador sigue su camino.
     if (c.charla_de_la_clinica) {
