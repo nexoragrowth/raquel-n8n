@@ -108,7 +108,8 @@ const libro = {{ ok: r.ok === true, simulado, parcial: r.parcial === true, tipo:
 let aviso = null;
 if (r.aviso_clinica && !simulado) aviso = {{ nivel: 'ACCION', texto: r.aviso_clinica }};   // paciente nuevo que no se pudo dar de alta (o DNI de otra ficha): no se reservó nada
 else if (escribio && !simulado) {{
-  if (r.ok === true) aviso = {{ nivel: 'FYI', texto: '[FYI] Asiri hizo un cambio en la agenda solo: ' + (r.readback_text || '') + (r.nota_alta ? ' ' + r.nota_alta : '') }};
+  // (20/10) "solo" se leía como "sin confirmar": siempre se ejecuta recién después del "sí" del paciente al read-back (AgendaCore.decidir).
+  if (r.ok === true) aviso = {{ nivel: 'FYI', texto: '[FYI] Asiri hizo un cambio en la agenda (el paciente lo confirmó con «sí»): ' + (r.readback_text || '') + (r.nota_alta ? ' ' + r.nota_alta : '') }};
   else if (r.parcial === true) aviso = {{ nivel: 'ACCION', texto: '[ACCIÓN] Escritura a medias, revisar la agenda: ' + (r.readback_text || '') }};
   else if (r.motivo === 'no_pude_cancelar') aviso = {{ nivel: 'ACCION', texto: '[ACCIÓN] No se pudo cancelar un turno que la paciente pidió cancelar. Revisar.' }};
 }}
