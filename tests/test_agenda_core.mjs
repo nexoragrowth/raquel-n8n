@@ -74,7 +74,8 @@ const P = prop().propuesta;
 { const io = mkIO({ citaCambia: { fecha: '2026-10-19' } }); const r = await ejec(P, io); t('E07 la cita vieja cambió de fecha desde la propuesta → aborta sin escribir', r.motivo === 'cita_cambio' && !io.log.includes('POST')); }
 { const io = mkIO({ citaCambia: { id_estado: 1 } }); const r = await ejec(P, io); t('E08 la cita vieja ya está anulada → aborta sin escribir', r.motivo === 'cita_cambio' && !io.log.includes('POST')); }
 { const io = mkIO({ citaCambia: { id_paciente: 777 } }); const r = await ejec(P, io); t('E08b la cita vieja ahora es de otro paciente → aborta', r.motivo === 'cita_cambio' && !io.log.includes('POST')); }
-{ const r = await ejec(P, mkIO(), { ahora: '2026-10-05T13:30:00Z' }); t('E09 propuesta vencida (>30 min) → vencida', r.motivo === 'vencida'); }
+{ const r = await ejec(P, mkIO(), { ahora: '2026-10-06T01:00:00Z' }); t('E09 propuesta vencida (>12 h; 21/10: antes 30 min) → vencida', r.motivo === 'vencida'); }
+{ const r = await ejec(P, mkIO(), { ahora: '2026-10-05T13:30:00Z' }); t('E09b (auditoría 21/10, real 320078) un "sí" a los 54 min ya NO vence la confirmación', r.motivo !== 'vencida', r); }
 { const io = mkIO({ getFalla: true }); const r = await ejec(P, io); t('E10 la agenda no responde al verificar: no escribe nada', r.motivo === 'error_tecnico' && !io.log.includes('POST')); }
 { const io = mkIO({ consumirFalla: true }); const r = await ejec(P, io); t('E10b Redis caído al consumir: no escribe nada', r.motivo === 'error_tecnico' && !io.log.includes('POST')); }
 { const pc = prop({ tipo: 'cancelacion', fecha_turno_viejo: '2026-10-16' }).propuesta; const io = mkIO(); const r = await ejec(pc, io);
@@ -114,8 +115,8 @@ console.log('\nDECIDIR (herramienta única gestionar_turno: misma llamada para c
   t('D05 confirma=true pero el último mensaje de Asiri NO es ese read-back (no lo vio): NO ejecuta', d4.etapa === 'confirmacion', d4.etapa);
   const d5 = Core.decidir({ ...CAMBIO, confirma: 'true' }, { ...estado(), propuesta_guardada: null, ultimo_asiri: RB, texto_paciente: 'Si' }, AHORA);
   t('D06 confirma=true sin confirmación guardada: NO ejecuta (muestra el read-back)', d5.etapa === 'confirmacion', d5.etapa);
-  const d6 = Core.decidir({ ...CAMBIO, confirma: 'true' }, { ...estado(), propuesta_guardada: { ...G, creada_ms: Date.parse(AHORA) - 31 * 60000 }, ultimo_asiri: RB, texto_paciente: 'Sí' }, AHORA);
-  t('D07 confirma=true con la confirmación vencida (31 min): NO ejecuta', d6.etapa !== 'ejecutar', d6.etapa);
+  const d6 = Core.decidir({ ...CAMBIO, confirma: 'true' }, { ...estado(), propuesta_guardada: { ...G, creada_ms: Date.parse(AHORA) - 13 * 3600000 }, ultimo_asiri: RB, texto_paciente: 'Sí' }, AHORA);
+  t('D07 confirma=true con la confirmación vencida (13 h): NO ejecuta', d6.etapa !== 'ejecutar', d6.etapa);
   const d7 = Core.decidir({ ...CAMBIO, hora: '10:00' }, { ...estado(), ultimo_asiri: RB, texto_paciente: 'Sí' }, AHORA);
   t('D08 horario no ofrecido: error del código, nunca ejecuta', d7.etapa === 'error' && d7.resultado.motivo === 'no_ofrecido' && d7.resultado.ok === false, d7);
   const d8 = Core.decidir({ tipo: 'reserva', fecha: '2026-10-22', hora: '9:20' }, { ...estado(), ultimo_asiri: '', texto_paciente: 'el jueves 22' }, AHORA);

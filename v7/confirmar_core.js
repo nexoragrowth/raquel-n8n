@@ -16,10 +16,20 @@ const ConfirmarCore = (() => {
   // (21/10, incidente real: papá con dos hijos con turno el MISMO día respondió "Confirmo" → bucle "¿Cuál de estos turnos confirma?", porque
   // se elegía solo por fecha y no había forma de distinguir dos turnos del mismo día). Ahora: sin datos = TODOS los pendientes (lo que hacía el
   // v6), con datos = los que coinciden. Devuelve { ok, cands: [...] } (cand = el primero, por compatibilidad) o { fin }.
-  function elegir(rows, turnosVistos, fecha, hoyISO, hora, nombre) {
-    const abiertas = (rows || []).filter((r) => r && r.id_cita_dentalink && r.fecha_turno && String(r.fecha_turno).slice(0, 10) >= hoyISO)
-      .map((r) => ({ cita_id: Number(r.id_cita_dentalink), paciente_id: Number(r.id_paciente_dentalink) || null, fecha: String(r.fecha_turno).slice(0, 10), hora: normHora(r.hora_turno),
-        nombre: primerNombre(r.nombre_paciente), origen: 'recordatorio' }));
+  function elegir(rows, turnosVistos, fecha, hoyISO, hora, nombre, ahoraHM) {
+    // (21/10, auditoría) recordatorios_enviados tiene filas REPETIDAS para la misma cita cuando el envío se corre dos veces (18 citas): una cita = un turno.
+    // (21/10, auditoría: el v6 confirmó "por WhatsApp" dos citas de HOY cuando el paciente mandó el comprobante después de atenderse) Un turno de hoy
+    // cuya hora ya pasó no se confirma: ahoraHM = 'HH:MM' de Jujuy (opcional).
+    const ahora = normHora(ahoraHM);
+    const porCita = new Map();
+    for (const r of (rows || [])) {
+      if (!(r && r.id_cita_dentalink && r.fecha_turno && String(r.fecha_turno).slice(0, 10) >= hoyISO)) continue;
+      if (ahora && String(r.fecha_turno).slice(0, 10) === hoyISO && normHora(r.hora_turno) && normHora(r.hora_turno) <= ahora) continue;
+      const id = Number(r.id_cita_dentalink);
+      if (!porCita.has(id)) porCita.set(id, { cita_id: id, paciente_id: Number(r.id_paciente_dentalink) || null, fecha: String(r.fecha_turno).slice(0, 10), hora: normHora(r.hora_turno),
+        nombre: primerNombre(r.nombre_paciente), origen: 'recordatorio' });
+    }
+    const abiertas = [...porCita.values()];
     // (07/10) El modelo a veces da vuelta día y mes ("jueves 10/12" → 2026-10-12; escenarios reales REAL-14/15). Si la fecha no coincide se prueba invertida,
     // y si hay UN solo recordatorio pendiente, "confirmo" es para ese.
     const invertida = (f) => (/^\d{4}-\d{2}-\d{2}$/.test(String(f || '')) ? `${f.slice(0, 4)}-${f.slice(8, 10)}-${f.slice(5, 7)}` : f);
@@ -73,7 +83,11 @@ const ConfirmarCore = (() => {
   function resumir(resultados) {
     const rs = (resultados || []).filter((r) => r && r.cand);
     const oks = rs.filter((r) => r.ok === true);
-    const fallas = rs.filter((r) => r.ok !== true);
+    // (21/10, auditoría) Recordatorio de un turno que la clínica anuló o movió después de mandarlo: si se confirmaron los otros, al paciente no se le
+    // dice "no pude confirmar" (no hay nada que confirmar); la secretaria se entera con un FYI.
+    const NO_APLICA = ['cita_no_vigente', 'cita_cambio'];
+    const viejas = oks.length ? rs.filter((r) => r.ok !== true && NO_APLICA.includes(r.motivo)) : [];
+    const fallas = rs.filter((r) => r.ok !== true && !viejas.includes(r));
     if (!oks.length) {
       const f = fallas[0] || {};
       return { ok: false, motivo: f.motivo || 'error_tecnico', para_asiri: f.para_asiri || 'No pude confirmar en la agenda; avisá a la clínica con avisar_grupo (ACCION).', escribio: false, cands: [] };
@@ -84,6 +98,8 @@ const ConfirmarCore = (() => {
       const cuales = lista(fallas.map((r) => 'el del ' + corto(r.cand.fecha, r.cand.hora) + (r.cand.nombre ? ` (${r.cand.nombre})` : '')));
       texto += ` No pude confirmar ${cuales}: la secretaria lo revisa.`;
       aviso = `[ACCIÓN] Confirmación a medias: el paciente confirmó, pero no se pudo confirmar en la agenda ${cuales}. Revisar.`;
+    } else if (viejas.length) {
+      aviso = `[FYI] El paciente confirmó; el recordatorio ${lista(viejas.map((r) => 'del ' + corto(r.cand.fecha, r.cand.hora) + (r.cand.nombre ? ` (${r.cand.nombre})` : '')))} ya no coincide con la agenda (anulado o movido): ese no se confirmó.`;
     }
     return { ok: true, ya: oks.every((r) => r.ya === true), escribio: oks.some((r) => r.escribio === true || r.ya === true), readback_text: texto, parcial: fallas.length > 0, aviso, cands: oks.map((r) => r.cand) };
   }

@@ -8,7 +8,9 @@
 const AgendaCore = (() => {
   const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  const TTL_PROPUESTA_MS = 30 * 60 * 1000;
+  // (21/10, auditoría v6→v7: un "Si" a los 31 min repetía el mismo read-back) El v6 no vencía la pregunta. 12 h: al ejecutar igual se re-verifica
+  // el lugar y la cita vieja contra la agenda, y el sí solo vale si ese read-back es lo ÚLTIMO que dijo Asiri (pendienteVista).
+  const TTL_PROPUESTA_MS = 12 * 60 * 60 * 1000;
   const MIN_ANTICIPACION_MS = 48 * 60 * 60 * 1000;
   const ESTADOS_NO_VIGENTES = [1, 14]; // anulado / no vigente (mismo criterio que Step 2b del sub-WF)
 

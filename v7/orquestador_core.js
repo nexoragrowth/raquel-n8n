@@ -100,7 +100,7 @@ const OrquestadorCore = (() => {
     // "si vamos los dos" además ofreció horarios) Ruteo por ESTADO, como la B3: si está respondiendo a un recordatorio, Turnos SIEMPRE ve el mensaje y
     // decide (la IA, no una regex) si es un sí; con la instrucción de confirmar y no buscar horarios salvo que pida otro turno.
     if (c.recordatorio_pendiente && plan.fija !== 'humano' && !c.charla_de_la_clinica) {
-      const NOTA_REC = 'responde al recordatorio: si su mensaje es una forma de sí (aunque sea informal), confirmar_turno UNA vez y vacío; no busques horarios salvo que pida OTRO turno';
+      const NOTA_REC = 'responde al recordatorio: si su mensaje es una forma de sí (aunque sea informal) o el comprobante o aviso de pago de ese turno, confirmar_turno UNA vez y vacío; no busques horarios salvo que pida OTRO turno';
       if (!plan.turnos) { plan.turnos = NOTA_REC; plan.turnos_por_estado = true; }
       else if (!plan.turnos.includes('responde al recordatorio')) plan.turnos += ' — ' + NOTA_REC;
     }
@@ -145,7 +145,12 @@ const OrquestadorCore = (() => {
     if (p.tool === 'buscar_horarios') {
       if (o.ok && o.bloque) return { texto: String(o.bloque).trim(), estado: 'bloque_ofrecido' };
       // (08/10, REAL-12) Antes: dos frases secas que se repetían igual en cada mensaje. Ahora una sola (unir() deduplica) que ofrece la salida: otra fecha o lista de espera.
-      if (o.sin_horarios_nuevos) return { texto: TEXTO_SIN_DISPONIBILIDAD, estado: 'sin_horarios_nuevos' };
+      // (21/10, auditoría, ejecución 320042) "Nada nuevo" no es "no hay": si en ese rango siguen libres horarios que ya se le ofrecieron, se le nombran.
+      if (o.sin_horarios_nuevos) {
+        const ya = (Array.isArray(o.ya_ofrecidos_en_rango) ? o.ya_ofrecidos_en_rango : []).filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(String(x.fecha)) && x.hora);
+        if (ya.length) return { texto: textoYaOfrecidos(ya), estado: 'ya_ofrecidos', ya_ofrecidos: ya };
+        return { texto: TEXTO_SIN_DISPONIBILIDAD, estado: 'sin_horarios_nuevos' };
+      }
       if (o.motivo === 'sin_turnos') return { texto: TEXTO_SIN_DISPONIBILIDAD, estado: 'sin_turnos' };
       if (o.motivo === 'limite_de_bloques') return { texto: 'No tengo más horarios para ofrecerle por acá.', derivar: 'pidió más horarios de los que Asiri puede ofrecer', estado: 'limite' };
       return { error_tecnico: true, estado: 'error' };
@@ -170,7 +175,7 @@ const OrquestadorCore = (() => {
     if (p.tool === 'confirmar_turno') {
       if (o.ok === true && o.readback_text) return { texto: String(o.readback_text).trim(), estado: 'confirmado' };
       if (o.motivo === 'varios_recordatorios' && Array.isArray(o.fechas) && o.fechas.length) return { texto: '¿Cuál de estos turnos confirma?\n' + lista(o.fechas), estado: 'pregunta' };
-      if (['sin_recordatorio', 'sin_turno_en_esa_fecha', 'cita_no_vigente', 'cita_cambio'].includes(o.motivo)) return { pregunta: 'CUAL_TURNO', estado: 'pregunta' };
+      if (['sin_recordatorio', 'sin_turno_en_esa_fecha', 'cita_no_vigente', 'cita_cambio'].includes(o.motivo)) return { pregunta: 'CUAL_TURNO', estado: 'pregunta', motivo: o.motivo };
       return { error_tecnico: true, estado: 'error' };
     }
     if (p.tool === 'lista_espera') return o.texto_para_el_paciente ? { texto: o.texto_para_el_paciente, estado: 'espera' } : { error_tecnico: true, estado: 'error' };
@@ -206,6 +211,21 @@ const OrquestadorCore = (() => {
   // (20/10, BOT-01) "No, ese turno sí voy" a una confirmación pendiente: la propuesta se descarta (Salida, descartar_propuesta) y el paciente lo sabe.
   const SIN_CAMBIOS = { cancelacion: 'Perfecto, no cancelé nada: su turno queda como estaba.', cambio: 'Perfecto, no cambié nada: su turno queda como estaba.',
     reserva: 'Perfecto, no reservé nada. Si quiere otro horario, me avisa.', sumar: 'Perfecto, no reservé nada. Si quiere otro horario, me avisa.' };
+  // (21/10) Oraciones que, repetidas, indican un estado trabado: preguntas y "no hay". Un read-back ("¿Procedo…?") no cuenta: se repite a propósito.
+  const readbackEn = (t) => /¿procedo|le confirmo:|¿confirma|quedó (?:reprogramado|confirmad|reservad)|le reservé|anulé|está confirmado|quedaron confirmados/i.test(String(t || ''));
+  const oracionesClave = (t) => String(t || '').split(/\n+/).map((s) => s.trim()).filter((s) => s && (/\?$/.test(s) || /no hay turnos|no tengo más horarios|necesito nombre, apellido y dni/i.test(s)));
+  // (21/10) Horarios que ya se le ofrecieron y siguen libres en lo que pidió. Un día: "El martes 27/10 tengo a las 9:20. ¿Le sirve?"; varios: lista corta.
+  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const diaCorto = (iso) => `${DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()]} ${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))}`;
+  const hCorta = (h) => String(h).replace(/^0(\d):/, '$1:');
+  const yHoras = (hs) => (hs.length <= 1 ? hs.join('') : hs.slice(0, -1).join(', ') + ' y ' + hs[hs.length - 1]);
+  function textoYaOfrecidos(ya) {
+    const porDia = new Map();
+    for (const x of ya) { const k = String(x.fecha); if (!porDia.has(k)) porDia.set(k, []); if (!porDia.get(k).includes(hCorta(x.hora))) porDia.get(k).push(hCorta(x.hora)); }
+    const dias = [...porDia.keys()].sort().slice(0, 6);
+    if (dias.length === 1) { const hs = porDia.get(dias[0]); return `El ${diaCorto(dias[0])} tengo a las ${yHoras(hs)}. ${hs.length === 1 ? '¿Le sirve?' : '¿Cuál le queda mejor?'}`; }
+    return 'Siguen libres los horarios que le ofrecí:\n' + dias.map((d) => `- ${diaCorto(d)}: ${yHoras(porDia.get(d))}`).join('\n') + '\n¿Le sirve alguno?';
+  }
   const TEXTO_SIN_DISPONIBILIDAD ='Para lo que pidió no hay turnos disponibles. ¿Quiere que le busque otra fecha, o prefiere que le deje anotado por si se libera uno?';
   const unir = (partes) => { const vistos = new Set(); return partes.filter((x) => { const k = norm(x); if (!x || !k || vistos.has(k)) return false; vistos.add(k); return true; }); };
 
@@ -236,31 +256,43 @@ const OrquestadorCore = (() => {
     const confOk = r.filter((x) => x.tool === 'confirmar_turno' && x.texto && x.estado === 'confirmado');
     const confPregunto = !!(c && c.texto && c.estado === 'pregunta');
     if (confOk.length) for (const x of confOk) partes.push(x.texto);
-    else if (c) { if (c.texto) partes.push(c.texto); if (c.pregunta) pregunta = c.pregunta; }
+    // (21/10, auditoría; el v6 escalaba "paciente confirma pero no tiene turno activo") Quiso confirmar y ver_turnos (de ESTE mensaje: si no se
+    // llamó, una lista vacía puede ser un error de consulta) no encontró ningún turno con este celular: se le dice y la confirmación va a la secretaria.
+    let confSinTurno = null;
+    if (!confOk.length && c && c.pregunta === 'CUAL_TURNO' && ['sin_recordatorio', 'sin_turno_en_esa_fecha'].includes(c.motivo) && !turnos.length
+      && r.some((x) => x.tool === 'ver_turnos' && (x.estado === 'turnos_vistos' || x.estado === 'sin_ficha'))) {
+      confSinTurno = 'confirma asistencia pero no figura un turno vigente con este celular';
+      partes.push('No veo un turno para confirmar con este número de celular.');   // + TEXTOS.DERIVA (reunir deriva por `derivar`)
+    } else if (c) { if (c.texto) partes.push(c.texto); if (c.pregunta) pregunta = c.pregunta; }
     if (le && le.texto) partes.push(le.texto);
     if (g && g.readback) readback = g.texto;   // el read-back va SOLO y al final (sin el bloque: el paciente ya eligió)
     else {
       // (08/10) Si en la misma respuesta va un bloque de horarios, el "no hay" queda corto (la salida ya está a la vista); si no, ofrece otra fecha o lista de espera.
-      const hayBloque = bloques.some((b) => b.estado === 'bloque_ofrecido');
+      const hayBloque = bloques.some((b) => b.estado === 'bloque_ofrecido' || b.estado === 'ya_ofrecidos');
+      // (21/10, auditoría 320042) Si el agente ya entendió que ELIGIÓ (pide datos o para quién), no se le vuelven a listar horarios: con uno solo se lo nombra en la pregunta.
+      const yaEligio = cod === 'PREGUNTA_DATOS_NUEVO' || cod === 'PREGUNTA_PARA_QUIEN';
       // (20/10) Con "menos de 48 h" no van horarios en el mismo mensaje: no se pueden reservar como cambio de ESE turno.
       if (!(g && g.texto && (g.estado === 'escrito_ok' || g.estado === 'menos_48h'))) for (const b of bloques) {
-        if (!hayBloque || b.estado === 'bloque_ofrecido') partes.push(b.texto);
+        if (yaEligio && b.estado !== 'bloque_ofrecido') continue;
+        if (!hayBloque || b.estado === 'bloque_ofrecido' || b.estado === 'ya_ofrecidos') partes.push(b.texto);
         else if (diaPuntual(b.input)) partes.push('Para ese día no hay turnos disponibles.');
       }
       if (g && g.texto) partes.push(g.texto);
       if (g && g.pregunta) pregunta = pregunta || g.pregunta;
     }
     if (ef && ef.pregunta && !readback && !(g && g.texto)) pregunta = pregunta || ef.pregunta;
-    if (!readback && !pregunta && !confPregunto && cod && cod.startsWith('PREGUNTA_')) pregunta = cod.slice('PREGUNTA_'.length);
-    if (!readback && cod === 'MOSTRAR_TURNOS') partes.push(textoPregunta('MOSTRAR_TURNOS', turnos));
-    if (pregunta && !readback) partes.push(textoPregunta(pregunta, turnos));
+    if (!readback && !pregunta && !confPregunto && !confSinTurno && cod && cod.startsWith('PREGUNTA_')) pregunta = cod.slice('PREGUNTA_'.length);
+    if (!readback && !confSinTurno && cod === 'MOSTRAR_TURNOS') partes.push(textoPregunta('MOSTRAR_TURNOS', turnos));
+    const elegidos = [...new Set(bloques.filter((b) => b.estado === 'ya_ofrecidos').flatMap((b) => b.ya_ofrecidos.map((x) => x.fecha + ' ' + x.hora)))];
+    if (pregunta === 'DATOS_NUEVO' && !readback && elegidos.length === 1) partes.push(`Para reservar el ${diaCorto(elegidos[0].slice(0, 10))} a las ${hCorta(elegidos[0].slice(11))} necesito nombre, apellido y DNI del paciente, en un solo mensaje.`);
+    else if (pregunta && !readback) partes.push(textoPregunta(pregunta, turnos));
     if (readback) partes.push(readback);
     const texto = unir(partes).join('\n\n');
-    const derivar = r.map((x) => x.derivar).find(Boolean) || null;
+    const derivar = r.map((x) => x.derivar).find(Boolean) || confSinTurno || null;
     const fuera = cod === 'FUERA_DE_ALCANCE' && !texto;
     const error_tecnico = !texto && !fuera && r.some((x) => x.error_tecnico);
     const estado = readback ? 'readback_pendiente' : (g && g.estado === 'escrito_ok') ? 'escrito_ok' : (g && g.estado === 'escrito_error') ? 'escrito_error'
-      : (c && c.estado === 'confirmado') ? 'confirmado' : bloques.length ? 'bloque_ofrecido' : pregunta ? 'pregunta' : fuera ? 'fuera_de_alcance'
+      : (c && c.estado === 'confirmado') ? 'confirmado' : (bloques.length && !(pregunta && !bloques.some((b) => b.estado === 'bloque_ofrecido'))) ? 'bloque_ofrecido' : pregunta ? 'pregunta' : fuera ? 'fuera_de_alcance'
       : cod === '[NO_REPLY]' && !texto ? 'no_reply' : texto ? 'respondido' : error_tecnico ? 'error' : 'nada';
     return { ...base, texto, estado, readback: !!readback, fuera_de_alcance: fuera, urgencia: cod === 'URGENCIA', derivar, error_tecnico };
   }
@@ -416,14 +448,34 @@ const OrquestadorCore = (() => {
       partes = [SIN_CAMBIOS[e.prop.tipo] || 'Perfecto, no hice ningún cambio en la agenda.'];
     }
     if (!partes.length) {
-      const callar = plan.fija === 'no_reply' || (agentes.length > 0 && agentes.every((a) => res[a].estado === 'no_reply' || res[a].codigo === '[NO_REPLY]'));
+      const porCierre = plan.fija === 'no_reply';
+      const callar = porCierre || (agentes.length > 0 && agentes.every((a) => res[a].estado === 'no_reply' || res[a].codigo === '[NO_REPLY]'));
+      // (21/10, auditoría v6→v7, caso real …6023: 3 mensajes de un paciente nuevo sin ninguna respuesta) Red del v6 "Fallback Output": un sub-agente
+      // que dice [NO_REPLY] a un mensaje que el ORQUESTADOR sí clasificó como pedido no es un cierre: se deriva a la secretaria con aviso, nunca silencio.
+      if (callar && !porCierre) {
+        avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no supo qué responder (el agente no hizo nada): «' + cita + '». Contestarle por este chat.' });
+        return fin(TEXTOS.DERIVA, { sin_respuesta_del_agente: true });
+      }
       if (callar) return fin(null, { silencio: true });
       partes = [TEXTOS.NO_ENTENDI];
     }
     let texto = partes.join('\n\n');
+    let repeticion = false;
+    // (21/10, auditoría) Corte de bucle: si una PREGUNTA o un "no hay" ya salió tal cual en el último mensaje de Asiri y el paciente contestó algo,
+    // repetirla una tercera vez no ayuda: se deriva a la secretaria con aviso. Compara texto NUESTRO (el último de Asiri) con texto NUESTRO; las
+    // confirmaciones, read-backs y éxitos de la agenda se dejan pasar (repetirlos es inocuo y suelen ser respuestas a un "sí" repetido).
+    if (!hayOk && e.ultimo_asiri && !readbackEn(texto)) {
+      const antes = norm(e.ultimo_asiri), ahora = norm(texto);
+      const repetida = ahora && antes && (ahora === antes || (oracionesClave(texto).length > 0 && oracionesClave(texto).every((o) => antes.includes(norm(o)))));
+      if (repetida && Number(e.repeticiones || 0) >= 1) {
+        avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri repitió la misma respuesta y el paciente sigue sin resolver: «' + cita + '». Contestarle por este chat.' });
+        return fin(TEXTOS.DERIVA, { bucle_cortado: true });
+      }
+      repeticion = !!repetida;
+    }
     // 7) Presentación en una conversación nueva (dato de 12 h; el menú ya la trae).
     if (e.conversacion_nueva && !esMenu && !/soy asiri/i.test(texto)) texto = TEXTOS.PRESENTACION + '\n\n' + texto;
-    return fin(texto, { datos_pago_agregados, partes: { informacion: iTexto || null, pagos: pTexto || null, derivacion: dTexto || null, turnos: tTexto || null } });
+    return fin(texto, { datos_pago_agregados, ...(repeticion ? { repeticion: true } : {}), partes: { informacion: iTexto || null, pagos: pTexto || null, derivacion: dTexto || null, turnos: tTexto || null } });
   }
   return { AGENTES, FIJAS, TEXTOS, MENU, menuValido, menu, parsear, despachar, pasosDe, codigo, textoTurnos, salidaTurnos, salidaPagos, salidaInformacion, salidaUrgencias, urgenciaPendiente, reunir, componer, norm };
 })();

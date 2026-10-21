@@ -25,14 +25,15 @@ def wf_confirmar_turno():
     g = Grafo("v7 Tool - confirmar_turno")
     g.trigger({"tel": "5490000000651", "exec_id_actual": "1234", "modo": "vivo", "fecha": "", "hora": "", "nombre": ""}, 0, 300)
     postgres(g, "Recordatorios abiertos",
-             "SELECT id_cita_dentalink, id_paciente_dentalink, nombre_paciente, fecha_turno, hora_turno FROM recordatorios_enviados WHERE telefono = $1 AND confirmado_at IS NULL AND cancelado_at IS NULL AND fecha_turno >= (now() AT TIME ZONE 'America/Argentina/Jujuy')::date ORDER BY fecha_turno, hora_turno",
+             "SELECT DISTINCT ON (id_cita_dentalink) id_cita_dentalink, id_paciente_dentalink, nombre_paciente, fecha_turno, hora_turno FROM recordatorios_enviados WHERE telefono = $1 AND confirmado_at IS NULL AND cancelado_at IS NULL AND fecha_turno >= (now() AT TIME ZONE 'America/Argentina/Jujuy')::date ORDER BY id_cita_dentalink, enviado_at DESC",
              "$json.tel", 220, 300)
     g.redis_get("Redis GET turnos_vistos", "'turnos_vistos:' + $('Entrada').first().json.tel", "turnos_raw", 440, 300)
     g.code("Elegir citas", HOY_JS + """
 const e = $('Entrada').first().json;
 const rows = $('Recordatorios abiertos').all().map((i) => i.json).filter((r) => r && r.id_cita_dentalink);
 let vistos = null; try { vistos = JSON.parse($input.first().json.turnos_raw || 'null'); } catch (x) { vistos = null; }
-const r = ConfirmarCore.elegir(rows, vistos, e.fecha || '', hoy, e.hora || '', e.nombre || '');
+const ahoraHM = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Argentina/Jujuy', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+const r = ConfirmarCore.elegir(rows, vistos, e.fecha || '', hoy, e.hora || '', e.nombre || '', ahoraHM);
 if (r.fin) return [{ json: { terminado: true, resultado: r.fin } }];
 return r.cands.map((cand) => ({ json: { terminado: false, cand } }));""", 660, 300, usar=("confirmar_core",))
     g.si("¿Termina? (elegir)", "$json.terminado === true", 880, 300)

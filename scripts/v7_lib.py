@@ -87,10 +87,13 @@ class Grafo:
         return self._nodo(nombre, "n8n-nodes-base.redis", 1, {"operation": "get", "propertyName": propiedad, "key": "={{ " + key_expr + " }}", "keyType": "list", "options": {}}, x, y,
                           {"credentials": CRED_REDIS, "alwaysOutputData": True, "onError": "continueRegularOutput"})
 
-    def postgres(self, nombre, query, params_expr, x=0, y=0):
-        """Consulta Postgres (Supabase v3). params_expr = expresión n8n que devuelve el texto o el ARRAY de parámetros ($1, $2…)."""
-        return self._nodo(nombre, "n8n-nodes-base.postgres", 2.5, {"operation": "executeQuery", "query": query, "options": {"queryReplacement": "={{ " + params_expr + " }}"}}, x, y,
-                          {"credentials": CRED_POSTGRES, "alwaysOutputData": True, "continueOnFail": True})
+    def postgres(self, nombre, query, params_expr, x=0, y=0, una_vez=False):
+        """Consulta Postgres (Supabase v3). params_expr = expresión n8n que devuelve el texto o el ARRAY de parámetros ($1, $2…).
+        una_vez (21/10): executeOnce — corre UNA sola vez aunque reciba N ítems (sin esto, un nodo encadenado detrás de 'Historial' corría una vez por fila)."""
+        extra = {"credentials": CRED_POSTGRES, "alwaysOutputData": True, "continueOnFail": True}
+        if una_vez:
+            extra["executeOnce"] = True
+        return self._nodo(nombre, "n8n-nodes-base.postgres", 2.5, {"operation": "executeQuery", "query": query, "options": {"queryReplacement": "={{ " + params_expr + " }}"}}, x, y, extra)
 
     def agente(self, nombre, texto_expr, sistema_expr, x=0, y=0, max_iter=5):
         """AI Agent (Tools Agent) v2.2. El mensaje y el system prompt entran por expresión."""

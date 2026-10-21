@@ -54,10 +54,19 @@ const conversacion_nueva = filas.length === 0 || (!isNaN(ultFecha) && ahoraMs - 
 // Último mensaje de ASIRI antes del mensaje actual (si después escribió el paciente o el staff, no hay confirmación pendiente vista).
 let ultimo_asiri = '';
 for (const f of filas) { const m = msg(f); if (!m) continue; const c = String(m.content || ''); if (m.type === 'human' || c.startsWith('[ATENCION HUMANA')) break; if (m.type === 'ai' && c && !c.startsWith('[')) { ultimo_asiri = c; break; } }
+// (21/10, corte de bucle) ¿Cuántas veces seguidas Asiri ya mandó ese mismo texto (entre mensajes del paciente)? 0 = la última fue distinta.
+let repeticiones = 0;
+if (ultimo_asiri) {
+  const nn = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const asiri = []; for (const f of filas) { const m = msg(f); if (!m) continue; const c = String(m.content || ''); if (m.type === 'ai' && c && !c.startsWith('[')) asiri.push(nn(c)); }
+  for (let i = 1; i < asiri.length && asiri[i] === asiri[0]; i++) repeticiones++;
+}
 // Mensajes del paciente de las últimas 12 h (+ el actual): gestionar_turno verifica que el DNI que copió el modelo lo escribió el paciente (I3/8 de la crítica).
 const textos_paciente = filas.filter((f) => { const m = msg(f); const t = f && f.created_at ? Date.parse(String(f.created_at)) : NaN; return !!m && m.type === 'human' && (isNaN(t) || ahoraMs - t < 12 * 3600 * 1000); })
   .map((f) => String(msg(f).content || '')).concat([String(e.texto || '')]);
-const rec = $('Recordatorios').all().map((i) => i.json).filter((r) => r && r.id_cita_dentalink && r.fecha_turno).map((r) => {
+// (21/10) una entrada por cita (la tabla puede traer la misma cita dos veces; antes además el nodo corría por fila del historial)
+const recVistas = new Set();
+const rec = $('Recordatorios').all().map((i) => i.json).filter((r) => r && r.id_cita_dentalink && r.fecha_turno && !recVistas.has(String(r.id_cita_dentalink)) && recVistas.add(String(r.id_cita_dentalink))).map((r) => {
   const f = String(r.fecha_turno).slice(0, 10);
   return DIAS[new Date(f + 'T12:00:00Z').getUTCDay()] + ' ' + Number(f.slice(8)) + '/' + Number(f.slice(5, 7)) + ' a las ' + String(r.hora_turno || '').slice(0, 5);
 });
@@ -94,7 +103,7 @@ let primero = null; try { primero = $('Primer mensaje').first().json || null; } 
 const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && ident.ok !== true && ident.motivo === 'sin_ficha';
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, conversacion_nueva, prop_pendiente,
+return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
@@ -126,7 +135,7 @@ const c = OrquestadorCore.componer({ modo: e.modo, texto_paciente: e.texto, exec
   derivar_res: r('Derivar a secretaria'), humano_res: r('Pasar a humano'), libros, hechos, prop, ofertas: pj('Redis GET ofertas', 'ofertas_raw', []),
   vistos: [].concat(pj('Redis GET turnos_vistos', 'vistos_raw', []) || [], recTurnos), bloque: String($('Redis GET bloque').first().json.bloque_raw || ''),
   bloque_exec: String($('Redis GET bloque_exec').first().json.bloque_exec_raw || ''), triaje: pj('Redis GET triaje', 'triaje_raw', null),
-  menu: ctx.menu, anuncio: ctx.anuncio || '', consulta: ctx.consulta || '', datosPago: ctx.datos_pago, conversacion_nueva: ctx.conversacion_nueva === true, prop_pendiente: ctx.prop_pendiente === true });
+  ultimo_asiri: ctx.ultimo_asiri || '', repeticiones: ctx.repeticiones || 0, menu: ctx.menu, anuncio: ctx.anuncio || '', consulta: ctx.consulta || '', datosPago: ctx.datos_pago, conversacion_nueva: ctx.conversacion_nueva === true, prop_pendiente: ctx.prop_pendiente === true });
 const vivo = e.modo === 'vivo';   // (08/10) solo avisa y guarda memoria con modo 'vivo' EXPLÍCITO
 if (vivo) for (const a of c.avisos) { try { await this.helpers.httpRequest({ method: 'POST', url: '""" + GRUPO + """', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }
 const texto = c.texto; const silencio = c.silencio === true;
@@ -175,9 +184,10 @@ def wf_cerebro(esfuerzo=ESFUERZO_PRODUCCION):
     g = Grafo("v7 Cerebro" if esfuerzo == ESFUERZO_PRODUCCION else f"v7 Cerebro ({esfuerzo})")
     g.trigger({"phone": "5490000000651", "texto": "Hola", "pushName": "", "modo": "vivo", "historial_json": ""}, 0, 300)
     g.postgres("Historial", SQL_HISTORIAL, "$json.phone", 220, 300)
-    g.postgres("Recordatorios", SQL_RECORDATORIOS, f"{E}.phone", 440, 300)
-    g.postgres("Primer mensaje", SQL_PRIMERO, f"{E}.phone", 550, 420)
-    g.postgres("Datos del consultorio", SQL_DATOS, "''", 660, 300)
+    # (21/10, auditoría) una_vez: encadenados detrás de 'Historial' (hasta 30 filas) corrían una vez POR FILA: cada recordatorio aparecía 23–60 veces en el contexto.
+    g.postgres("Recordatorios", SQL_RECORDATORIOS, f"{E}.phone", 440, 300, una_vez=True)
+    g.postgres("Primer mensaje", SQL_PRIMERO, f"{E}.phone", 550, 420, una_vez=True)
+    g.postgres("Datos del consultorio", SQL_DATOS, "''", 660, 300, una_vez=True)
     g.subworkflow("Identificar paciente", "@@ID:ver_turnos@@", {"tel": f"{E}.phone", "exec_id_actual": "$execution.id"}, 770, 300)
     g.redis_get("Redis GET propuesta (entrada)", f"'propuesta:' + {E}.phone", "prop_entrada_raw", 825, 420)
     g._nodo("Armar contexto", "n8n-nodes-base.code", 2, {"jsCode": "const PROMPT_ORQ = " + json.dumps(PROMPT_ORQ, ensure_ascii=False) + ";\n"
@@ -218,7 +228,7 @@ def wf_cerebro(esfuerzo=ESFUERZO_PRODUCCION):
     g.si("¿Guardar hechos?", "!!$('Salida').first().json.hechos_json", x + 110, 420)
     g.redis_set("Redis SET hechos", f"'hechos:' + {tel}", "$('Salida').first().json.hechos_json", 43200, x + 160, 520)
     g.si("¿Marcar propuesta enviada?", "!!$('Salida').first().json.propuesta_json", x + 220, 300)
-    g.redis_set("Redis SET propuesta enviada", f"'propuesta:' + {tel}", "$('Salida').first().json.propuesta_json", 1800, x + 440, 240)
+    g.redis_set("Redis SET propuesta enviada", f"'propuesta:' + {tel}", "$('Salida').first().json.propuesta_json", 43200, x + 440, 240)
     g.si("¿Descartar propuesta?", "$('Salida').first().json.descartar_propuesta === true", x + 550, 420)
     g.redis_del("Redis DEL propuesta", f"'propuesta:' + {tel}", x + 600, 520)
     g.si("¿Guardar en memoria?", "$('Salida').first().json.guardar === true", x + 660, 300)

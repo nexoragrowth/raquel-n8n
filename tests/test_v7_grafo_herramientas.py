@@ -129,6 +129,7 @@ def main():
         esc("B8 pide otra ventana y vuelve el MISMO bloque (sin horarios nuevos)", {"desde": "2026-10-08", "hasta": ""}, {f"lotes:{TEL}": 1, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|",
             f"ofertas:{TEL}": json.dumps([{"fecha": "2026-10-22", "hora": h} for h in ("08:00", "09:20")] + [{"fecha": "2026-10-23", "hora": "09:10"}, {"fecha": "2026-11-02", "hora": "16:20"}] + [{"fecha": "2026-11-04", "hora": h} for h in ("15:00", "15:40")])},
             subwf={"Buscar horarios (sub-WF)": {"bloque": BLOQUE}}),
+        esc("B9 el bloque vino en un formato que no se puede leer", {"desde": "", "hasta": ""}, {f"ofertas:{TEL}": OFERTAS}, subwf={"Buscar horarios (sub-WF)": {"bloque": "Turnos: consultar"}}),
         esc("B7 pedido distinto con 2 bloques ya contados", {"desde": "2026-11-10", "hasta": ""}, {f"lotes:{TEL}": 2, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|", f"ofertas:{TEL}": OFERTAS}, subwf={"Buscar horarios (sub-WF)": {"bloque": "NO DEBE LLAMARSE"}}),
     ])
     print("\nbuscar_horarios")
@@ -152,7 +153,11 @@ def main():
     x = r["B8 pide otra ventana y vuelve el MISMO bloque (sin horarios nuevos)"]; a = x["reps"][0]
     chequear("B8 sin horarios nuevos: NO cuenta como bloque (lotes sigue en 1), NO se marca para pegar y la nota dice nombrar lo más cercano de lo ya ofrecido",
              a["error"] is None and x["redis_final"][f"lotes:{TEL}"] == 1 and f"bloque_exec:{TEL}:ex-2" not in x["redis_final"] and a["salida"].get("sin_horarios_nuevos") is True
-             and "más cercano" in a["salida"]["para_asiri"] and "bloque" not in {k for k in a["salida"] if k == "bloque"}, (a["error"], x["redis_final"].get(f"lotes:{TEL}"), a["salida"]))
+             and "bloque" not in {k for k in a["salida"] if k == "bloque"}, (a["error"], x["redis_final"].get(f"lotes:{TEL}"), a["salida"]))
+    chequear("B8b (auditoría 21/10, real 320042) devuelve lo que la agenda dio AHORA en ese rango y ya se le había ofrecido (sigue libre): el texto lo nombra en vez de 'no hay'",
+             a["salida"].get("ya_ofrecidos_en_rango") and {"fecha": "2026-10-22", "hora": "09:20"} in a["salida"]["ya_ofrecidos_en_rango"] and "ya_ofrecidos_en_rango" in a["salida"]["para_asiri"], a["salida"])
+    a = r["B9 el bloque vino en un formato que no se puede leer"]["reps"][0]
+    chequear("B9 un bloque que no se puede leer es error técnico (no 'no hay' ni 'nada nuevo') y no se guarda", a["salida"].get("motivo") == "error_tecnico" and f"bloque_exec:{TEL}:ex-2" not in r["B9 el bloque vino en un formato que no se puede leer"]["redis_final"], a["salida"])
     a = r["B7 pedido distinto con 2 bloques ya contados"]["reps"][0]
     chequear("B7 un pedido distinto sí cuenta: tercer bloque → límite", a["salida"]["motivo"] == "limite_de_bloques" and not any(p["metodo"] == "executeWorkflow" for p in a["pedidos"]), a["salida"])
 
@@ -233,6 +238,7 @@ def main():
         esc("C13 dos turnos, uno se confirma y el otro falla", {"fecha": ""}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [r_ok(PEDRO), r_mal(HILARIO)]}),
         esc("C14 el sub-workflow se cae en uno ({error})", {"fecha": ""}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [r_ok(PEDRO), {"error": "timeout"}]}),
         esc("C15 SOMBRA con dos turnos: no avisa al grupo aunque uno falle", {"fecha": "", "modo": "sombra"}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [{**r_ok(PEDRO), "simulado": True}, r_mal(HILARIO)]}),
+        esc("C16 dos recordatorios y la clínica ya anuló uno", {"fecha": ""}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [r_ok(PEDRO), r_mal(HILARIO, "cita_no_vigente")]}),
     ])
     print("\nconfirmar_turno")
     llamados_ = lambda a: [q["entradas"] for q in a["pedidos"] if q["nodo"] == "Confirmar cada una"]
@@ -280,6 +286,10 @@ def main():
     chequear("C14 un sub-workflow caído cuenta como falla de ESE turno (no rompe el otro)", a["salida"]["ok"] is True and "No pude confirmar el del viernes 23/10 a las 10:30" in a["salida"]["readback_text"], a["salida"])
     a = r["C15 SOMBRA con dos turnos: no avisa al grupo aunque uno falle"]["reps"][0]
     chequear("C15 sombra: ningún aviso al grupo y la salida marcada simulado", not a["avisos"] and a["salida"].get("simulado") is True, (a["avisos"], a["salida"]))
+    a = r["C16 dos recordatorios y la clínica ya anuló uno"]["reps"][0]
+    chequear("C16 (auditoría 21/10) recordatorio de un turno anulado: al paciente solo el confirmado (sin 'no pude'), la clínica recibe un FYI y no queda parcial",
+             a["salida"]["readback_text"] == "Perfecto, su turno del viernes 23/10 a las 09:50 está confirmado." and any("[FYI]" in str((v.get("qs") or {}).get("resumen", "")) for v in a["avisos"])
+             and not any("[ACCIÓN]" in str((v.get("qs") or {}).get("resumen", "")) for v in a["avisos"]), (a["salida"], a["avisos"]))
 
     # ------------------------------------------------------------------ clinica (08/10: derivar / humano / pago / datos_pago / espera / triaje; textos fijos por código)
     ESTADO = {f"{k}:{TEL}": "x" for k in ("propuesta", "ofertas", "lotes", "turnos_vistos", "bloque")}

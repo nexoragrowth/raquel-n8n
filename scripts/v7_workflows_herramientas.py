@@ -85,7 +85,7 @@ const r = AgendaCore.proponer({ tipo: e.tipo, fecha: e.fecha, hora: e.hora, fech
 if (r.ok) return [{ json: { ok: true, propuesta_json: JSON.stringify(r.propuesta), resultado: { ok: true, texto_para_el_paciente: r.readback_text, para_asiri: r.para_asiri } } }];
 return [{ json: { ok: false, resultado: r } }];""", 880, 200, usar=("agenda_core",))
     g.si("¿Propuso?", "$json.ok === true", 1100, 200)
-    g.redis_set("Redis SET propuesta", "'propuesta:' + $('Entrada').first().json.tel", "$('Proponer').first().json.propuesta_json", 1800, 1320, 140)
+    g.redis_set("Redis SET propuesta", "'propuesta:' + $('Entrada').first().json.tel", "$('Proponer').first().json.propuesta_json", 43200, 1320, 140)
     g.code("Devolver", "return [{ json: $('Proponer').first().json.resultado }];", 1540, 200)
     for a, b, s_ in [("Entrada", "Redis GET ficha", 0), ("Redis GET ficha", "Redis GET turnos_vistos", 0), ("Redis GET turnos_vistos", "Redis GET ofertas", 0), ("Redis GET ofertas", "Proponer", 0), ("Proponer", "¿Propuso?", 0),
                      ("¿Propuso?", "Redis SET propuesta", 0), ("¿Propuso?", "Devolver", 1), ("Redis SET propuesta", "Devolver", 0)]:
@@ -117,7 +117,7 @@ const d = AgendaCore.decidir({ tipo: e.tipo, fecha: e.fecha, hora: e.hora, fecha
   nuevo_nombre: e.nuevo_nombre || '', nuevo_apellido: e.nuevo_apellido || '', nuevo_dni: e.nuevo_dni || '', confirma: e.confirma }, estado, new Date().toISOString());
 return [{ json: { etapa: d.etapa, propuesta_json: d.propuesta ? JSON.stringify(d.propuesta) : null, resultado: d.resultado || null } }];""", 880, 200, usar=("agenda_core",))
     g.si("¿Ejecutar?", "$json.etapa === 'ejecutar'", 1100, 200)
-    g.redis_set("Redis SET propuesta confirmada", "'propuesta:' + $('Entrada').first().json.tel", "$('Decidir').first().json.propuesta_json", 1800, 1320, 80)
+    g.redis_set("Redis SET propuesta confirmada", "'propuesta:' + $('Entrada').first().json.tel", "$('Decidir').first().json.propuesta_json", 43200, 1320, 80)
     g.subworkflow("Ejecutar", "@@ID:ejecutar_propuesta@@", {"tel": "$('Entrada').first().json.tel", "exec_id_actual": "$('Entrada').first().json.exec_id_actual", "modo": "$('Entrada').first().json.modo"}, 1540, 80)
     # (07/10) El mensaje final va como texto_para_el_paciente (igual que la confirmación) y con la instrucción de mandarlo solo: con `readback_text` y
     # para_asiri vacío el modelo lo tomó por otra confirmación y escribió "Le confirmo… ¿Desea que le envíe los datos para abonar?" (examen AGE-01).
@@ -126,7 +126,7 @@ const exito = ok === true;
 return [{ json: { etapa: 'ejecutado', ok: exito, texto_para_el_paciente: readback_text || null,
   para_asiri: para_asiri || (exito ? '[Nota interna para vos, NO la repitas al paciente] Ya quedó hecho en la agenda. Tu respuesta es texto_para_el_paciente, tal cual y sola: no vuelvas a confirmar ni agregues preguntas u ofrecimientos.' : null), ...resto } }];""", 1760, 80)
     g.si("¿Confirmación?", "$('Decidir').first().json.etapa === 'confirmacion'", 1320, 300)
-    g.redis_set("Redis SET propuesta", "'propuesta:' + $('Entrada').first().json.tel", "$('Decidir').first().json.propuesta_json", 1800, 1540, 260)
+    g.redis_set("Redis SET propuesta", "'propuesta:' + $('Entrada').first().json.tel", "$('Decidir').first().json.propuesta_json", 43200, 1540, 260)
     g.code("Devolver", "return [{ json: $('Decidir').first().json.resultado }];", 1760, 300)
     for a, b, s_ in [("Entrada", "Redis GET ficha", 0), ("Redis GET ficha", "Redis GET turnos_vistos", 0), ("Redis GET turnos_vistos", "Redis GET ofertas", 0), ("Redis GET ofertas", "Redis GET propuesta guardada", 0), ("Redis GET propuesta guardada", "Decidir", 0), ("Decidir", "¿Ejecutar?", 0),
                      ("¿Ejecutar?", "Redis SET propuesta confirmada", 0), ("Redis SET propuesta confirmada", "Ejecutar", 0), ("Ejecutar", "Devolver ejecución", 0),
@@ -165,11 +165,15 @@ const resp = $input.first().json || {};
 const bloque = typeof resp.bloque === 'string' ? resp.bloque.trim() : '';
 if (!bloque) return [{ json: { terminado: true, resultado: { ok: false, motivo: (resp.error || resp.error_tecnico) ? 'error_tecnico' : 'sin_turnos', para_asiri: (resp.error || resp.error_tecnico) ? 'No pude consultar la agenda en este momento. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).' : 'No hay turnos en ese rango. Decíselo en una frase y nombrá lo más cercano de lo que ya le ofreciste, o buscá sin hasta para ver los próximos. Si quiere esperar, lista_espera. No inventes horarios y NO avises a la clínica por esto.' } } }];
 const delBloque = HorariosCore.parseBloque(bloque, hoy);
+// (21/10, auditoría) Un bloque que no se puede leer no es "no hay turnos" ni "nada nuevo": sin la lista de ofrecidos no se puede reservar nada.
+if (!delBloque.length) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude leer los horarios de la agenda. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION).' } } }];
 const ofertas = HorariosCore.unir(prev, delBloque, hoy);
 const desde = HorariosCore.siguienteDesde(ofertas);
 if (prev.length && !HorariosCore.nuevas(prev, delBloque).length) {
   // Nada que no se le haya ofrecido ya: no se pega otro bloque ni cuenta para el límite de 2.
-  return [{ json: { terminado: false, nuevo: false, resultado: { ok: true, sin_horarios_nuevos: true, siguiente_desde: desde, para_asiri: '[Nota interna para vos, NO la repitas al paciente] En lo que pidió no hay horarios distintos de los que YA le ofreciste (esta búsqueda no cuenta como bloque nuevo). NO pegues otro bloque: decile en una frase que en eso no hay y nombrale lo más cercano a lo que pidió entre los horarios que ya le ofreciste (por ejemplo, la primera tarde). Si quiere fechas más adelante, llamá buscar_horarios con desde = ' + desde + '.' } } }];
+  // (21/10, auditoría v6→v7, ejecución 320042: eligió "Martes 27 de octubre" de un bloque que tenía ese día a las 9:20 → "no hay turnos disponibles")
+  // Lo que la agenda devolvió AHORA en ese rango ya se le había ofrecido y sigue libre: se devuelve para nombrarlo (no `prev`, que pudo ocuparse).
+  return [{ json: { terminado: false, nuevo: false, resultado: { ok: true, sin_horarios_nuevos: true, ya_ofrecidos_en_rango: delBloque, siguiente_desde: desde, para_asiri: '[Nota interna para vos, NO la repitas al paciente] En lo que pidió no hay horarios distintos de los que YA le ofreciste; los de ya_ofrecidos_en_rango siguen libres (el sistema se los nombra). Si eligió uno de ellos, seguí con gestionar_turno. Si quiere fechas más adelante, llamá buscar_horarios con desde = ' + desde + '.' } } }];
 }
 return [{ json: { terminado: false, nuevo: true, ofertas_json: JSON.stringify(ofertas), bloque, req: $('¿Es el mismo pedido?').first().json.req, resultado: { ok: true, bloque, siguiente_desde: desde, para_asiri: '[Nota interna para vos, NO la repitas al paciente] El texto para el paciente es `bloque`: mandáselo tal cual, sin frases como \"le paso el bloque\". Si pidió una hora o franja que no está, decíselo en una frase antes y nombrá lo más cercano. Si dice que ninguno le sirve, llamá buscar_horarios con desde = ' + desde + '.' } } }];""", 2200, 360, usar=("horarios_core",))
     g.si("¿Bloque nuevo?", "$json.nuevo === true", 2530, 360)

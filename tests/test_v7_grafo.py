@@ -99,7 +99,7 @@ def main():
         esc("G11b cancelación que la agenda rechaza", propuesta({"tipo": "cancelacion", "fecha_turno_viejo": "2026-10-16"}), {"GET cita vieja": CITA_OK, "PUT anular": ERR}),
         esc("G12 reserva simple (sin cita vieja): sin GET ni PUT", propuesta({"tipo": "reserva", "fecha": "2026-10-22", "hora": "9:20"}, {**ESTADO, "turnos_vistos": []}), {"POST reserva": POST_OK}),
         esc("G13 modo sombra", P, trigger={**TRIG, "modo": "sombra"}),
-        esc("G14 propuesta vencida", {**P, "creada_ms": ahora_ms - 31 * 60_000}),
+        esc("G14 propuesta vencida", {**P, "creada_ms": ahora_ms - 13 * 3600_000}),   # (21/10) 12 h; antes 30 min
         esc("G15 familia: reserva para la ficha elegida (777)", propuesta(CAMBIO, {**ESTADO, "ficha": {"fichas": [{"id": 651, "nombre": "Dana"}, {"id": 777, "nombre": "Martina"}], "elegida": 777}, "turnos_vistos": [{**T_VIEJO, "id_paciente": 777}]}),
             {"GET cita vieja": {"data": {**T_VIEJO, "id_paciente": 777}}, "POST reserva": POST_OK, "PUT anular": PUT_OK}),
         # (06/10) paciente nuevo: alta + reserva con el mismo "sí"

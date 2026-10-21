@@ -307,6 +307,58 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   t('B2c sin confirmación pendiente, un cierre sigue en silencio', c3.silencio === true && !c3.texto, c3);
   const c4 = O.componer(base({ plan, prop: PROPC, prop_pendiente: true, res: { turnos: T_NO }, reunion: {}, libros: [{ ok: true, tipo: 'cancelacion', readback_text: 'Listo, cancelé su turno.' }] }));
   t('B2d si en este mensaje SÍ se escribió en la agenda, no dice "no cancelé nada"', !/no cancel[eé] nada/.test(c4.texto || ''), c4.texto); }
+// (21/10) Auditoría de paridad v6→v7: comportamientos del v6 que el v7 había perdido (quedan como tests permanentes).
+{ const T_NO = O.salidaTurnos({ output: '[NO_REPLY]', intermediateSteps: [] }, {});
+  const c = O.componer(base({ plan: O.despachar(orq([{ a: 'turnos', pedido: 'quiere turno para el viernes' }]), {}), res: { turnos: T_NO }, reunion: {}, texto_paciente: 'para el viernes tenes algo?' }));
+  t('P1 (v6 Fallback Output; real …6023) el orquestador vio un pedido y el agente dijo [NO_REPLY]: deriva con aviso, nunca silencio',
+    c.texto === O.TEXTOS.DERIVA && !c.silencio && c.sin_respuesta_del_agente === true && c.avisos.some((a) => /no supo qu[eé] responder/.test(a.texto)), c);
+  const c2 = O.componer(base({ plan: O.despachar(orq([{ a: 'no_reply' }]), {}), res: {}, reunion: {} }));
+  t('P1b un cierre ("gracias") que el orquestador marcó no_reply sigue en silencio', c2.silencio === true && !c2.texto, c2);
+  const T_DIA = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: true, sin_horarios_nuevos: true, ya_ofrecidos_en_rango: [{ fecha: '2026-10-27', hora: '09:20' }] }, { desde: '2026-10-27', hasta: '2026-10-27' })] }, {});
+  t('P2 (real 320042) eligió un día que ya se le ofreció: nombra ese horario, no "no hay turnos"', T_DIA.texto === 'El martes 27/10 tengo a las 9:20. ¿Le sirve?' && !/no hay/i.test(T_DIA.texto), T_DIA.texto);
+  const T_DIA2 = O.salidaTurnos({ output: 'PREGUNTA_DATOS_NUEVO', intermediateSteps: [paso('buscar_horarios', { ok: true, sin_horarios_nuevos: true, ya_ofrecidos_en_rango: [{ fecha: '2026-10-27', hora: '09:20' }] }, { desde: '2026-10-27', hasta: '2026-10-27' })] }, {});
+  t('P2b si el agente ya entendió que eligió (pide datos), una sola pregunta que nombra el horario y sin "no hay"',
+    T_DIA2.texto === 'Para reservar el martes 27/10 a las 9:20 necesito nombre, apellido y DNI del paciente, en un solo mensaje.' && T_DIA2.estado === 'pregunta', T_DIA2);
+  const T_VAR = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: false, motivo: 'sin_turnos' }, { desde: '2026-10-23', hasta: '2026-10-23' }),
+    paso('buscar_horarios', { ok: true, sin_horarios_nuevos: true, ya_ofrecidos_en_rango: [{ fecha: '2026-10-27', hora: '08:00' }, { fecha: '2026-10-27', hora: '10:40' }, { fecha: '2026-10-29', hora: '16:00' }] }, { desde: '2026-10-23' })] }, {});
+  t('P2c ese día no hay y lo siguiente ya se le ofreció: "para ese día no hay" + lo que sigue libre, una sola pregunta',
+    T_VAR.texto === 'Para ese día no hay turnos disponibles.\n\nSiguen libres los horarios que le ofrecí:\n- martes 27/10: 8:00 y 10:40\n- jueves 29/10: 16:00\n¿Le sirve alguno?', T_VAR.texto);
+  const T_NADA = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: true, sin_horarios_nuevos: true }, { desde: '2026-10-23' })] }, {});
+  t('P2d sin nada libre en el rango (ni nuevo ni ofrecido), sigue el "no hay" con la salida', /no hay turnos disponibles/.test(T_NADA.texto), T_NADA.texto);
+  const T_PREG = O.salidaTurnos({ output: 'PREGUNTA_DATOS_NUEVO', intermediateSteps: [] }, {});
+  const plan = O.despachar(orq([{ a: 'turnos', pedido: 'eligió horario' }]), {});
+  const PREG = O.TEXTOS.DATOS_NUEVO;
+  const r1 = O.componer(base({ plan, res: { turnos: T_PREG }, reunion: {}, ultimo_asiri: PREG, repeticiones: 0 }));
+  t('P3 (real 12333→12335) la misma pregunta por segunda vez: sale, marcada como repetición', r1.texto === PREG && r1.repeticion === true, r1);
+  const r2 = O.componer(base({ plan, res: { turnos: T_PREG }, reunion: {}, ultimo_asiri: PREG, repeticiones: 1, texto_paciente: 'como?' }));
+  t('P3b (v6: sin bucles) la misma pregunta por TERCERA vez: deriva a la secretaria con aviso', r2.texto === O.TEXTOS.DERIVA && r2.bucle_cortado === true && r2.avisos.some((a) => /repiti[oó] la misma respuesta/.test(a.texto)), r2);
+  const T_RB = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { etapa: 'confirmacion', ok: true, texto_para_el_paciente: RB })] }, {});
+  const r3 = O.componer(base({ plan, prop: PROP, res: { turnos: T_RB }, reunion: {}, ultimo_asiri: RB, repeticiones: 3 }));
+  t('P3c un read-back ("¿Procedo…?") repetido NO corta: se repite a propósito', r3.texto === RB && !r3.bucle_cortado, r3.texto);
+  const r4 = O.componer(base({ plan, res: { turnos: T_PREG }, reunion: {}, ultimo_asiri: 'Otra cosa distinta.', repeticiones: 4 }));
+  t('P3d si lo último de Asiri fue otra cosa, no hay corte', r4.texto === PREG && !r4.bucle_cortado && !r4.repeticion, r4); }
+{ const pasosSin = [paso('confirmar_turno', { ok: false, motivo: 'sin_recordatorio' }), paso('ver_turnos', { ok: false, motivo: 'sin_ficha' })];
+  const T1 = O.salidaTurnos({ output: 'PREGUNTA_CUAL_TURNO', intermediateSteps: pasosSin }, {});
+  t('P4 (v6: "confirma pero no tiene turno activo" → secretaria) sin recordatorio ni turnos: lo dice una vez y deriva', T1.derivar && T1.texto === 'No veo un turno para confirmar con este número de celular.', T1);
+  const plan = O.despachar(orq([{ a: 'turnos', pedido: 'confirma asistencia' }]), {});
+  const reu = O.reunir(plan, { turnos: T1 }, { texto_paciente: 'Confirmo' });
+  const cc = O.componer(base({ plan, res: { turnos: T1 }, reunion: reu, texto_paciente: 'Confirmo' }));
+  t('P4b el paciente recibe "no veo…" + la derivación, y reunir deriva (aviso a la clínica)', reu.derivar === true && cc.texto === 'No veo un turno para confirmar con este número de celular.\n\n' + O.TEXTOS.DERIVA, [reu, cc.texto]);
+  const T2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('confirmar_turno', { ok: false, motivo: 'sin_recordatorio' }), paso('ver_turnos', { ok: true, turnos: ['jueves 23/10 a las 10:00'] })] }, {});
+  t('P4c si tiene turnos, no deriva: pregunta cuál', !T2.derivar && /¿Cuál de estos turnos\?/.test(T2.texto), T2);
+  const T3 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('confirmar_turno', { ok: false, motivo: 'sin_recordatorio' })] }, {});
+  t('P4d sin ver_turnos en este mensaje (la lista vacía puede ser un error), no deriva por esto', !T3.derivar, T3);
+  const p = O.despachar(orq([{ a: 'pagos', pedido: 'manda el comprobante' }]), { recordatorio_pendiente: true });
+  t('P5 (v6: el comprobante como respuesta al recordatorio confirmaba) Turnos lo ve con la nota de que el pago de ese turno es un sí', !!p.turnos && /comprobante o aviso de pago/.test(p.turnos), p.turnos); }
+// (21/10, auditoría) confirmar_core: un turno de HOY cuya hora ya pasó no se confirma (el v6 confirmó dos así, con el comprobante de después de atenderse).
+{ const Conf = require('../v7/confirmar_core.js');
+  const rows = [{ id_cita_dentalink: 1, fecha_turno: '2026-10-21', hora_turno: '10:00:00', nombre_paciente: 'Ana' }, { id_cita_dentalink: 2, fecha_turno: '2026-10-21', hora_turno: '18:30:00', nombre_paciente: 'Ana' }];
+  const e1 = Conf.elegir(rows, null, '', '2026-10-21', '', '', '15:43');
+  t('CF-H1 a las 15:43 se confirma solo el de las 18:30 (el de las 10:00 ya pasó)', e1.ok && e1.cands.map((c) => c.cita_id).join() === '2', e1);
+  const e2 = Conf.elegir(rows.slice(0, 1), null, '', '2026-10-21', '', '', '15:43');
+  t('CF-H2 si el único es de hoy y ya pasó: no hay nada para confirmar', !!e2.fin, e2);
+  const e3 = Conf.elegir(rows, null, '', '2026-10-21', '', '');
+  t('CF-H3 sin la hora actual se comporta como antes (todos los de hoy)', e3.ok && e3.cands.length === 2, e3); }
 
 console.log(`\n${total - fallas}/${total} ${fallas ? 'FALLAS: ' + fallas : 'TODO OK'}`);
 process.exit(fallas ? 1 : 0);
