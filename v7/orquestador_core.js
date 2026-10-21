@@ -223,7 +223,12 @@ const OrquestadorCore = (() => {
     const c = ultimo('confirmar_turno'), le = ultimo('lista_espera'), ef = ultimo('elegir_ficha');
     const bloques = r.filter((x) => x.tool === 'buscar_horarios' && x.texto);
     const partes = []; let pregunta = null, readback = null;
-    if (c) { if (c.texto) partes.push(c.texto); if (c.pregunta) pregunta = c.pregunta; }
+    // (21/10, incidente familia: "¿Cuál de estos turnos confirma?" + "¿Cuál de estos turnos?" en el mismo mensaje, en bucle) Todas las confirmaciones
+    // logradas van al mensaje (no solo la última); si confirmar_turno ya hizo SU pregunta con la lista, no se suma otra pregunta en el mismo mensaje.
+    const confOk = r.filter((x) => x.tool === 'confirmar_turno' && x.texto && x.estado === 'confirmado');
+    const confPregunto = !!(c && c.texto && c.estado === 'pregunta');
+    if (confOk.length) for (const x of confOk) partes.push(x.texto);
+    else if (c) { if (c.texto) partes.push(c.texto); if (c.pregunta) pregunta = c.pregunta; }
     if (le && le.texto) partes.push(le.texto);
     if (g && g.readback) readback = g.texto;   // el read-back va SOLO y al final (sin el bloque: el paciente ya eligió)
     else {
@@ -238,7 +243,7 @@ const OrquestadorCore = (() => {
       if (g && g.pregunta) pregunta = pregunta || g.pregunta;
     }
     if (ef && ef.pregunta && !readback && !(g && g.texto)) pregunta = pregunta || ef.pregunta;
-    if (!readback && !pregunta && cod && cod.startsWith('PREGUNTA_')) pregunta = cod.slice('PREGUNTA_'.length);
+    if (!readback && !pregunta && !confPregunto && cod && cod.startsWith('PREGUNTA_')) pregunta = cod.slice('PREGUNTA_'.length);
     if (!readback && cod === 'MOSTRAR_TURNOS') partes.push(textoPregunta('MOSTRAR_TURNOS', turnos));
     if (pregunta && !readback) partes.push(textoPregunta(pregunta, turnos));
     if (readback) partes.push(readback);

@@ -37,8 +37,11 @@ HERRAMIENTAS = [
                       "nuevo_nombre": "Solo paciente nuevo (sin ficha): su nombre, tal como lo escribió. Si no, vacío.", "nuevo_apellido": "Solo paciente nuevo: su apellido, tal como lo escribió. Si no, vacío.",
                       "nuevo_dni": "Solo paciente nuevo: su DNI, tal como lo escribió. Si no, vacío.",
                       "confirma": "true SOLO si el MENSAJE ACTUAL del paciente acepta la CONFIRMACIÓN PENDIENTE; si no, vacío."}),
-    ("confirmar_turno", "confirmar_turno", "Confirma la asistencia a un turno cuando el paciente responde a un recordatorio. Con varios recordatorios, una vez por fecha (YYYY-MM-DD).",
-     ESCRIBE, {"fecha": "Fecha YYYY-MM-DD del turno a confirmar; vacío si hay un solo recordatorio pendiente."}),
+    # (21/10, incidente familia con dos turnos el mismo día) UNA llamada confirma todos los que correspondan: sin datos = todos los recordatorios
+    # pendientes (lo que hacía el v6 con "Confirmo"); con fecha / hora / nombre = solo los que coinciden.
+    ("confirmar_turno", "confirmar_turno", "Confirma la asistencia cuando el paciente responde a un recordatorio. UNA sola llamada: vacía confirma TODOS los recordatorios pendientes (\"Confirmo\", \"sí, ambos\", \"Pedro 9:50 e Hilario 10:30\"). Si confirma solo uno de varios, pasá su fecha y/o hora y/o nombre.",
+     ESCRIBE, {"fecha": "Opcional. Fecha YYYY-MM-DD del turno, solo si confirma UNO de varios.", "hora": "Opcional. Hora HH:MM del turno, solo si confirma UNO de varios el mismo día.",
+               "nombre": "Opcional. Nombre del paciente (familia), solo si confirma el turno de UNO de varios."}),
     ("lista_espera", "clinica", "Anota para la clínica que el paciente quiere adelantar su turno si se libera uno. Una vez por pedido.",
      {**CLINICA, "accion": "'espera'"}, {"texto": "Opcional: hasta qué fecha o qué horarios le sirven."}),
     ("registrar_pago", "clinica", "Registra que el paciente avisó un pago o mandó un comprobante (la secretaria lo verifica). No valida montos.", {**CLINICA, "accion": "'pago'"}, {}),

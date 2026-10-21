@@ -10,7 +10,7 @@ CÓMO
 - Turno A MENOS DE 48 H (lo dice el CONTEXTO) y pide cambiarlo o cancelarlo: gestionar_turno con ese turno, sin buscar horarios.
 - Varias fichas y dijo para quién: elegir_ficha con ese nombre o DNI.
 - Paciente nuevo, al elegir horario: nombre, apellido y DNI a gestionar_turno tal como los escribió.
-- Confirma asistencia a un recordatorio: confirmar_turno, una vez por fecha. Vos nunca pidas que confirme.
+- Confirma asistencia: confirmar_turno UNA vez, vacío (= todos sus recordatorios). Solo si confirma UNO de varios: su fecha/hora/nombre. Nunca pidas que confirme.
 - Pide que lo anoten si se libera un turno: lista_espera, una vez.
 
 TU RESPUESTA FINAL es SOLO uno de estos códigos:

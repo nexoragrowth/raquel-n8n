@@ -27,7 +27,7 @@ PUT_KEYS = ("name", "nodes", "connections", "settings")
 import datetime as _dt
 TS = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")   # (08/10) sello de los backups PRE de esta corrida
 SETTINGS_OK = {"saveExecutionProgress", "saveManualExecutions", "saveDataErrorExecution", "saveDataSuccessExecution", "executionTimeout", "errorWorkflow", "timezone", "executionOrder", "callerPolicy", "callerIds"}
-HERRAMIENTAS = ["ejecutar_propuesta", "ver_turnos", "elegir_ficha", "proponer", "buscar_horarios", "confirmar_turno", "clinica", "gestionar_turno"]   # gestionar_turno usa a ejecutar_propuesta: va después
+HERRAMIENTAS = ["ejecutar_propuesta", "ver_turnos", "elegir_ficha", "proponer", "buscar_horarios", "confirmar_una", "confirmar_turno", "clinica", "gestionar_turno"]   # (21/10) confirmar_turno usa a confirmar_una: va después   # gestionar_turno usa a ejecutar_propuesta: va después
 # (08/10) Sub-agentes del cerebro con orquestador. agente_pagos, agente_informacion y agente_urgencias son NUEVOS: v7/ids.json los tiene como
 # "PENDIENTE_crear_v7_en_n8n" hasta que Lucas corra --aplicar (los crea inactivos y escribe sus ids). agente_turnos se ACTUALIZA en su lugar (mismo nombre).
 # Las variantes retiradas (cerebro_ma, cerebro_mixto, cerebro_min, agente_clinica) quedan en n8n como estaban: este script nunca borra.
@@ -109,6 +109,13 @@ def main():
             return wid
         return api("/workflows", "POST", body)["id"]
 
+    def asegurar_activo(wid, nombre):
+        """(21/10) n8n no publica un workflow que llama a un sub-workflow sin publicar, y un sub-workflow sin publicar no se puede ejecutar:
+        cada herramienta queda activa ANTES de subir la que la usa (las de antes ya estaban activas a mano; una nueva se crea inactiva)."""
+        if not api(f"/workflows/{wid}").get("active"):
+            api(f"/workflows/{wid}/activate", "POST")
+            print(f"     activado {nombre}")
+
     for k in HERRAMIENTAS:
         txt_h = json.dumps(herramientas_json[k], ensure_ascii=False)
         for k2, v2 in ids.items():          # una herramienta puede usar otra ya subida (gestionar_turno → ejecutar_propuesta)
@@ -116,6 +123,7 @@ def main():
         assert "@@ID:" not in txt_h, "quedaron marcadores sin resolver en " + k
         wf = herramientas_json[k] = json.loads(txt_h)
         ids[k] = subir(wf["name"], wf, existentes.get(wf["name"]))
+        asegurar_activo(ids[k], wf["name"])
         print(f"  ok {wf['name']} → {ids[k]}")
     for k in AGENTES:
         txt_a = json.dumps(agentes_json[k], ensure_ascii=False)

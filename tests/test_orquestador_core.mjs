@@ -207,6 +207,17 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const r2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { etapa: 'ejecutado', ok: false, motivo: 'ya_ejecutada' }, { confirma: 'true' })] }, {});
   t('T10b "ya_ejecutada" sola (un "sí" repetido) sigue diciendo que ya quedó registrado', r2.texto === 'Ese pedido ya quedó registrado.', r2); }
 
+// (21/10, incidente familia: dos turnos el mismo día) confirmaciones: todas al mensaje, nunca dos preguntas
+{ const PL = 'Perfecto, quedaron confirmados sus turnos del viernes 23/10 a las 09:50 (Pedro) y viernes 23/10 a las 10:30 (Hilario).';
+  const s1 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('confirmar_turno', { ok: true, readback_text: PL })] }, {});
+  t('CF1 una sola llamada con los dos turnos: el texto en plural tal cual, estado confirmado', s1.texto === PL && s1.estado === 'confirmado', s1);
+  const s2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('confirmar_turno', { ok: true, readback_text: 'Perfecto, su turno del viernes 23/10 a las 09:50 está confirmado.' }),
+    paso('confirmar_turno', { ok: true, readback_text: 'Perfecto, su turno del viernes 23/10 a las 10:30 está confirmado.' })] }, {});
+  t('CF2 si el agente igual llama dos veces: van LAS DOS confirmaciones (antes solo la última)', s2.texto.includes('09:50 está confirmado') && s2.texto.includes('10:30 está confirmado'), s2.texto);
+  const s3 = O.salidaTurnos({ output: 'PREGUNTA_CUAL_TURNO', intermediateSteps: [paso('confirmar_turno', { ok: false, motivo: 'varios_recordatorios', fechas: ['viernes 23/10 a las 09:50', 'viernes 23/10 a las 10:30'] })] },
+    { turnos: ['viernes 23/10 a las 09:50 (Pedro)', 'viernes 23/10 a las 10:30 (Hilario)'] });
+  t('CF3 si la herramienta ya preguntó "¿Cuál…?" con su lista, el código NO suma otra pregunta (antes: dos listas en el mismo mensaje)', (s3.texto.match(/\?/g) || []).length === 1, s3.texto); }
+
 // (20/10, D3; escalaciones reales 380–386) charla que inició la clínica con un contacto sin ficha: Asiri no se mete
 { const p = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'Yo por la tarde puedo pasar únicamente', motivo: 'proveedor: arreglar grifo' }]), { charla_de_la_clinica: true });
   t('CL1 charla de la clínica + el orquestador quería derivar: NO deriva, NO responde (sin aviso al grupo)', p.fija === 'no_reply' && !p.hay_agentes && p.charla_de_la_clinica === true, p);

@@ -156,60 +156,130 @@ def main():
     a = r["B7 pedido distinto con 2 bloques ya contados"]["reps"][0]
     chequear("B7 un pedido distinto sí cuenta: tercer bloque → límite", a["salida"]["motivo"] == "limite_de_bloques" and not any(p["metodo"] == "executeWorkflow" for p in a["pedidos"]), a["salida"])
 
-    # ------------------------------------------------------------------ confirmar_turno
+    # ------------------------------------------------------------------ confirmar_una (21/10: la cadena de UNA cita, con la agenda simulada)
     ROW = {"id_cita_dentalink": 9104, "id_paciente_dentalink": 651, "nombre_paciente": "Dana", "fecha_turno": "2026-10-16", "hora_turno": "09:10:00"}
     ROW2 = {"id_cita_dentalink": 9300, "id_paciente_dentalink": 777, "nombre_paciente": "Martina", "fecha_turno": "2026-10-20", "hora_turno": "16:20:00"}
     CITA = {"data": {"id": 9104, "id_paciente": 651, "fecha": "2026-10-16", "hora_inicio": "09:10:00", "id_estado": 15, "estado_anulacion": 0}}
     PUT18 = {"data": {"id": 9104, "id_estado": 18}}
+    CAND = {"cita_id": 9104, "paciente_id": 651, "fecha": "2026-10-16", "hora": "09:10", "nombre": "Dana", "origen": "recordatorio"}
+    CAND_AG = {**CAND, "nombre": "", "origen": "agenda"}
+
+    def una(id_, cand, modo="vivo", **kw):
+        return esc(id_, {"cand_json": json.dumps(cand), "modo": modo}, **kw)
+
+    r = correr(B.wf_confirmar_una(), [
+        una("U10 SOMBRA: verifica pero no confirma ni marca el recordatorio (incidente 06/10)", CAND, "sombra", http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Marcar recordatorio": {}}),
+        una("U11 SIN modo: tampoco escribe (solo con 'vivo' explícito)", CAND, "", http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Marcar recordatorio": {}}),
+        una("U1 todo ok", CAND, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Marcar recordatorio": {}}),
+        una("U2 ya estaba confirmada", CAND, http={"GET cita": {"data": {**CITA["data"], "id_estado": 18}}}, pg={"Marcar recordatorio": {}}),
+        una("U3 Dentalink dice 'igual al original'", CAND, http={"GET cita": CITA, "PUT confirmar": {"error": {"message": "400 - el nuevo estado es igual al original"}}}, pg={"Marcar recordatorio": {}}),
+        una("U4 el PUT falla", CAND, http={"GET cita": CITA, "PUT confirmar": {"error": {"message": "500"}}}, pg={"Marcar recordatorio": {}}),
+        una("U7 turno visto (sin recordatorio)", CAND_AG, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Marcar recordatorio": {}}),
+        una("U8 la cita cambió de fecha", CAND, http={"GET cita": {"data": {**CITA["data"], "fecha": "2026-10-19"}}}),
+        una("U9 la cita está anulada", CAND, http={"GET cita": {"data": {**CITA["data"], "id_estado": 1, "estado_anulacion": 1}}}),
+        una("U12 la agenda no responde", CAND, http={"GET cita": {"__throw": True}}),
+        una("U13 la cita ahora es de otra ficha", CAND, http={"GET cita": {"data": {**CITA["data"], "id_paciente": 777}}}),
+        esc("U14 sin turno (cand_json vacío)", {"cand_json": "", "modo": "vivo"}),
+    ])
+    print("\nconfirmar_una")
+    met = lambda a: [p["metodo"] + " " + (p["url"] or "").replace(D, "") for p in a["pedidos"] if p["metodo"] in ("GET", "PUT", "POST")]
+    for k in ("U10 SOMBRA: verifica pero no confirma ni marca el recordatorio (incidente 06/10)", "U11 SIN modo: tampoco escribe (solo con 'vivo' explícito)"):
+        a = r[k]["reps"][0]
+        chequear(k[:3] + " ningún PUT a Dentalink ni UPDATE del recordatorio; ok marcado simulado", met(a) == ["GET /citas/9104"] and not any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]) and a["salida"].get("simulado") is True and a["salida"]["ok"] is True, (met(a), a["salida"]))
+    a = r["U1 todo ok"]["reps"][0]
+    chequear("U1 GET → PUT (id_estado 18) y marca el recordatorio; devuelve ok + escribio + la cita", a["error"] is None and met(a) == ["GET /citas/9104", "PUT /citas/9104"] and next(q for q in a["pedidos"] if q["nodo"] == "PUT confirmar")["body"] == {"id_estado": 18}
+             and any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]) and a["salida"]["ok"] is True and a["salida"]["escribio"] is True and a["salida"]["cand"]["cita_id"] == 9104, (a["error"], a["pedidos"], a["salida"]))
+    a = r["U2 ya estaba confirmada"]["reps"][0]
+    chequear("U2 ya confirmada: no hace PUT, ok + ya y cierra el recordatorio", met(a) == ["GET /citas/9104"] and a["salida"]["ok"] is True and a["salida"]["ya"] is True and any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]), (met(a), a["salida"]))
+    a = r["U3 Dentalink dice 'igual al original'"]["reps"][0]
+    chequear("U3 el 400 'igual al original' cuenta como éxito idempotente", a["salida"]["ok"] is True and a["salida"]["ya"] is True, a["salida"])
+    a = r["U4 el PUT falla"]["reps"][0]
+    chequear("U4 PUT que falla: ok false (no_pude_confirmar), no marca el recordatorio, con instrucción de avisar", a["salida"]["ok"] is False and a["salida"]["motivo"] == "no_pude_confirmar" and not any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]) and "avisar_grupo" in (a["salida"]["para_asiri"] or ""), a["salida"])
+    a = r["U7 turno visto (sin recordatorio)"]["reps"][0]
+    chequear("U7 turno visto: confirma y NO toca recordatorios", a["salida"]["ok"] is True and met(a) == ["GET /citas/9104", "PUT /citas/9104"] and not any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]), (met(a), a["pedidos"]))
+    for k, motivo in [("U8 la cita cambió de fecha", "cita_cambio"), ("U9 la cita está anulada", "cita_no_vigente"), ("U12 la agenda no responde", "error_tecnico"), ("U13 la cita ahora es de otra ficha", "cita_cambio")]:
+        a = r[k]["reps"][0]
+        chequear(f"{k[:3].strip()} → {motivo}, no escribe", a["salida"]["ok"] is False and a["salida"]["motivo"] == motivo and not any(q["metodo"] == "PUT" for q in a["pedidos"]) and not any(q["nodo"] == "Marcar recordatorio" for q in a["pedidos"]), (a["salida"], met(a)))
+    a = r["U14 sin turno (cand_json vacío)"]["reps"][0]
+    chequear("U14 sin turno: no consulta la agenda", a["salida"]["ok"] is False and not met(a), a["salida"])
+
+    # ------------------------------------------------------------------ confirmar_turno (21/10: elige TODOS los que correspondan, confirmar_una por cada uno, un solo mensaje)
+    PEDRO = {"id_cita_dentalink": 9116, "id_paciente_dentalink": 501, "nombre_paciente": "Pedro Gómez", "fecha_turno": "2026-10-23", "hora_turno": "09:50:00"}
+    HILARIO = {"id_cita_dentalink": 9120, "id_paciente_dentalink": 502, "nombre_paciente": "Hilario Gómez", "fecha_turno": "2026-10-23", "hora_turno": "10:30:00"}
+
+    def cand_de(row):
+        return {"cita_id": row["id_cita_dentalink"], "fecha": row["fecha_turno"], "hora": row["hora_turno"][:5], "nombre": row["nombre_paciente"].split()[0], "origen": "recordatorio"}
+
+    def r_ok(row, ya=False):
+        return {"ok": True, "ya": ya, "escribio": True, "motivo": None, "para_asiri": None, "cand": cand_de(row)}
+
+    def r_mal(row, motivo="no_pude_confirmar"):
+        return {"ok": False, "ya": False, "escribio": False, "motivo": motivo, "para_asiri": "No pude confirmar el turno en la agenda: sigue como estaba. Decíselo y avisá a la clínica con avisar_grupo (ACCION).", "cand": cand_de(row)}
+
     r = correr(B.wf_confirmar_turno(), [
-        esc("C10 SOMBRA: verifica pero no confirma ni marca el recordatorio (incidente 06/10)", {"fecha": "", "modo": "sombra"}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
-        esc("C11 SIN modo: tampoco escribe (solo con 'vivo' explícito)", {"fecha": "", "modo": ""}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
-        esc("C1 un recordatorio abierto, todo ok", {"fecha": ""}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
-        esc("C9 'confirmo' y el modelo pasa una fecha equivocada (10/12 leído como 12/10): con UN recordatorio abierto, confirma ese", {"fecha": "2026-10-12"}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
-        esc("C2 ya estaba confirmada", {"fecha": ""}, http={"GET cita": {"data": {**CITA["data"], "id_estado": 18}}}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
-        esc("C3 Dentalink dice 'igual al original'", {"fecha": ""}, http={"GET cita": CITA, "PUT confirmar": {"error": {"message": "400 - el nuevo estado es igual al original"}}}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
-        esc("C4 el PUT falla", {"fecha": ""}, http={"GET cita": CITA, "PUT confirmar": {"error": {"message": "500"}}}, pg={"Recordatorios abiertos": [ROW], "Marcar recordatorio": {}}),
-        esc("C5 dos recordatorios sin decir cuál", {"fecha": ""}, pg={"Recordatorios abiertos": [ROW, ROW2]}),
-        esc("C5b dos recordatorios, pide el de Martina", {"fecha": "2026-10-20"}, http={"GET cita": {"data": {"id": 9300, "id_paciente": 777, "fecha": "2026-10-20", "hora_inicio": "16:20:00", "id_estado": 15, "estado_anulacion": 0}}, "PUT confirmar": {"data": {"id": 9300, "id_estado": 18}}}, pg={"Recordatorios abiertos": [ROW, ROW2], "Marcar recordatorio": {}}),
-        esc("C6 sin recordatorio ni fecha", {"fecha": ""}, pg={"Recordatorios abiertos": [{}]}),
-        esc("C7 sin recordatorio pero con fecha y turno visto", {"fecha": "2026-10-16"}, {f"turnos_vistos:{TEL}": TURNOS}, http={"GET cita": CITA, "PUT confirmar": PUT18}, pg={"Recordatorios abiertos": [{}]}),
-        esc("C8 la cita cambió de fecha", {"fecha": ""}, http={"GET cita": {"data": {**CITA["data"], "fecha": "2026-10-19"}}}, pg={"Recordatorios abiertos": [ROW]}),
-        esc("C9 la cita está anulada", {"fecha": ""}, http={"GET cita": {"data": {**CITA["data"], "id_estado": 1, "estado_anulacion": 1}}}, pg={"Recordatorios abiertos": [ROW]}),
-        esc("C10 la agenda no responde", {"fecha": ""}, http={"GET cita": {"__throw": True}}, pg={"Recordatorios abiertos": [ROW]}),
-        esc("C11 la cita ahora es de otra ficha", {"fecha": ""}, http={"GET cita": {"data": {**CITA["data"], "id_paciente": 777}}}, pg={"Recordatorios abiertos": [ROW]}),
+        esc("C1 un recordatorio abierto, todo ok", {"fecha": ""}, pg={"Recordatorios abiertos": [ROW]}, subwf={"Confirmar cada una": r_ok(ROW)}),
+        esc("C2 ya estaba confirmada", {"fecha": ""}, pg={"Recordatorios abiertos": [ROW]}, subwf={"Confirmar cada una": r_ok(ROW, ya=True)}),
+        esc("C4 confirmar_una falla", {"fecha": ""}, pg={"Recordatorios abiertos": [ROW]}, subwf={"Confirmar cada una": r_mal(ROW)}),
+        esc("C5 dos recordatorios sin decir cuál (fechas distintas): confirma los dos", {"fecha": ""}, pg={"Recordatorios abiertos": [ROW, ROW2]}, subwf={"Confirmar cada una": [r_ok(ROW), r_ok(ROW2)]}),
+        esc("C5b dos recordatorios, pide el de Martina por fecha", {"fecha": "2026-10-20"}, pg={"Recordatorios abiertos": [ROW, ROW2]}, subwf={"Confirmar cada una": r_ok(ROW2)}),
+        esc("C6 sin recordatorio ni fecha", {"fecha": ""}, pg={"Recordatorios abiertos": [{}]}, subwf={"Confirmar cada una": r_ok(ROW)}),
+        esc("C7 sin recordatorio pero con fecha y turno visto", {"fecha": "2026-10-16"}, {f"turnos_vistos:{TEL}": TURNOS}, pg={"Recordatorios abiertos": [{}]}, subwf={"Confirmar cada una": r_ok(ROW)}),
+        esc("C9 'confirmo' y el modelo pasa una fecha equivocada (10/12 leído como 12/10): con UN recordatorio abierto, confirma ese", {"fecha": "2026-10-12"}, pg={"Recordatorios abiertos": [ROW]}, subwf={"Confirmar cada una": r_ok(ROW)}),
+        esc("C12 INCIDENTE 21/10: dos hermanos el MISMO día, 'Confirmo'", {"fecha": ""}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [r_ok(PEDRO), r_ok(HILARIO)]}),
+        esc("C12b mismo día, el modelo pasa solo la fecha ('Pedro 9:50 e Hilario 10:30')", {"fecha": "2026-10-23"}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [r_ok(PEDRO), r_ok(HILARIO)]}),
+        esc("C12c mismo día, confirma solo el de las 10:30", {"fecha": "2026-10-23", "hora": "10:30"}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": r_ok(HILARIO)}),
+        esc("C12d mismo día, confirma solo el de Pedro (por nombre, sin tilde ni mayúscula)", {"fecha": "", "nombre": "pedro"}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": r_ok(PEDRO)}),
+        esc("C12e hora que no coincide con ninguno: no achica (confirma los dos)", {"fecha": "2026-10-23", "hora": "11:00"}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [r_ok(PEDRO), r_ok(HILARIO)]}),
+        esc("C13 dos turnos, uno se confirma y el otro falla", {"fecha": ""}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [r_ok(PEDRO), r_mal(HILARIO)]}),
+        esc("C14 el sub-workflow se cae en uno ({error})", {"fecha": ""}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [r_ok(PEDRO), {"error": "timeout"}]}),
+        esc("C15 SOMBRA con dos turnos: no avisa al grupo aunque uno falle", {"fecha": "", "modo": "sombra"}, pg={"Recordatorios abiertos": [PEDRO, HILARIO]}, subwf={"Confirmar cada una": [{**r_ok(PEDRO), "simulado": True}, r_mal(HILARIO)]}),
     ])
     print("\nconfirmar_turno")
-    met = lambda a: [p["metodo"] + " " + (p["url"] or "").replace(D, "") for p in a["pedidos"] if p["metodo"] in ("GET", "PUT", "POST")]
-    a = r["C9 'confirmo' y el modelo pasa una fecha equivocada (10/12 leído como 12/10): con UN recordatorio abierto, confirma ese"]["reps"][0]
-    chequear("C9 fecha equivocada + un solo recordatorio → confirma ese (07/10, escenarios reales REAL-14/15)", a["salida"]["ok"] is True and "16/10" in (a["salida"]["readback_text"] or ""), a["salida"])
-    for k in ("C10 SOMBRA: verifica pero no confirma ni marca el recordatorio (incidente 06/10)", "C11 SIN modo: tampoco escribe (solo con 'vivo' explícito)"):
-        a = r[k]["reps"][0]
-        chequear(k[:3] + " ningún PUT a Dentalink ni UPDATE del recordatorio; devuelve el mensaje marcado simulado", met(a) == ["GET /citas/9104"] and not any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]) and a["salida"].get("simulado") is True and a["salida"]["ok"] is True, (met(a), [p["nodo"] for p in a["pedidos"]], a["salida"]))
+    llamados_ = lambda a: [q["entradas"] for q in a["pedidos"] if q["nodo"] == "Confirmar cada una"]
+    cids = lambda a: [json.loads(e["cand_json"])["cita_id"] for e in llamados_(a)]
     x = r["C1 un recordatorio abierto, todo ok"]; a = x["reps"][0]
-    chequear("C1 GET → PUT (id_estado 18) y marca el recordatorio", a["error"] is None and met(a) == ["GET /citas/9104", "PUT /citas/9104"] and next(q for q in a["pedidos"] if q["nodo"] == "PUT confirmar")["body"] == {"id_estado": 18} and any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]), (a["error"], a["pedidos"]))
+    chequear("C1 un llamado a confirmar_una con la cita del recordatorio y el modo/tel del pedido", cids(a) == [9104] and llamados_(a)[0]["modo"] == "vivo" and llamados_(a)[0]["tel"] == TEL, llamados_(a))
     chequear("C1 el mensaje lo arma el código", a["salida"]["readback_text"] == "Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado." and a["salida"]["ok"] is True, a["salida"])
     lib = json.loads(x["redis_final"][f"escrituras:{TEL}:ex-2"])
     chequear("C1 deja el libro (tipo confirmacion, ok)", lib[0]["tipo"] == "confirmacion" and lib[0]["ok"] is True and lib[0]["readback_text"] == a["salida"]["readback_text"], lib)
     x = r["C2 ya estaba confirmada"]; a = x["reps"][0]
     lib2 = json.loads(x["redis_final"].get(f"escrituras:{TEL}:{TRIG['exec_id_actual']}") or "null")
-    chequear("C2b ya confirmada: igual queda en el libro (ok, confirmación) para que el chequeo de salida no frene 'está confirmado'", isinstance(lib2, list) and lib2[0]["ok"] is True and lib2[0]["tipo"] == "confirmacion" and "está confirmado" in lib2[0]["readback_text"], lib2)
-    chequear("C2 ya confirmada: no hace PUT, le dice lo mismo que si se confirmara recién (no \"ya estaba\") y igual cierra el recordatorio", met(a) == ["GET /citas/9104"] and a["salida"]["ya_estaba_confirmada"] is True and a["salida"]["readback_text"] == "Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado." and any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]), (met(a), a["salida"]))
-    chequear("C2c sin PUT a la agenda (ya estaba confirmada), el libro registra solo la verificación: una entrada, sin cita nueva ni anulada", len(lib2) == 1 and lib2[0]["nueva_cita"] is None and lib2[0]["vieja_anulada"] is None, lib2)
-    a = r["C3 Dentalink dice 'igual al original'"]["reps"][0]
-    chequear("C3 el 400 'igual al original' cuenta como éxito idempotente", a["salida"]["ok"] is True and a["salida"]["ya_estaba_confirmada"] is True, a["salida"])
-    x = r["C4 el PUT falla"]; a = x["reps"][0]
-    chequear("C4 PUT que falla: no confirma, no marca el recordatorio y avisa a Asiri", a["salida"]["motivo"] == "no_pude_confirmar" and not any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]) and "avisar_grupo" in a["salida"]["para_asiri"], a["salida"])
-    a = r["C5 dos recordatorios sin decir cuál"]["reps"][0]
-    chequear("C5 dos recordatorios sin fecha: no confirma nada y devuelve las fechas", a["salida"]["motivo"] == "varios_recordatorios" and a["salida"]["fechas_iso"] == ["2026-10-16", "2026-10-20"] and not met(a), a["salida"])
-    a = r["C5b dos recordatorios, pide el de Martina"]["reps"][0]
-    chequear("C5b con fecha confirma SOLO esa cita (9300)", met(a) == ["GET /citas/9300", "PUT /citas/9300"] and a["salida"]["ok"] is True, (met(a), a["salida"]))
+    chequear("C2 ya confirmada: mismo texto que si se confirmara recién, ya_estaba_confirmada y queda en el libro (para el chequeo de salida)",
+             a["salida"]["ya_estaba_confirmada"] is True and a["salida"]["readback_text"] == "Perfecto, su turno del viernes 16/10 a las 09:10 está confirmado." and isinstance(lib2, list) and lib2[0]["ok"] is True and len(lib2) == 1, (a["salida"], lib2))
+    x = r["C4 confirmar_una falla"]; a = x["reps"][0]
+    chequear("C4 si no se pudo confirmar: ok false, motivo de la cita y la instrucción de avisar; sin libro", a["salida"]["ok"] is False and a["salida"]["motivo"] == "no_pude_confirmar" and "avisar_grupo" in a["salida"]["para_asiri"] and f"escrituras:{TEL}:ex-2" not in x["redis_final"], a["salida"])
+    a = r["C5 dos recordatorios sin decir cuál (fechas distintas): confirma los dos"]["reps"][0]
+    chequear("C5 'Confirmo' con dos recordatorios: confirma LOS DOS (como el v6) y un solo mensaje con los dos nombres",
+             cids(a) == [9104, 9300] and a["salida"]["ok"] is True and a["salida"]["readback_text"] == "Perfecto, quedaron confirmados sus turnos del viernes 16/10 a las 09:10 (Dana) y martes 20/10 a las 16:20 (Martina)." and a["salida"]["confirmados"] == 2, (cids(a), a["salida"]))
+    a = r["C5b dos recordatorios, pide el de Martina por fecha"]["reps"][0]
+    chequear("C5b con fecha confirma SOLO esa cita (9300)", cids(a) == [9300] and a["salida"]["ok"] is True, (cids(a), a["salida"]))
     a = r["C6 sin recordatorio ni fecha"]["reps"][0]
-    chequear("C6 sin recordatorio: le dice a Asiri que mire ver_turnos", a["salida"]["motivo"] == "sin_recordatorio" and not met(a), a["salida"])
+    chequear("C6 sin recordatorio: le dice a Asiri que mire ver_turnos, sin llamar a confirmar_una", a["salida"]["motivo"] == "sin_recordatorio" and not cids(a), a["salida"])
     a = r["C7 sin recordatorio pero con fecha y turno visto"]["reps"][0]
-    chequear("C7 confirma un turno visto por fecha y NO toca recordatorios", a["salida"]["ok"] is True and met(a) == ["GET /citas/9104", "PUT /citas/9104"] and not any(p["nodo"] == "Marcar recordatorio" for p in a["pedidos"]), (met(a), a["pedidos"]))
-    for k, motivo in [("C8 la cita cambió de fecha", "cita_cambio"), ("C9 la cita está anulada", "cita_no_vigente"), ("C10 la agenda no responde", "error_tecnico"), ("C11 la cita ahora es de otra ficha", "cita_cambio")]:
-        a = r[k]["reps"][0]
-        chequear(f"{k[:3].strip()} → {motivo}, no escribe", a["salida"]["motivo"] == motivo and not any(q["metodo"] == "PUT" for q in a["pedidos"]) and not any(q["nodo"] == "Marcar recordatorio" for q in a["pedidos"]), (a["salida"], met(a)))
+    chequear("C7 turno visto por fecha: confirmar_una con origen agenda (no toca recordatorios)", cids(a) == [9104] and json.loads(llamados_(a)[0]["cand_json"])["origen"] == "agenda", llamados_(a))
+    a = r["C9 'confirmo' y el modelo pasa una fecha equivocada (10/12 leído como 12/10): con UN recordatorio abierto, confirma ese"]["reps"][0]
+    chequear("C9 fecha equivocada + un solo recordatorio → confirma ese (07/10, escenarios reales REAL-14/15)", cids(a) == [9104] and a["salida"]["ok"] is True, (cids(a), a["salida"]))
+    a = r["C12 INCIDENTE 21/10: dos hermanos el MISMO día, 'Confirmo'"]["reps"][0]
+    chequear("C12 INCIDENTE: 'Confirmo' con dos turnos el MISMO día → confirma los dos, sin preguntar, un mensaje con los nombres",
+             cids(a) == [9116, 9120] and a["salida"]["ok"] is True and a["salida"]["readback_text"] == "Perfecto, quedaron confirmados sus turnos del viernes 23/10 a las 09:50 (Pedro) y viernes 23/10 a las 10:30 (Hilario)." and a["salida"]["motivo"] is None, (cids(a), a["salida"]))
+    a = r["C12b mismo día, el modelo pasa solo la fecha ('Pedro 9:50 e Hilario 10:30')"]["reps"][0]
+    chequear("C12b con solo la fecha de un día con dos turnos: confirma los dos (antes: 'varios_recordatorios' en bucle)", cids(a) == [9116, 9120] and a["salida"]["ok"] is True, (cids(a), a["salida"]))
+    a = r["C12c mismo día, confirma solo el de las 10:30"]["reps"][0]
+    chequear("C12c fecha + hora: SOLO esa cita", cids(a) == [9120] and a["salida"]["readback_text"] == "Perfecto, su turno del viernes 23/10 a las 10:30 está confirmado.", (cids(a), a["salida"]))
+    a = r["C12d mismo día, confirma solo el de Pedro (por nombre, sin tilde ni mayúscula)"]["reps"][0]
+    chequear("C12d por nombre: SOLO la de Pedro", cids(a) == [9116], cids(a))
+    a = r["C12e hora que no coincide con ninguno: no achica (confirma los dos)"]["reps"][0]
+    chequear("C12e un dato que no coincide con nada no deja al paciente sin confirmar", cids(a) == [9116, 9120], cids(a))
+    x = r["C13 dos turnos, uno se confirma y el otro falla"]; a = x["reps"][0]
+    chequear("C13 a medias: confirma el que pudo, dice con sinceridad cuál no y avisa a la clínica [ACCIÓN]",
+             a["salida"]["ok"] is True and a["salida"]["readback_text"].startswith("Perfecto, su turno del viernes 23/10 a las 09:50 está confirmado.") and "No pude confirmar el del viernes 23/10 a las 10:30 (Hilario): la secretaria lo revisa." in a["salida"]["readback_text"]
+             and any("[ACCIÓN] Confirmación a medias" in str((v.get("qs") or {}).get("resumen", "")) for v in a["avisos"]), (a["salida"], a["avisos"]))
+    lib3 = json.loads(x["redis_final"][f"escrituras:{TEL}:ex-2"])
+    chequear("C13b el libro queda ok y marcado parcial", lib3[0]["ok"] is True and lib3[0]["parcial"] is True, lib3)
+    a = r["C14 el sub-workflow se cae en uno ({error})"]["reps"][0]
+    chequear("C14 un sub-workflow caído cuenta como falla de ESE turno (no rompe el otro)", a["salida"]["ok"] is True and "No pude confirmar el del viernes 23/10 a las 10:30" in a["salida"]["readback_text"], a["salida"])
+    a = r["C15 SOMBRA con dos turnos: no avisa al grupo aunque uno falle"]["reps"][0]
+    chequear("C15 sombra: ningún aviso al grupo y la salida marcada simulado", not a["avisos"] and a["salida"].get("simulado") is True, (a["avisos"], a["salida"]))
 
     # ------------------------------------------------------------------ clinica (08/10: derivar / humano / pago / datos_pago / espera / triaje; textos fijos por código)
     ESTADO = {f"{k}:{TEL}": "x" for k in ("propuesta", "ofertas", "lotes", "turnos_vistos", "bloque")}

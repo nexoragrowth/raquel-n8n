@@ -80,6 +80,17 @@ async function correrUna(esc, estadoCompartido, nRep) {
       const sistema = t === 'agent' ? n.parameters.options.systemMessage : ((n.parameters.messages?.messageValues || [])[0] || {}).message;
       pedidos.push({ nodo: nombre, metodo: t === 'agent' ? 'agent' : 'llm', url: null, entradas: { text: evalExpr(n.parameters.text, ctx), sistema: evalExpr(sistema, ctx) } });
       salida = [{ json: sim }];
+    } else if (t === 'executeWorkflow' && n.parameters.mode === 'each') {
+      // (21/10) "Run once for each item": un llamado por ítem de entrada, con las entradas evaluadas sobre ESE ítem. esc.subwf[nodo] puede ser
+      // una lista (una respuesta por llamado, en orden; la última se repite) o una sola respuesta para todos.
+      const r = (esc.subwf || {})[nombre];
+      if (r === undefined) throw new Error('sin respuesta simulada para ' + nombre);
+      const lista = Array.isArray(r) ? r : [r];
+      salida = entrada.map((it, i) => {
+        const c2 = { $json: it.json, $ };
+        pedidos.push({ nodo: nombre, metodo: t, url: null, params: null, entradas: Object.fromEntries(Object.entries(n.parameters.workflowInputs.value).map(([k, v]) => [k, evalExpr(v, c2)])) });
+        return { json: lista[Math.min(i, lista.length - 1)] };
+      });
     } else if (t === 'executeWorkflow' || t === 'postgres') {
       const r = ((t === 'postgres' ? esc.pg : esc.subwf) || {})[nombre];
       if (r === undefined) throw new Error('sin respuesta simulada para ' + nombre);
