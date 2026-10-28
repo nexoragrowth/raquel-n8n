@@ -963,3 +963,9 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Por qué:** auditoría v6→v7 (casos reales 23/10 ejec 321861, 26/10 "payments", 22/10 sticker; derivación de más medida).
 - **Estado:** en el repo y probado; deploy pendiente del OK de Lucas.
 - **Revisable:** sí.
+
+## 2026-10-28 (4.ª) — El modo humano dura 1 hora (confirmado por Lucas); NO se extiende a 24 h
+- **Qué:** queda la ventana de 1 h tras un mensaje del staff. Se descarta la propuesta D3 de 24 h.
+- **Medido:** de 27 respuestas del v7 dentro de las 24 h posteriores a un mensaje del staff, 23 fueron pasada la hora (64 min a 23,6 h: el silencio ya había vencido, por diseño) y 4 en el mismo minuto del mensaje del staff (carrera: la secretaria escribe mientras el cerebro procesa; Gate Humano Final falla abierto).
+- **Cómo se ataca:** (a) las 23: regla del prompt del orquestador "le contesta al STAFF sin pedirnos nada nuevo, aunque cuente algo → no_reply" (en el repo, deploy pendiente); (b) las 4: arreglar la carrera en Gate Humano Final (backlog).
+
