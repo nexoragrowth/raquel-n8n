@@ -940,3 +940,14 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Por qué ya y sin sombra:** en un solo día cayeron 7 escalaciones al grupo de contactos así (plomero, proveedores, técnico); medido sobre 114 contactos, los que parecían pacientes tenían ficha.
 - **Riesgo aceptado:** un prospecto al que la secretaria escribió primero no recibe respuesta de Asiri (la atiende la secretaria).
 - **Revisable:** sí; vuelta atrás = sacar el bloque `charla_de_la_clinica` de `despachar` y redeploy.
+
+## 2026-10-28 — El control de la clínica sobre Asiri = Conocimiento + instrucciones de Información + MENSAJES FIJOS (no prompts de Turnos/Pagos)
+- **Qué:** se agregó un editor de 12 mensajes fijos (filas `msg_<CLAVE>`), con validación doble, vista previa, historial y "volver al estándar". No se agregó un cuadro de instrucciones para Turnos/Pagos/Urgencias/orquestador.
+- **Por qué:** esos agentes devuelven códigos y NO redactan lo que lee la paciente; editar su prompt no cambia el mensaje (placebo) y sí puede romper el agendado. Lo que la paciente lee de Turnos/Pagos sale de `TEXTOS` y eso es lo que la clínica sí quiere cambiar.
+- **Descartado por ahora:** (a) variantes rotativas de cada mensaje (anti-repetición): el corte de bucle compara TEXTOS iguales; con variantes dejaría de cortar. Primero hay que comparar por clave de mensaje. (b) "Redactor" con modelo (el código decide, el modelo redacta, el código verifica hechos): más inteligente pero más riesgo; recién después de la capacitación en vivo con las secretarias, en sombra y con verificación de hechos (sin banlist de frases, decisión del 07/10).
+- **Revisable:** sí. Vuelta atrás: dejar vacías las filas `msg_*` (el bot usa el estándar) o restaurar el backup PRE del Cerebro.
+
+## 2026-10-28 — Un audio transcripto es un mensaje normal; "pedir texto" solo si no hubo transcripción
+- **Regla:** el cerebro recibe `[AUDIO] <transcripción>`; solo `[AUDIO]` sin texto se contesta pidiendo que lo escriban. Si el orquestador pide texto para un audio transcripto, el código lo deriva a la secretaria con lo que dijo (nunca "no puedo escuchar").
+- **Por qué:** caso real 27/10 12:18; el v6 transcribía y procesaba el texto, el v7 lo perdió en la migración.
+- **Revisable:** sí (`audio_transcripto` en `despachar`).

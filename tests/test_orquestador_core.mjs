@@ -360,5 +360,70 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const e3 = Conf.elegir(rows, null, '', '2026-10-21', '', '');
   t('CF-H3 sin la hora actual se comporta como antes (todos los de hoy)', e3.ok && e3.cands.length === 2, e3); }
 
+// (28/10) AUDIOS: el v6 transcribía y el v7 recibe "[AUDIO] <transcripción>". Caso real 27/10 12:18: una paciente preguntó por la tomografía con o sin braquets
+// (audio transcripto) y Asiri contestó "no puedo escuchar audios". "Pedir el texto" solo vale si el audio llegó SIN transcripción.
+{ const CITA = 'Hola Iris, ¿le puede preguntar a la doctora si la tomografía la tengo que hacer con o sin los braquets?';
+  const pl = O.despachar(orq([{ a: 'pedir_texto' }]), { audio_transcripto: true, cita_audio: CITA });
+  t('AU1 audio transcripto que el orquestador mandó a pedir_texto: se deriva con lo que dijo', pl.fija === 'derivar' && pl.cita === CITA && pl.motivo === 'audio transcripto' && pl.audio_derivado === true, pl);
+  const pl2 = O.despachar(orq([{ a: 'pedir_texto' }]), { audio_transcripto: false });
+  t('AU2 un audio SIN transcripción sigue pidiendo que lo escriba', pl2.fija === 'pedir_texto' && !pl2.audio_derivado, pl2);
+  const pl3 = O.despachar(orq([{ a: 'informacion', pedido: 'tomografía' }]), { audio_transcripto: true, cita_audio: CITA });
+  t('AU3 si el orquestador ruteó bien el audio transcripto, no se toca', pl3.fija === null && !!pl3.informacion && !pl3.audio_derivado, pl3);
+  const pl4 = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'su frase', motivo: 'consulta clínica' }]), { audio_transcripto: true, cita_audio: CITA });
+  t('AU4 si ya derivó, conserva su cita y motivo', pl4.fija === 'derivar' && pl4.cita === 'su frase' && pl4.motivo === 'consulta clínica' && !pl4.audio_derivado, pl4);
+  const reu = O.reunir(pl, {}, { texto_paciente: '[AUDIO] ' + CITA });
+  const cc = O.componer(base({ plan: pl, res: {}, reunion: reu, texto_paciente: '[AUDIO] ' + CITA }));
+  t('AU5 la paciente recibe la derivación (no "no pude escuchar") y la secretaria el aviso con lo que dijo', cc.texto === O.TEXTOS.DERIVA && reu.derivar === true && /tomograf/i.test(String(reu.cita || '') + JSON.stringify(cc.avisos)), [reu, cc]);
+  t('AU6 el texto de "no se pudo escuchar" ya no dice que Asiri no escucha audios', !/no puedo escuchar audios/i.test(O.TEXTOS.PEDIR_TEXTO) && /audio/i.test(O.TEXTOS.PEDIR_TEXTO)); }
+
+// (28/10) MENSAJES FIJOS EDITABLES desde el panel (filas msg_<CLAVE>): la clínica cambia las palabras, el código decide cuándo salen.
+{ const NUEVO_NE = 'Perdón, no logré entender. ¿Podría escribirlo con otras palabras? Le ayudo con turnos, pagos o información.';
+  const NUEVO_DN = 'Para reservar necesito su nombre, su apellido y su DNI, todo en un solo mensaje, por favor.';
+  const planNE = O.despachar(orq([{ a: 'no_entendi' }]), {});
+  // Validación (la misma que corre el panel al guardar; acá es la red de seguridad)
+  t('MF1 un texto razonable es válido', O.mensajeInvalido('NO_ENTENDI', NUEVO_NE) === null);
+  t('MF2 vacío o muy corto se ignora', O.mensajeInvalido('NO_ENTENDI', '') !== null && O.mensajeInvalido('NO_ENTENDI', 'ok') !== null);
+  t('MF3 más de 400 caracteres se ignora', O.mensajeInvalido('NO_ENTENDI', 'a'.repeat(401)) === 'muy largo');
+  t('MF4 llaves dobles reservadas', O.mensajeInvalido('NO_ENTENDI', 'Hola {{nombre}}, no le entendí bien, disculpe.') === 'llaves reservadas');
+  t('MF5 un precio escrito a mano se rechaza (sale de Conocimiento)', O.mensajeInvalido('HOLA_ANUNCIO', 'Hola! Soy Asiri, la consulta sale $50.000 y es para usted.') === 'precio escrito a mano' && O.mensajeInvalido('HOLA_ANUNCIO', 'Hola! La consulta sale 50.000 pesos, venga.') === 'precio escrito a mano');
+  t('MF6 cuotas o dólares se rechazan', O.mensajeInvalido('NO_ENTENDI', 'No le entendí. Puede pagar en cuotas o en dólares si prefiere.') === 'habla de cuotas o dólares');
+  t('MF7 las preguntas tienen que seguir siendo preguntas', O.mensajeInvalido('PARA_QUIEN', 'Dígame para quién es el turno, por favor.') === 'tiene que ser una pregunta' && O.mensajeInvalido('PARA_QUIEN', '¿Para quién sería el turno?') === null && O.mensajeInvalido('CUAL_TURNO', 'Elija uno de estos turnos, por favor.') !== null && O.mensajeInvalido('OFERTA_PRIMERA', 'Le puedo buscar turno para la consulta.') !== null);
+  t('MF8 el pedido de datos del paciente nuevo sigue pidiendo nombre, apellido y DNI', O.mensajeInvalido('DATOS_NUEVO', 'Para reservar necesito su nombre y su DNI, en un solo mensaje.') === 'le falta pedir un dato' && O.mensajeInvalido('DATOS_NUEVO', NUEVO_DN) === null);
+  t('MF9 no se pueden editar los de urgencia ni los de pago', O.mensajeInvalido('URG_FALLO', 'Le paso su mensaje a la doctora ahora.') === 'clave no editable' && O.mensajeInvalido('RESERVA_PAGO', 'Para confirmar necesitamos el pago de la consulta antes.') === 'clave no editable');
+  // mensajesDe: solo los válidos que cambian algo
+  const md = O.mensajesDe({ NO_ENTENDI: NUEVO_NE, PEDIR_TEXTO: 'x', DERIVA: O.TEXTOS.DERIVA, URG_FALLO: 'Le paso su mensaje a la doctora ahora.', PARA_QUIEN: 'sin signo' });
+  t('MF10 mensajesDe se queda solo con los válidos que difieren del estándar', Object.keys(md).join() === 'NO_ENTENDI', md);
+  t('MF11 mensajesDe tolera basura (null, texto, números)', Object.keys(O.mensajesDe(null)).length === 0 && Object.keys(O.mensajesDe('x')).length === 0 && Object.keys(O.mensajesDe({ NO_ENTENDI: 5 })).length === 0);
+  // En la respuesta
+  const sin = O.componer(base({ plan: planNE, res: {}, reunion: {} }));
+  t('MF12 sin mensajes editados todo sale como siempre', sin.texto === O.TEXTOS.NO_ENTENDI, sin.texto);
+  const con = O.componer(base({ plan: planNE, res: {}, reunion: {}, mensajes: { NO_ENTENDI: NUEVO_NE } }));
+  t('MF13 con el mensaje editado sale el nuevo', con.texto === NUEVO_NE, con.texto);
+  const malo = O.componer(base({ plan: planNE, res: {}, reunion: {}, mensajes: { NO_ENTENDI: 'ok' } }));
+  t('MF14 un mensaje inválido en la base se ignora y sale el estándar (nunca se rompe la respuesta)', malo.texto === O.TEXTOS.NO_ENTENDI, malo.texto);
+  // Turnos: el texto lo arma OTRO workflow (con el estándar adentro) y el reemplazo igual aplica
+  const T_PREG2 = O.salidaTurnos({ output: 'PREGUNTA_DATOS_NUEVO', intermediateSteps: [] }, {});
+  const planT = O.despachar(orq([{ a: 'turnos', pedido: 'eligió horario' }]), {});
+  const dn = O.componer(base({ plan: planT, res: { turnos: T_PREG2 }, reunion: {}, mensajes: { DATOS_NUEVO: NUEVO_DN } }));
+  t('MF15 el pedido de datos que arma el agente de Turnos sale con el texto de la clínica', dn.texto === NUEVO_DN, dn.texto);
+  // Derivación: el mismo texto sale cuando lo arma el cerebro y cuando lo arma la herramienta de clínica
+  const DERIVA_NUEVA = 'Enseguida le aviso a la secretaria para que se comunique con usted.';
+  const rr = O.componer(base({ plan: planT, res: { turnos: T_PREG2 }, reunion: {}, ultimo_asiri: NUEVO_DN, repeticiones: 1, mensajes: { DATOS_NUEVO: NUEVO_DN, DERIVA: DERIVA_NUEVA } }));
+  t('MF16 el corte de bucle sigue andando con los textos editados (compara lo que la paciente vio) y deriva con el texto de la clínica', rr.bucle_cortado === true && rr.texto === DERIVA_NUEVA, rr);
+  const rr1 = O.componer(base({ plan: planT, res: { turnos: T_PREG2 }, reunion: {}, ultimo_asiri: NUEVO_DN, repeticiones: 0, mensajes: { DATOS_NUEVO: NUEVO_DN } }));
+  t('MF17 la misma pregunta editada por segunda vez se marca como repetición', rr1.repeticion === true && rr1.texto === NUEVO_DN, rr1);
+  // Una pasada: un texto nuevo que contiene el estándar de otro no se vuelve a reemplazar
+  const enc = O.aplicarMensajes(O.TEXTOS.NO_ENTENDI + ' ' + O.TEXTOS.DERIVA, { NO_ENTENDI: 'Perdón. ' + O.TEXTOS.DERIVA + ' (nuevo)', DERIVA: 'Chau, la secretaria lo llama.' });
+  t('MF18 el reemplazo es de una sola pasada (no encadena)', enc === 'Perdón. ' + O.TEXTOS.DERIVA + ' (nuevo) Chau, la secretaria lo llama.', enc);
+  // Caracteres especiales del texto nuevo no se interpretan ($&, $1)
+  t('MF19 un "$&" en el texto nuevo se copia literal', O.aplicarMensajes(O.TEXTOS.NO_ENTENDI, { NO_ENTENDI: 'Costo $& y $1 no aplican, disculpe.' }) === 'Costo $& y $1 no aplican, disculpe.');
+  // El read-back de la agenda no se toca aunque haya mensajes editados
+  const T_RB2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('gestionar_turno', { etapa: 'confirmacion', ok: true, texto_para_el_paciente: RB })] }, {});
+  const rb = O.componer(base({ plan: planT, prop: PROP, res: { turnos: T_RB2 }, reunion: {}, mensajes: { NO_ENTENDI: NUEVO_NE, DERIVA: DERIVA_NUEVA, DATOS_NUEVO: NUEVO_DN } }));
+  t('MF20 el "¿Procedo?" de la agenda sale intacto con mensajes editados', rb.texto === RB, rb.texto);
+  // Los 12 editables existen en TEXTOS y sus estándares pasan su propia validación (si no, el panel mostraría un estándar "inválido")
+  const todos = Object.keys(O.MENSAJES_EDITABLES);
+  t('MF21 los 12 editables existen en TEXTOS y su estándar es válido', todos.length === 12 && todos.every((k) => typeof O.TEXTOS[k] === 'string' && O.mensajeInvalido(k, O.TEXTOS[k]) === null), todos.filter((k) => O.mensajeInvalido(k, O.TEXTOS[k]) !== null).map((k) => k + ':' + O.mensajeInvalido(k, O.TEXTOS[k]))); }
+
 console.log(`\n${total - fallas}/${total} ${fallas ? 'FALLAS: ' + fallas : 'TODO OK'}`);
 process.exit(fallas ? 1 : 0);

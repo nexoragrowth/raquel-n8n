@@ -298,6 +298,49 @@ def main():
     a = R["Z26c la clínica escribió primero pero el contacto TIENE ficha"]["reps"][0]
     chequear("Z26c paciente con ficha: aunque la clínica haya escrito primero, se atiende como siempre", bool(llamados(a, "Derivar a secretaria")), a["salida"])
 
+    # (28/10) AUDIOS. Caso real 27/10 12:18: audio transcripto ("…la tomografía con o sin braquets?") y Asiri contestó "no puedo escuchar audios".
+    print("AUDIOS")
+    AUD = "[AUDIO] Hola Iris, ¿le puede preguntar a la doctora si la tomografía la tengo que hacer con o sin los braquets? [MEDIA:633cc86]"
+    AU = correr(wf, [
+        esc("AU-G1 audio transcripto y el orquestador pide texto", orq({"a": "pedir_texto"}), texto=AUD),
+        esc("AU-G2 audio SIN transcripción (solo el marcador de media)", orq({"a": "pedir_texto"}), texto="[AUDIO] [MEDIA:633cc86]"),
+        esc("AU-G3 audio con el orquestador bien ruteado", orq({"a": "derivar_secretaria", "cita": "pregunta por la tomografía con o sin braquets", "motivo": "consulta clínica"}), texto=AUD),
+    ])
+    a = AU["AU-G1 audio transcripto y el orquestador pide texto"]["reps"][0]
+    chequear("AU-G1 se deriva (no le dice que no puede escuchar) y la secretaria recibe lo que dijo", bool(llamados(a, "Derivar a secretaria")) and "escuchar" not in a["salida"]["texto"]
+             and "tomograf" in json.dumps(llamados(a, "Derivar a secretaria"), ensure_ascii=False).lower(), (a["salida"]["texto"], llamados(a, "Derivar a secretaria")))
+    a = AU["AU-G2 audio SIN transcripción (solo el marcador de media)"]["reps"][0]
+    chequear("AU-G2 si no hubo transcripción, pide que lo escriba (y no deriva)", "audio" in a["salida"]["texto"].lower() and not llamados(a, "Derivar a secretaria"), a["salida"]["texto"])
+    a = AU["AU-G3 audio con el orquestador bien ruteado"]["reps"][0]
+    chequear("AU-G3 si el orquestador ya derivó bien, sigue igual (una sola derivación)", len(llamados(a, "Derivar a secretaria")) == 1 and "escuchar" not in a["salida"]["texto"], a["salida"]["texto"])
+
+    # (28/10) MENSAJES FIJOS EDITABLES desde el panel: filas dir:msg_<CLAVE> de agente_directrices → el paciente lee las palabras de la clínica.
+    print("MENSAJES FIJOS EDITABLES")
+    NE_NUEVO = "Perdón, no logré entender. ¿Podría escribirlo con otras palabras? Le ayudo con turnos, pagos o información."
+    PRES_NUEVA = "Hola, soy Asiri, la asistente virtual de la Dra. Raquel."
+    DERIVA_NUEVA = "Enseguida le aviso a la secretaria para que se comunique con usted."
+    kb_msg = lambda **m: KB + [{"id": f"dir:msg_{k}", "contenido": v} for k, v in m.items()]
+    M = correr(wf, [
+        esc("MF-A no entendí + presentación editados", orq({"a": "no_entendi"}), texto="asdf qwe", pg={"Datos del consultorio": kb_msg(NO_ENTENDI=NE_NUEVO, PRESENTACION=PRES_NUEVA)}),
+        esc("MF-B mensaje inválido en la base", orq({"a": "no_entendi"}), texto="asdf qwe", pg={"Datos del consultorio": kb_msg(NO_ENTENDI="ok")}),
+        esc("MF-C mensaje vacío en la base", orq({"a": "no_entendi"}), texto="asdf qwe", pg={"Datos del consultorio": kb_msg(NO_ENTENDI="")}),
+        esc("MF-D derivación editada", orq({"a": "derivar_secretaria", "cita": "cuanto sale en dolares", "motivo": "presupuesto en dólares"}), texto="cuanto sale en dolares el tratamiento",
+            pg={"Datos del consultorio": kb_msg(DERIVA=DERIVA_NUEVA)}),
+        esc("MF-E sin ninguna fila msg_", orq({"a": "no_entendi"}), texto="asdf qwe"),
+    ])
+    a = M["MF-A no entendí + presentación editados"]["reps"][0]
+    chequear("MF-A el paciente lee la presentación y el 'no entendí' de la clínica (no los estándar)", a["salida"]["texto"] == PRES_NUEVA + "\n\n" + NE_NUEVO, a["salida"]["texto"])
+    chequear("MF-A2 lo que se guarda en memoria es lo que el paciente vio (así el corte de bucle compara bien la próxima vez)", mem(a)[1] is not None and mem(a)[1]["content"] == a["salida"]["texto"], mem(a))
+    a = M["MF-B mensaje inválido en la base"]["reps"][0]
+    chequear("MF-B un texto inválido se ignora: sale el estándar y no se rompe nada", "Disculpe, no le entendí bien" in a["salida"]["texto"] and "ok" != a["salida"]["texto"].strip(), a["salida"]["texto"])
+    a = M["MF-C mensaje vacío en la base"]["reps"][0]
+    chequear("MF-C una fila vacía = usar el estándar", "Disculpe, no le entendí bien" in a["salida"]["texto"], a["salida"]["texto"])
+    a = M["MF-D derivación editada"]["reps"][0]
+    chequear("MF-D la derivación que arma la herramienta de clínica sale con las palabras de la clínica", DERIVA_NUEVA in a["salida"]["texto"] and DERIVA not in a["salida"]["texto"], a["salida"]["texto"])
+    a = M["MF-E sin ninguna fila msg_"]["reps"][0]
+    chequear("MF-E sin filas msg_ (hoy, en producción) todo sale exactamente igual que antes", "Disculpe, no le entendí bien" in a["salida"]["texto"] and "Soy Asiri, la secretaria virtual de la Dra. Raquel." in a["salida"]["texto"], a["salida"]["texto"])
+    chequear("MF-F el cerebro lee las filas msg_ de la base (consulta SQL) y las pasa al armado final", "left(clave, 4) = 'msg_'" in txt and "mensajes: ctx.mensajes" in txt)
+
     print(f"\n{total - fallas}/{total} {'TODO OK' if not fallas else str(fallas) + ' FALLAS'}")
     sys.exit(1 if fallas else 0)
 

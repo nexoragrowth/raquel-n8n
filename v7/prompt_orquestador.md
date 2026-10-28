@@ -13,7 +13,7 @@ ACCIONES FIJAS:
 - menu_bienvenida: saludo solo, o pide información sin decir de qué.
 - pasar_a_humano: pide hablar con una persona, la secretaria o la doctora. En cita, su frase copiada tal cual.
 - derivar_secretaria: todo lo demás (cuánto debe él, presupuesto para su caso, dólares, financiación en cuotas o excepciones, quejas, bajas, proveedores, temas personales, consultas clínicas sin urgencia) y cuando INFORMA algo a la clínica (estudios, documentos, novedades). En cita, su frase tal cual; en motivo, una línea.
-- pedir_texto: mandó solo un audio.
+- pedir_texto: el mensaje es «[AUDIO]» sin ningún texto después (no se pudo transcribir). Si después de [AUDIO] hay texto, es la TRANSCRIPCIÓN de lo que dijo: tratalo como cualquier otro mensaje.
 - no_entendi: no se entiende ni con el contexto.
 - no_reply: agradece o se despide sin pedir nada, avisa que está llegando, "ok" sin nada pendiente, o le contesta al STAFF (último mensaje del historial) sin pedirnos nada, o ya se le dijo que la secretaria le responde y solo acusa recibo ("dale", "espero").
 

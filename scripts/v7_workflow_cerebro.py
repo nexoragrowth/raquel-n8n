@@ -31,7 +31,8 @@ SQL_DATOS = ("SELECT id::text AS id, contenido FROM knowledge_base WHERE id IN (
              "(SELECT 'asiri:' || id::text AS id, left(contenido, " + str(KB_ASIRI_LARGO) + ") AS contenido FROM knowledge_base "
              "WHERE metadata->>'asiri' = 'true' AND coalesce(metadata->>'archivado', '') <> 'true' AND id NOT IN (20, 21, 24, 25, 36, 39, 40, " + ", ".join(KB_EXTRA) + ") "
              "ORDER BY id LIMIT " + str(KB_ASIRI_MAX) + ") UNION ALL "
-             "SELECT 'dir:' || clave AS id, valor AS contenido FROM agente_directrices WHERE clave IN ('notas_para_asiri', 'menu_bienvenida') ORDER BY 1")
+             "SELECT 'dir:' || clave AS id, valor AS contenido FROM agente_directrices WHERE clave IN ('notas_para_asiri', 'menu_bienvenida') OR left(clave, 4) = 'msg_' ORDER BY 1")
+# (28/10) Mensajes fijos editables desde el panel: filas `msg_<CLAVE>` (ver OrquestadorCore.MENSAJES_EDITABLES). Vacío o inválido = sale el estándar.
 # (20/10, D3 del plan del 13/10; escalaciones reales 380–386) ¿Quién escribió PRIMERO en este chat? Si fue la clínica y el contacto no tiene ficha,
 # es una charla de la clínica (plomero, proveedor, técnico): Asiri no se mete. Es estructura (fuente del mensaje), no lectura del texto del paciente.
 SQL_PRIMERO = "SELECT message->'additional_kwargs'->>'source' AS fuente, message->>'type' AS tipo FROM n8n_chat_histories WHERE session_id = $1 ORDER BY id ASC LIMIT 1"
@@ -83,6 +84,12 @@ const datos = [kb['20'] && '- Horarios de atención: ' + kb['20'], kb['21'] && '
   .concat(Object.keys(kb).filter((k) => k.startsWith('asiri:')).sort((a, b) => Number(a.slice(6)) - Number(b.slice(6))).map((k) => '- ' + kb[k]))   // cargadas por la clínica desde el panel
   .filter(Boolean).join('\\n');
 const notas = kb['dir:notas_para_asiri'] || '';
+// (28/10) ¿Audio YA transcripto? Estructura, no lectura de lo que dijo el paciente: la entrada arma "[AUDIO] <transcripción>"; sin texto después no hubo transcripción.
+const texto_crudo = String(e.texto || '');
+const es_audio = texto_crudo.slice(0, 7).toUpperCase() === '[AUDIO]';
+const audio_cuerpo = es_audio ? texto_crudo.slice(7).replace(/\\[MEDIA:[^\\]]*\\]/g, '').trim() : '';
+const audio_transcripto = es_audio && audio_cuerpo.length > 0;
+const mensajes = {}; for (const k of Object.keys(kb)) if (k.startsWith('dir:msg_')) mensajes[k.slice(8)] = kb[k];   // (28/10) { NO_ENTENDI: 'texto', ... }; el core descarta lo inválido
 // (B2 de la crítica) Las notas del panel cambian el TONO, nunca el alcance: Información responde solo su lista cerrada de temas.
 const datos_info = 'DATOS DEL CONSULTORIO (son los únicos datos que podés dar)\\n' + (datos || '(sin datos cargados: respondé FUERA_DE_ALCANCE)')
   + (notas ? '\\n\\nNOTAS DE LA CLÍNICA (cambian el tono o la forma; nunca agregan temas ni habilitan otra cosa):\\n' + notas : '');
@@ -103,13 +110,13 @@ let primero = null; try { primero = $('Primer mensaje').first().json || null; } 
 const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && ident.ok !== true && ident.motivo === 'sin_ficha';
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
+return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
 JS_DESPACHO = """const ctx = $('Armar contexto').first().json;
 let o = {}; try { o = $('Orquestador').first().json || {}; } catch (x) { o = { error: 'sin salida' }; }
-return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true }) }];"""
+return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '' }) }];"""
 
 JS_RES = """const r = (n) => { try { const x = $(n); return x.isExecuted ? (x.first().json || null) : null; } catch (y) { return null; } };
 const res = { turnos: r('Agente Turnos'), pagos: r('Agente Pagos'), informacion: r('Agente Información'), urgencias: r('Agente Urgencias') };
@@ -135,7 +142,7 @@ const c = OrquestadorCore.componer({ modo: e.modo, texto_paciente: e.texto, exec
   derivar_res: r('Derivar a secretaria'), humano_res: r('Pasar a humano'), libros, hechos, prop, ofertas: pj('Redis GET ofertas', 'ofertas_raw', []),
   vistos: [].concat(pj('Redis GET turnos_vistos', 'vistos_raw', []) || [], recTurnos), bloque: String($('Redis GET bloque').first().json.bloque_raw || ''),
   bloque_exec: String($('Redis GET bloque_exec').first().json.bloque_exec_raw || ''), triaje: pj('Redis GET triaje', 'triaje_raw', null),
-  ultimo_asiri: ctx.ultimo_asiri || '', repeticiones: ctx.repeticiones || 0, menu: ctx.menu, anuncio: ctx.anuncio || '', consulta: ctx.consulta || '', datosPago: ctx.datos_pago, conversacion_nueva: ctx.conversacion_nueva === true, prop_pendiente: ctx.prop_pendiente === true });
+  ultimo_asiri: ctx.ultimo_asiri || '', repeticiones: ctx.repeticiones || 0, menu: ctx.menu, mensajes: ctx.mensajes || {}, anuncio: ctx.anuncio || '', consulta: ctx.consulta || '', datosPago: ctx.datos_pago, conversacion_nueva: ctx.conversacion_nueva === true, prop_pendiente: ctx.prop_pendiente === true });
 const vivo = e.modo === 'vivo';   // (08/10) solo avisa y guarda memoria con modo 'vivo' EXPLÍCITO
 if (vivo) for (const a of c.avisos) { try { await this.helpers.httpRequest({ method: 'POST', url: '""" + GRUPO + """', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }
 const texto = c.texto; const silencio = c.silencio === true;

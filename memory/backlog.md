@@ -1,5 +1,16 @@
 # Backlog — raquel-n8n
 
+## ⇢ 2026-10-28 — audios, mensajes fijos y control de la clínica
+- [x] Bug de audios transcriptos ("no puedo escuchar audios") corregido y desplegado en el Cerebro (prompt + red por código + texto). Falta: nada.
+- [x] Mensajes fijos editables (12) — bot desplegado (sin filas = sin cambio), panel commiteado.
+- [ ] **Desplegar el panel** (`bash deploy/redeploy.sh` en `nexora-whatsapp-agent`) y probar en producción: guardar un mensaje con la fila real, ver que Asiri lo usa en el próximo mensaje, volver al estándar. Dejar las filas `msg_*` vacías al terminar la prueba.
+- [ ] **Rescate de recordatorios tras reconectar WhatsApp** (pedido de Lucas 28/10): detectar citas de la fecha objetivo SIN fila en `recordatorios_enviados`, banner en el Inicio "Quedaron N sin enviar" + botón "Enviar ahora" (solo esas, con ritmo, registrando cada una); respetar `recordatorios_config`; NO usar el webhook manual (reenvía a quienes ya recibieron el aviso y no contestaron). Después, avisar por el grupo cuando la instancia vuelva a conectar con pendientes.
+- [ ] Precio duplicado en ~9 entradas de Conocimiento (`$50.000`): marcador `{{precio_consulta}}` resuelto por el cerebro desde la entrada 21 + ajustar la guarda de precios del panel.
+- [ ] Variantes de cada mensaje fijo (anti-repetición) — requiere que el corte de bucle compare por clave del mensaje, no por texto.
+- [ ] Vista de solo lectura de "cómo piensa cada agente" (orquestador + 4 agentes, explicado en lenguaje común) y probador "así contesta Asiri" (sombra) para la capacitación.
+- [ ] Redactor con modelo para los mensajes de bajo riesgo (en sombra, verificación de hechos) — después de la capacitación.
+- [ ] Capacitación en vivo con las secretarias: guion en `docs/cliente/04_Guion_Reunion_Secretaria.md` (agregar la parte de Mensajes fijos).
+
 ## ⇢ 2026-10-20 — v7 PARA TODOS (llave `v7:global`, ver current-state)
 - [x] v7 atiende a todos los pacientes (00:10 ART). Apagar: `python scripts/v7_global.py --off`.
 - [x] BOT-01 (respuesta tras un "no", @lid sin celular falso, doble pregunta de Información) + ruteo de pedidos múltiples (Pagos por código, orquestador "medium").

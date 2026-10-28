@@ -20,7 +20,7 @@ const OrquestadorCore = (() => {
   const TEXTOS = {
     DERIVA: 'Le paso con la secretaria para que lo atienda.',
     NO_ENTENDI: 'Disculpe, no le entendí bien. ¿Me lo puede escribir de otra forma? Puedo ayudarlo con turnos, pagos o información del consultorio.',
-    PEDIR_TEXTO: 'Disculpe, por este medio no puedo escuchar audios. ¿Me lo puede escribir, por favor?',
+    PEDIR_TEXTO: 'Disculpe, no pude escuchar bien su audio. ¿Me lo puede escribir, por favor?',   // (28/10) antes decía "no puedo escuchar audios": es falso, los audios se transcriben; esto es solo si la transcripción falló
     PRESENTACION: 'Soy Asiri, la secretaria virtual de la Dra. Raquel.',
     ERROR: 'Disculpe, tuve un inconveniente para responderle en este momento. Le aviso a la clínica para que se comunique con usted.',
     ERROR_PARCIAL: 'No pude resolver todo en este momento; le aviso a la clínica para que lo complete.',
@@ -46,6 +46,51 @@ const OrquestadorCore = (() => {
     return s.length >= 40 && s.length <= 900 && !/cuota|d[oó]lar|\busd\b|u\$s/i.test(s) && !/en qu[eé] (?:le |lo |la )?(?:puedo|podemos) ayudar/i.test(s);
   }
   const menu = (panel) => (menuValido(panel) ? String(panel).trim() : MENU);
+
+  // (28/10) MENSAJES FIJOS EDITABLES desde el panel (Asiri → "Mensajes fijos"; filas `msg_<CLAVE>` de agente_directrices). La clínica cambia las PALABRAS de estos
+  // textos; el código sigue decidiendo CUÁNDO salen. Cada uno se valida acá aunque el panel también lo haga (defensa en profundidad): uno que no pasa se ignora
+  // en silencio y sale el estándar. NO entran los de urgencia (URG_FALLO) ni los de pago (RESERVA_PAGO*): llevan una regla de negocio o de seguridad.
+  // `pregunta`: tiene que seguir siendo una pregunta (el paciente tiene que saber que le piden algo). `requiere`: lo que el agente de Turnos necesita que se pida.
+  const MENSAJES_EDITABLES = {
+    DERIVA: {}, NO_ENTENDI: {}, PEDIR_TEXTO: {}, PRESENTACION: {}, ERROR: {}, ERROR_PARCIAL: {}, SIN_TURNOS: {}, HOLA_ANUNCIO: {},
+    PARA_QUIEN: { pregunta: true }, CUAL_TURNO: { pregunta: true }, OFERTA_PRIMERA: { pregunta: true },
+    DATOS_NUEVO: { requiere: [/nombre/i, /apellido/i, /dni/i] },
+  };
+  const MENSAJE_MIN = 8, MENSAJE_MAX = 400;
+  // Motivo por el que el texto NO sirve como mensaje fijo (null = sirve). Sin precios escritos a mano: el precio sale de Conocimiento y se desactualiza si se copia acá.
+  function mensajeInvalido(clave, v) {
+    const def = MENSAJES_EDITABLES[clave];
+    if (!def) return 'clave no editable';
+    const s = String(v === undefined || v === null ? '' : v).trim();
+    if (s.length < MENSAJE_MIN) return 'muy corto';
+    if (s.length > MENSAJE_MAX) return 'muy largo';
+    if (s.includes('{{') || s.includes('}}')) return 'llaves reservadas';
+    if (/\$\s*\d|\d{1,3}(?:\.\d{3})+/.test(s)) return 'precio escrito a mano';
+    if (/cuota|d[oó]lar|\busd\b|u\$s/i.test(s)) return 'habla de cuotas o dólares';
+    if (def.pregunta && !s.includes('?')) return 'tiene que ser una pregunta';
+    if (def.requiere && !def.requiere.every((rx) => rx.test(s))) return 'le falta pedir un dato';
+    return null;
+  }
+  // `crudo` = { CLAVE: texto } tal como está en la base. Devuelve solo los que sirven y cambian algo.
+  function mensajesDe(crudo) {
+    const out = {};
+    if (!crudo || typeof crudo !== 'object') return out;
+    for (const k of Object.keys(MENSAJES_EDITABLES)) {
+      const v = crudo[k];
+      if (typeof v !== 'string' || !v.trim() || mensajeInvalido(k, v)) continue;
+      if (v.trim() !== TEXTOS[k]) out[k] = v.trim();
+    }
+    return out;
+  }
+  // Una sola pasada (no encadena: un texto nuevo que contenga el estándar de otro no se vuelve a reemplazar).
+  function aplicarMensajes(texto, mensajes) {
+    const claves = Object.keys(mensajes || {});
+    if (!texto || !claves.length) return texto;
+    const porBase = new Map(claves.map((k) => [TEXTOS[k], mensajes[k]]));
+    const bases = [...porBase.keys()].sort((a, b) => b.length - a.length);
+    const rx = new RegExp(bases.map((b) => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+    return texto.replace(rx, (m) => porBase.get(m));
+  }
 
   // ------------------------------------------------------------------------------------------------ ORQUESTADOR → plan (despacho por código)
   function textoModelo(salida) {
@@ -92,6 +137,13 @@ const OrquestadorCore = (() => {
         // (20/10, BOT-06) el saludo automático de un anuncio lleva la presentación de la clínica (KB 40), no el menú.
         plan.fija = fijas.has('presentacion_anuncio') ? 'anuncio' : fijas.has('menu_bienvenida') ? 'menu' : fijas.has('pedir_texto') ? 'pedir_texto' : fijas.has('no_reply') ? 'no_reply' : 'no_entendi';
       }
+    }
+    // (28/10, caso real 27/10 12:18: una paciente mandó un audio que SÍ se transcribió —"…la tomografía la tengo que hacer con o sin los braquets?"— y Asiri
+    // le contestó "no puedo escuchar audios") Red por ESTADO: "pedir el texto" solo vale si el audio llegó SIN transcripción. Si había transcripción y el
+    // orquestador igual dijo pedir_texto, el mensaje no se descarta: va a la secretaria con lo que dijo, y el aviso la lleva a contestarle.
+    if (plan.fija === 'pedir_texto' && c.audio_transcripto === true) {
+      plan.fija = 'derivar'; plan.cita = plan.cita || String(c.cita_audio || '').slice(0, 300); plan.motivo = plan.motivo || 'audio transcripto';
+      plan.audio_derivado = true;
     }
     // (B3) Ruteo por ESTADO, no por texto: con una confirmación pendiente que el paciente vio, Turnos SIEMPRE ve este mensaje y decide `confirma`
     // con el MENSAJE ACTUAL. Así un "👍" que el orquestador tomó por cierre no deja morir la propuesta.
@@ -369,7 +421,10 @@ const OrquestadorCore = (() => {
     const cita = lim(e.texto_paciente, 200);
     let triaje = e.triaje || null;
     if (!triaje && U && U.estado === 'derivado') triaje = { motivo: 'derivar_triaje', cita: lim(e.texto_paciente, 300) };
-    const fin = (texto, extra) => ({ texto: texto || null, silencio: !texto, derivar_triaje: false, triaje: null, avisos, motivo_chequeo, agentes, datos_pago_agregados: null, ...(extra || {}) });
+    // (28/10) Mensajes fijos que la clínica editó en el panel: se aplican UNA vez, sobre el texto ya compuesto (ver MENSAJES_EDITABLES).
+    const msgs = mensajesDe(e.mensajes);
+    const aplic = (t) => aplicarMensajes(t, msgs);
+    const fin = (texto, extra) => ({ texto: aplic(texto) || null, silencio: !texto, derivar_triaje: false, triaje: null, avisos, motivo_chequeo, agentes, datos_pago_agregados: null, ...(extra || {}) });
 
     // 1) Urgencia derivada: responde el triaje del v6. Si en el MISMO mensaje se escribió en la agenda, gana contarle lo que se hizo y la urgencia va al grupo.
     const otrasPartes = [T, P, I].filter((x) => x && x.texto).length;
@@ -465,8 +520,10 @@ const OrquestadorCore = (() => {
     // repetirla una tercera vez no ayuda: se deriva a la secretaria con aviso. Compara texto NUESTRO (el último de Asiri) con texto NUESTRO; las
     // confirmaciones, read-backs y éxitos de la agenda se dejan pasar (repetirlos es inocuo y suelen ser respuestas a un "sí" repetido).
     if (!hayOk && e.ultimo_asiri && !readbackEn(texto)) {
-      const antes = norm(e.ultimo_asiri), ahora = norm(texto);
-      const repetida = ahora && antes && (ahora === antes || (oracionesClave(texto).length > 0 && oracionesClave(texto).every((o) => antes.includes(norm(o)))));
+      // (28/10) se compara lo que la paciente VERÍA (con los mensajes editados), porque el último mensaje de Asiri se guardó así.
+      const visto = aplic(texto);
+      const antes = norm(e.ultimo_asiri), ahora = norm(visto);
+      const repetida = ahora && antes && (ahora === antes || (oracionesClave(visto).length > 0 && oracionesClave(visto).every((o) => antes.includes(norm(o)))));
       if (repetida && Number(e.repeticiones || 0) >= 1) {
         avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri repitió la misma respuesta y el paciente sigue sin resolver: «' + cita + '». Contestarle por este chat.' });
         return fin(TEXTOS.DERIVA, { bucle_cortado: true });
@@ -477,6 +534,6 @@ const OrquestadorCore = (() => {
     if (e.conversacion_nueva && !esMenu && !/soy asiri/i.test(texto)) texto = TEXTOS.PRESENTACION + '\n\n' + texto;
     return fin(texto, { datos_pago_agregados, ...(repeticion ? { repeticion: true } : {}), partes: { informacion: iTexto || null, pagos: pTexto || null, derivacion: dTexto || null, turnos: tTexto || null } });
   }
-  return { AGENTES, FIJAS, TEXTOS, MENU, menuValido, menu, parsear, despachar, pasosDe, codigo, textoTurnos, salidaTurnos, salidaPagos, salidaInformacion, salidaUrgencias, urgenciaPendiente, reunir, componer, norm };
+  return { AGENTES, FIJAS, TEXTOS, MENU, menuValido, menu, MENSAJES_EDITABLES, mensajeInvalido, mensajesDe, aplicarMensajes, parsear, despachar, pasosDe, codigo, textoTurnos, salidaTurnos, salidaPagos, salidaInformacion, salidaUrgencias, urgenciaPendiente, reunir, componer, norm };
 })();
 if (typeof module !== 'undefined') module.exports = OrquestadorCore;
