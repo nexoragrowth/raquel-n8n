@@ -376,6 +376,22 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   t('AU5 la paciente recibe la derivación (no "no pude escuchar") y la secretaria el aviso con lo que dijo', cc.texto === O.TEXTOS.DERIVA && reu.derivar === true && /tomograf/i.test(String(reu.cita || '') + JSON.stringify(cc.avisos)), [reu, cc]);
   t('AU6 el texto de "no se pudo escuchar" ya no dice que Asiri no escucha audios', !/no puedo escuchar audios/i.test(O.TEXTOS.PEDIR_TEXTO) && /audio/i.test(O.TEXTOS.PEDIR_TEXTO)); }
 
+// (28/10) COMPROBANTES Y NOMBRES DE AGENTE (auditoría v6->v7): el comprobante marcado por la entrada siempre pasa por Pagos; "payments" (caso real 26/10) se entiende.
+{ const pl = O.despachar(orq([{ a: 'turnos', pedido: 'responde al recordatorio' }]), { comprobante_marcado: true, recordatorio_pendiente: true });
+  t('CP1 comprobante marcado con recordatorio pendiente: Pagos entra por código además de Turnos (caso 23/10 ejec 321861)', !!pl.pagos && pl.pagos_por_codigo === true && pl.comprobante_forzado === true && !!pl.turnos, pl);
+  const pl2 = O.despachar(orq([{ a: 'pagos', pedido: 'comprobante' }]), { comprobante_marcado: true });
+  t('CP2 si el orquestador ya mandó a Pagos, no se duplica ni se marca forzado', pl2.pagos === 'comprobante' && !pl2.comprobante_forzado, pl2);
+  const pl3 = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'x', motivo: 'y' }]), { comprobante_marcado: true });
+  t('CP3 comprobante que el orquestador derivó: Pagos igual lo registra (y la derivación sigue)', !!pl3.pagos && pl3.fija === 'derivar', pl3);
+  const pl4 = O.despachar(orq([{ a: 'pasar_a_humano', cita: 'quiero hablar' }]), { comprobante_marcado: true });
+  t('CP4 si pidió una persona, no se fuerza Pagos (manda el humano)', !pl4.pagos && pl4.fija === 'humano', pl4);
+  const pl5 = O.despachar(orq([{ a: 'payments', pedido: 'comprobante' }]), {});
+  t('CP5 el agente "payments" se entiende como pagos y no se descarta', pl5.pagos === 'comprobante' && pl5.descartados.length === 0, pl5);
+  const pl6 = O.despachar(orq([{ a: 'Appointments', pedido: 'turno' }, { a: 'inventado', pedido: 'x' }]), {});
+  t('CP6 alias en singular/inglés; lo desconocido sigue descartándose', pl6.turnos === 'turno' && pl6.descartados.join() === 'inventado', pl6);
+  const pl7 = O.despachar(orq([{ a: 'no_reply' }]), { comprobante_marcado: false });
+  t('CP7 sin comprobante marcado no se agrega nada', !pl7.pagos && pl7.fija === 'no_reply', pl7); }
+
 // (28/10) MENSAJES FIJOS EDITABLES desde el panel (filas msg_<CLAVE>): la clínica cambia las palabras, el código decide cuándo salen.
 { const NUEVO_NE = 'Perdón, no logré entender. ¿Podría escribirlo con otras palabras? Le ayudo con turnos, pagos o información.';
   const NUEVO_DN = 'Para reservar necesito su nombre, su apellido y su DNI, todo en un solo mensaje, por favor.';

@@ -949,5 +949,17 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 
 ## 2026-10-28 — Un audio transcripto es un mensaje normal; "pedir texto" solo si no hubo transcripción
 - **Regla:** el cerebro recibe `[AUDIO] <transcripción>`; solo `[AUDIO]` sin texto se contesta pidiendo que lo escriban. Si el orquestador pide texto para un audio transcripto, el código lo deriva a la secretaria con lo que dijo (nunca "no puedo escuchar").
-- **Por qué:** caso real 27/10 12:18; el v6 transcribía y procesaba el texto, el v7 lo perdió en la migración.
+- **Por qué:** caso real 27/10 09:18 hora Jujuy (12:18 UTC); el v6 transcribía y procesaba el texto, el v7 lo perdió en la migración.
 - **Revisable:** sí (`audio_transcripto` en `despachar`).
+
+## 2026-10-28 (2.ª) — REVIERTE la decisión de la mañana: la clínica SÍ controla los prompts de los agentes
+- **Qué:** el panel vuelve a dar control sobre los prompts de los agentes (orquestador, Información, Turnos, Pagos, Urgencias) además del conocimiento. Diseño: esqueleto bloqueado en el repo + partes editables (`prm_*` en `agente_directrices`), leídas en cada mensaje, con fallback al texto del repo. Lógica de negocio/arquitectura se cambia aparte con Claude Code.
+- **Por qué:** pedido explícito de Lucas ("es importante poder controlar todo… directriz (prompts agents) como conocimiento"); el editor del v6 se había borrado sin su OK (BOT-14 pedía solo avisar/bloquear); mi argumento "placebo" valía para la redacción pero no para el ruteo ni para Información.
+- **Descartado:** reeditar el workflow por API como el panel viejo (el prompt del orquestador vive dentro de un nodo Code y los otros dentro de un literal JSON en una expresión; los `apply_*` lo pisarían; viola "cero PUT sin backup" en runtime); prompt completo editable (rompe el contrato de salida; causa raíz 2 del 9/5 fue texto contradictorio).
+- **Revisable:** sí.
+
+## 2026-10-28 (3.ª) — Un comprobante marcado por la entrada siempre pasa por Pagos; alias de agentes; sticker/emoji = silencio; mensaje mixto se parte
+- **Qué:** red por estado (`comprobante_marcado`, estructura que arma el sistema) + alias cerrados de nombres de agente + 3 líneas del prompt del orquestador (sacar "informa algo"; sticker/emoji a silencio; parte fuera de alcance a derivar y el resto a Información).
+- **Por qué:** auditoría v6→v7 (casos reales 23/10 ejec 321861, 26/10 "payments", 22/10 sticker; derivación de más medida).
+- **Estado:** en el repo y probado; deploy pendiente del OK de Lucas.
+- **Revisable:** sí.

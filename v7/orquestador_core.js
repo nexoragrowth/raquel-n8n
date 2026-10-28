@@ -98,6 +98,10 @@ const OrquestadorCore = (() => {
     if (typeof salida === 'string') return salida;
     return String(salida.text !== undefined ? salida.text : (salida.output !== undefined ? salida.output : ''));
   }
+  // (28/10, caso real 26/10: el orquestador devolvió el agente "payments" y se perdió el registro de un comprobante) Nombres de agente en inglés o en singular: es
+  // vocabulario del sistema (no texto del paciente), una lista cerrada. Lo que no esté acá sigue yendo a `descartados`.
+  const ALIAS_AGENTE = { payments: 'pagos', payment: 'pagos', pago: 'pagos', appointments: 'turnos', appointment: 'turnos', turno: 'turnos', info: 'informacion', information: 'informacion', 'información': 'informacion', emergency: 'urgencias', emergencies: 'urgencias', urgencia: 'urgencias' };
+  const nombreAgente = (a) => ALIAS_AGENTE[a] || a;
   function parsear(salida) {
     if (!salida || (typeof salida === 'object' && salida.error)) return { ok: false, motivo: 'error_modelo' };
     const t = textoModelo(salida).trim();
@@ -105,7 +109,7 @@ const OrquestadorCore = (() => {
     if (i < 0 || j < i) return { ok: false, motivo: 'sin_json', crudo: lim(t, 300) };
     let o; try { o = JSON.parse(t.slice(i, j + 1)); } catch (x) { return { ok: false, motivo: 'json_invalido', crudo: lim(t, 300) }; }
     const pasos = Array.isArray(o) ? o : (Array.isArray(o && o.pasos) ? o.pasos : []);
-    return { ok: true, pasos: pasos.filter((p) => p && typeof p === 'object').map((p) => ({ a: lim(p.a || p.agente || p.accion, 40).toLowerCase(), pedido: lim(p.pedido, 400), cita: lim(p.cita, 300), motivo: lim(p.motivo, 160) })) };
+    return { ok: true, pasos: pasos.filter((p) => p && typeof p === 'object').map((p) => ({ a: nombreAgente(lim(p.a || p.agente || p.accion, 40).toLowerCase()), pedido: lim(p.pedido, 400), cita: lim(p.cita, 300), motivo: lim(p.motivo, 160) })) };
   }
   const PIDE_DATOS_PAGO = /\balias\b|\bcbu\b|\bcvu\b|datos\s+(?:para\s+(?:transferir|la\s+transferencia|pagar)|bancarios|de\s+(?:la\s+)?cuenta|de\s+pago)|n[uú]mero\s+de\s+cuenta/i;
   // ctx: { prop_pendiente: hay una confirmación guardada, vigente, que el paciente VIO (estado, no texto) }
@@ -145,6 +149,10 @@ const OrquestadorCore = (() => {
       plan.fija = 'derivar'; plan.cita = plan.cita || String(c.cita_audio || '').slice(0, 300); plan.motivo = plan.motivo || 'audio transcripto';
       plan.audio_derivado = true;
     }
+    // (28/10, caso real 23/10 ejec 321861: un comprobante con recordatorio pendiente fue solo a Turnos y nadie registró el pago) Un comprobante MARCADO por la
+    // entrada ("[IMAGEN] TIPO: COMPROBANTE", clasificado por la visión del workflow de entrada, no por texto del paciente) siempre pasa por Pagos, además de lo que el
+    // orquestador haya decidido. Por ESTADO, como las otras redes.
+    if (c.comprobante_marcado === true && !plan.pagos && plan.fija !== 'humano') { plan.pagos = 'registrar el comprobante de pago que mandó (imagen marcada como comprobante)'; plan.pagos_por_codigo = true; plan.comprobante_forzado = true; }
     // (B3) Ruteo por ESTADO, no por texto: con una confirmación pendiente que el paciente vio, Turnos SIEMPRE ve este mensaje y decide `confirma`
     // con el MENSAJE ACTUAL. Así un "👍" que el orquestador tomó por cierre no deja morir la propuesta.
     if (c.prop_pendiente && plan.fija !== 'humano' && !plan.turnos) { plan.turnos = 'responde a la confirmación pendiente'; plan.turnos_por_estado = true; }

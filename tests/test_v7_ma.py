@@ -101,7 +101,7 @@ def main():
              and all(".datos" not in next(n for n in subs[k]["nodes"] if n["name"] == "Agente")["parameters"]["options"]["systemMessage"] for k in ("turnos", "pagos", "urgencias")))
     prompts = {"orquestador": C.PROMPT_ORQ, **M.PROMPTS}
     for k, p in prompts.items():
-        tope = 2900 if k == "orquestador" else 2500   # (08/10) +derivar cuando INFORMA algo y no_reply tras derivar (REAL-05/08); (20/10) +lo que NUNCA se deriva (vivo 318965); sigue ~8× más chico que los 22 k del v6
+        tope = 3300 if k == "orquestador" else 2500   # (28/10) 2900 -> 3300 (audios transcriptos, comprobantes, mensajes mixtos; probado con el modelo real): la regla de audios transcriptos (+158) está probada con el modelo real; (08/10) +derivar cuando INFORMA algo y no_reply tras derivar (REAL-05/08); (20/10) +lo que NUNCA se deriva (vivo 318965); sigue ~8× más chico que los 22 k del v6
         chequear(f"A10 prompt {k}: < {tope} caracteres ({len(p)})", len(p) < tope, len(p))
         chequear(f"A11 prompt {k}: sin 'Te esperamos', 'venite', 'ahora mismo' ni pedir que confirme la asistencia (control de texto NUESTRO)",
                  not re.search(r"te esperamos|los esperamos|lo esperamos|venite|ahora mismo|confirme su asistencia|pida confirmaci", p, re.I), p[:200])

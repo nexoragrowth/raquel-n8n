@@ -1,5 +1,16 @@
 # Backlog — raquel-n8n
 
+## ⇢ 2026-10-28 (tarde) — después de la auditoría v6→v7 (`docs/auditoria-v6-v7-2026-10-28.md`)
+- [ ] **OK de Lucas para desplegar** `scripts/apply_cerebro_auditoria.py --apply` (arreglos ya probados; backup + check_triaje incluidos) y correr la batería en sombra con el modelo real sobre lo tocado (sticker, comprobante, mensaje mixto, respuesta a la secretaria, audio con texto previo).
+- [ ] **Editor de prompts del panel (diseño B):** catálogo + `v7/prompt_core.js` + slots `prm_*` + UI `/asiri/instrucciones` + probador en sombra. Despliega 5 workflows con el default idéntico; luego filas.
+- [ ] **Sección "Piden hablar con una persona":** `/atencion/personas`, destino secretaria/doctora (`pasar_a_humano.destino`), cierre automático al contestar la clínica (trigger fail-safe sobre `n8n_chat_histories`), limpiar los 42 casos viejos, espera en horario hábil, push (fase 2).
+- [ ] **No contestar encima de la secretaria** con pacientes con ficha: hoy solo regla de prompt; decidir ventana (1 h actual vs 24 h, propuesta D3) con la Dra.
+- [ ] **Batería de ruteo con el modelo real** (urgencias 100 %, 0 falsos "confirma", pedidos múltiples) que el diseño exigía y nunca se construyó.
+- [ ] **Salud del v7:** Health Check/Vigía que cubran al v7 y alerta de "paciente sin respuesta"; segundo canal de alertas (hoy solo Evolution: 85 ejecuciones fallidas el 17–19/10 sin aviso).
+- [ ] **Higiene (con OK):** desactivar 21 workflows de prueba con webhook abierto (uno borra memoria) y 4 cerebros v7 retirados; mover credenciales fuera de los nodos; Reportero semanal (contar comprobantes v7 como operativo); Check Session Age.
+- [ ] Reglas de la clínica sin conectar: 20 fichas de Conocimiento (KB 9, 10, 14, 17, 18, 27…) que ningún agente lee; resolver KB 17 (turno único) y KB 9 con la Dra.
+- [ ] Textos de cortesía: el v6 respondía "de nada"; decidir si el v7 también.
+
 ## ⇢ 2026-10-28 — audios, mensajes fijos y control de la clínica
 - [x] Bug de audios transcriptos ("no puedo escuchar audios") corregido y desplegado en el Cerebro (prompt + red por código + texto). Falta: nada.
 - [x] Mensajes fijos editables (12) — bot desplegado (sin filas = sin cambio), panel commiteado.

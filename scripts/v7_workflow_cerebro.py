@@ -86,9 +86,11 @@ const datos = [kb['20'] && '- Horarios de atención: ' + kb['20'], kb['21'] && '
 const notas = kb['dir:notas_para_asiri'] || '';
 // (28/10) ¿Audio YA transcripto? Estructura, no lectura de lo que dijo el paciente: la entrada arma "[AUDIO] <transcripción>"; sin texto después no hubo transcripción.
 const texto_crudo = String(e.texto || '');
-const es_audio = texto_crudo.slice(0, 7).toUpperCase() === '[AUDIO]';
-const audio_cuerpo = es_audio ? texto_crudo.slice(7).replace(/\\[MEDIA:[^\\]]*\\]/g, '').trim() : '';
-const audio_transcripto = es_audio && audio_cuerpo.length > 0;
+const i_audio = texto_crudo.toUpperCase().indexOf('[AUDIO]');   // (28/10) en cualquier parte: el buffer de 22 s puede juntar un texto escrito antes con el audio
+const audio_cuerpo = i_audio >= 0 ? texto_crudo.slice(i_audio + 7).replace(/\[MEDIA:[^\]]*\]/g, '').trim() : '';
+const audio_transcripto = i_audio >= 0 && audio_cuerpo.length > 0;
+// (28/10) Comprobante MARCADO por la visión de la entrada ("[IMAGEN] ... TIPO: COMPROBANTE"): estructura que arma el sistema, no texto del paciente.
+const comprobante_marcado = texto_crudo.toUpperCase().indexOf('[IMAGEN]') >= 0 && texto_crudo.indexOf('TIPO: COMPROBANTE') >= 0;
 const mensajes = {}; for (const k of Object.keys(kb)) if (k.startsWith('dir:msg_')) mensajes[k.slice(8)] = kb[k];   // (28/10) { NO_ENTENDI: 'texto', ... }; el core descarta lo inválido
 // (B2 de la crítica) Las notas del panel cambian el TONO, nunca el alcance: Información responde solo su lista cerrada de temas.
 const datos_info = 'DATOS DEL CONSULTORIO (son los únicos datos que podés dar)\\n' + (datos || '(sin datos cargados: respondé FUERA_DE_ALCANCE)')
@@ -110,13 +112,13 @@ let primero = null; try { primero = $('Primer mensaje').first().json || null; } 
 const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && ident.ok !== true && ident.motivo === 'sin_ficha';
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
+return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), comprobante_marcado, charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
 JS_DESPACHO = """const ctx = $('Armar contexto').first().json;
 let o = {}; try { o = $('Orquestador').first().json || {}; } catch (x) { o = { error: 'sin salida' }; }
-return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '' }) }];"""
+return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '', comprobante_marcado: ctx.comprobante_marcado === true }) }];"""
 
 JS_RES = """const r = (n) => { try { const x = $(n); return x.isExecuted ? (x.first().json || null) : null; } catch (y) { return null; } };
 const res = { turnos: r('Agente Turnos'), pagos: r('Agente Pagos'), informacion: r('Agente Información'), urgencias: r('Agente Urgencias') };

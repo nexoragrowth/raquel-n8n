@@ -314,6 +314,26 @@ def main():
     a = AU["AU-G3 audio con el orquestador bien ruteado"]["reps"][0]
     chequear("AU-G3 si el orquestador ya derivó bien, sigue igual (una sola derivación)", len(llamados(a, "Derivar a secretaria")) == 1 and "escuchar" not in a["salida"]["texto"], a["salida"]["texto"])
 
+    # (28/10) Auditoría v6->v7: audio con texto escrito ANTES (buffer de 22 s), comprobante forzado a Pagos y agente "payments".
+    print("AUDITORIA v6->v7")
+    COMPROB = "[IMAGEN] TIPO: COMPROBANTE | MONTO: 50000 | DESTINATARIO: Laura Raquel Rodriguez | FECHA: 27/10/2026 | HORA: 09:17 | DESCRIPCION: Comprobante de transferencia"
+    P_COMP = sub("pagos", "Recibido. Dejé anotado su aviso de pago.", "pago_registrado")
+    AX = correr(wf, [
+        esc("AX-1 audio con texto antes y el orquestador pide texto", orq({"a": "pedir_texto"}), texto="hola buenas\n" + AUD),
+        esc("AX-2 comprobante: el orquestador manda solo a Turnos", orq({"a": "turnos", "pedido": "responde al recordatorio"}), texto=COMPROB,
+            subwf={"Agente Turnos": sub("turnos", "", "no_reply", codigo="[NO_REPLY]"), "Agente Pagos": P_COMP}),
+        esc("AX-3 el orquestador devuelve el agente payments", orq({"a": "payments", "pedido": "comprobante de pago"}), texto=COMPROB, subwf={"Agente Pagos": P_COMP}),
+        esc("AX-4 texto normal: no se fuerza Pagos", orq({"a": "informacion", "pedido": "precio"}), texto="cuanto sale la consulta", subwf={"Agente Información": I_PRECIO}),
+    ])
+    a = AX["AX-1 audio con texto antes y el orquestador pide texto"]["reps"][0]
+    chequear("AX-1 un audio transcripto detrás de un texto previo también se deriva (no 'no pude escuchar')", bool(llamados(a, "Derivar a secretaria")) and "escuchar" not in a["salida"]["texto"], a["salida"]["texto"])
+    a = AX["AX-2 comprobante: el orquestador manda solo a Turnos"]["reps"][0]
+    chequear("AX-2 el comprobante marcado entra a Pagos por código aunque el orquestador solo eligió Turnos", len(llamados(a, "Agente Pagos")) == 1 and "Recibido" in a["salida"]["texto"], (a["salida"]["texto"], len(llamados(a, "Agente Pagos"))))
+    a = AX["AX-3 el orquestador devuelve el agente payments"]["reps"][0]
+    chequear("AX-3 'payments' llega al agente Pagos (una sola vez)", len(llamados(a, "Agente Pagos")) == 1 and "Recibido" in a["salida"]["texto"], (a["salida"]["texto"], len(llamados(a, "Agente Pagos"))))
+    a = AX["AX-4 texto normal: no se fuerza Pagos"]["reps"][0]
+    chequear("AX-4 un mensaje sin comprobante no llama a Pagos", len(llamados(a, "Agente Pagos")) == 0, len(llamados(a, "Agente Pagos")))
+
     # (28/10) MENSAJES FIJOS EDITABLES desde el panel: filas dir:msg_<CLAVE> de agente_directrices → el paciente lee las palabras de la clínica.
     print("MENSAJES FIJOS EDITABLES")
     NE_NUEVO = "Perdón, no logré entender. ¿Podría escribirlo con otras palabras? Le ayudo con turnos, pagos o información."
