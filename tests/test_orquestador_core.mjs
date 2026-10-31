@@ -392,6 +392,24 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const pl7 = O.despachar(orq([{ a: 'no_reply' }]), { comprobante_marcado: false });
   t('CP7 sin comprobante marcado no se agrega nada', !pl7.pagos && pl7.fija === 'no_reply', pl7); }
 
+// (31/10) LE CONTESTA A LA SECRETARIA (< 6 h): si el orquestador solo deriva, silencio (la secretaria ya está en la charla).
+{ const der = orq([{ a: 'derivar_secretaria', cita: 'ya le mande los estudios por mail', motivo: 'informa estudios' }]);
+  const p1 = O.despachar(der, { staff_reciente: true });
+  t('SR1 deriva solo + staff reciente: silencio sin aviso (caso de la batería del 28/10)', p1.fija === 'no_reply' && p1.staff_silencio === true && !p1.cita, p1);
+  const p2 = O.despachar(der, { staff_reciente: false });
+  t('SR2 sin staff reciente (más de 6 h o nunca): deriva como siempre', p2.fija === 'derivar' && !p2.staff_silencio, p2);
+  const p3 = O.despachar(orq([{ a: 'informacion', pedido: 'precio' }, { a: 'derivar_secretaria', cita: 'y lo mio', motivo: 'deuda' }]), { staff_reciente: true });
+  t('SR3 si además hay un pedido a un agente, no se silencia', p3.fija === 'derivar' && !!p3.informacion && !p3.staff_silencio, p3);
+  const p4 = O.despachar(orq([{ a: 'pasar_a_humano', cita: 'quiero hablar con alguien' }]), { staff_reciente: true });
+  t('SR4 pedir una persona nunca se silencia', p4.fija === 'humano' && !p4.staff_silencio, p4);
+  const p5 = O.despachar(der, { staff_reciente: true, recordatorio_pendiente: true });
+  t('SR5 con recordatorio pendiente, Turnos ve el mensaje: no se silencia', !!p5.turnos && !p5.staff_silencio, p5);
+  const p6 = O.despachar(orq([{ a: 'urgencias', pedido: 'dolor' }, { a: 'derivar_secretaria', cita: 'x', motivo: 'y' }]), { staff_reciente: true });
+  t('SR6 una urgencia nunca se silencia', !!p6.urgencias && !p6.staff_silencio, p6);
+  const reu = O.reunir(p1, {}, { texto_paciente: 'ya le mande los estudios por mail' });
+  const cc = O.componer(base({ plan: p1, res: {}, reunion: reu }));
+  t('SR7 el silencio no deriva ni manda texto', reu.derivar !== true && cc.silencio === true && !cc.texto, [reu, cc]); }
+
 // (28/10) MENSAJES FIJOS EDITABLES desde el panel (filas msg_<CLAVE>): la clínica cambia las palabras, el código decide cuándo salen.
 { const NUEVO_NE = 'Perdón, no logré entender. ¿Podría escribirlo con otras palabras? Le ayudo con turnos, pagos o información.';
   const NUEVO_DN = 'Para reservar necesito su nombre, su apellido y su DNI, todo en un solo mensaje, por favor.';

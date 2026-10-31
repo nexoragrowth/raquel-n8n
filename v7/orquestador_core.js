@@ -166,6 +166,10 @@ const OrquestadorCore = (() => {
     }
     // (20/10, D3; escalaciones reales 380–386: plomero, proveedor, técnico) Charla que inició la CLÍNICA con un contacto SIN ficha: Asiri no
     // responde, no deriva y no avisa al grupo (la secretaria ya está en esa charla). Solo una urgencia que vea el orquestador sigue su camino.
+    // (31/10, Lucas: "el silencio dura 1 h"; medido: 23 de 27 respuestas tras un mensaje del staff fueron pasada la hora) Le contesta a la secretaria: si lo
+    // último que no escribió el paciente es del STAFF (< 6 h) y el orquestador SOLO decidió derivar (ningún agente), la secretaria ya está en esa charla:
+    // silencio y sin aviso al grupo. No toca pasar_a_humano, urgencias ni pedidos a agentes (turnos, pagos, información, recordatorio, confirmación).
+    if (c.staff_reciente === true && plan.fija === 'derivar' && !AGENTES.some((a) => plan[a])) { plan.fija = 'no_reply'; plan.cita = ''; plan.motivo = 'contesta_al_staff'; plan.staff_silencio = true; }
     if (c.charla_de_la_clinica) {
       plan.turnos = plan.pagos = plan.informacion = null; plan.turnos_por_estado = false;
       plan.fija = 'no_reply'; plan.cita = ''; plan.motivo = 'charla_de_la_clinica'; plan.charla_de_la_clinica = true;

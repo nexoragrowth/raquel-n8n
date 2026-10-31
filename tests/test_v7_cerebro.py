@@ -334,6 +334,23 @@ def main():
     a = AX["AX-4 texto normal: no se fuerza Pagos"]["reps"][0]
     chequear("AX-4 un mensaje sin comprobante no llama a Pagos", len(llamados(a, "Agente Pagos")) == 0, len(llamados(a, "Agente Pagos")))
 
+    # (31/10) Le contesta a la secretaria (< 6 h, por ESTADO): si el orquestador solo deriva, silencio y sin aviso al grupo.
+    print("CONTESTA A LA SECRETARIA")
+    fila_staff = lambda iso: [{"message": {"type": "ai", "content": "Hola! Ya te dejé reservado el jueves a las 10.", "additional_kwargs": {"source": "wa_outbound"}}, "created_at": iso}]
+    DER = orq({"a": "derivar_secretaria", "cita": "ya le mande los estudios por mail", "motivo": "informa estudios"})
+    SR = correr(wf, [
+        esc("SR-1 staff hace 2 h y el orquestador solo deriva", DER, texto="dale, ya le mande los estudios por mail", pg={"Historial": fila_staff("2026-10-05T10:36:00Z")}),
+        esc("SR-2 staff hace 7 h y el orquestador solo deriva", DER, texto="dale, ya le mande los estudios por mail", pg={"Historial": fila_staff("2026-10-05T05:30:00Z")}),
+        esc("SR-3 staff hace 2 h y pide el precio", orq({"a": "informacion", "pedido": "precio de la consulta"}), texto="y cuanto sale la consulta?",
+            pg={"Historial": fila_staff("2026-10-05T10:36:00Z")}, subwf={"Agente Información": I_PRECIO}),
+    ])
+    a = SR["SR-1 staff hace 2 h y el orquestador solo deriva"]["reps"][0]
+    chequear("SR-1 contesta a la secretaria (2 h): silencio, sin derivar ni avisar al grupo", a["salida"]["silencio"] is True and not llamados(a, "Derivar a secretaria") and not a["avisos"], (a["salida"], a["avisos"]))
+    a = SR["SR-2 staff hace 7 h y el orquestador solo deriva"]["reps"][0]
+    chequear("SR-2 pasadas las 6 h: deriva como siempre", bool(llamados(a, "Derivar a secretaria")) and a["salida"]["texto"], a["salida"]["texto"])
+    a = SR["SR-3 staff hace 2 h y pide el precio"]["reps"][0]
+    chequear("SR-3 un pedido real a un agente se responde aunque la secretaria haya escrito hace poco", "$50.000" in (a["salida"]["texto"] or ""), a["salida"]["texto"])
+
     # (28/10) MENSAJES FIJOS EDITABLES desde el panel: filas dir:msg_<CLAVE> de agente_directrices → el paciente lee las palabras de la clínica.
     print("MENSAJES FIJOS EDITABLES")
     NE_NUEVO = "Perdón, no logré entender. ¿Podría escribirlo con otras palabras? Le ayudo con turnos, pagos o información."

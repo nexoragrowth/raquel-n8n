@@ -75,6 +75,10 @@ const rec = $('Recordatorios').all().map((i) => i.json).filter((r) => r && r.id_
 // ESTADO, no texto: hay recordatorios abiertos y el último mensaje que NO es del paciente es un recordatorio (source reminder_note).
 let ultimoNoPaciente = null; for (const f of filas) { const m = msg(f); if (!m || m.type === 'human') continue; ultimoNoPaciente = m; break; }
 const recordatorio_pendiente = rec.length > 0 && !!(ultimoNoPaciente && (ultimoNoPaciente.additional_kwargs || {}).source === 'reminder_note');
+// (31/10, Lucas: 6 h) ¿Lo último que NO escribió el paciente es del STAFF y fue hace menos de 6 h? ESTADO (quién escribió y cuándo), no lectura del texto.
+let staff_reciente = false;
+for (const f of filas) { const m = msg(f); if (!m || m.type === 'human') continue; const src = String((m.additional_kwargs || {}).source || ''); const t = Date.parse(String(f.created_at || ''));
+  staff_reciente = (src === 'wa_outbound' || String(m.content || '').startsWith('[ATENCION HUMANA')) && !isNaN(t) && ahoraMs - t < 6 * 3600 * 1000; break; }
 const kb = {}; for (const r of $('Datos del consultorio').all().map((i) => i.json)) if (r && r.id !== undefined) kb[String(r.id)] = String(r.contenido || '').trim();
 const j = new Date(ahoraMs - 3 * 3600 * 1000);
 const ahora = DIAS[j.getUTCDay()] + ' ' + j.toISOString().slice(0, 10) + ' ' + j.toISOString().slice(11, 16);
@@ -112,13 +116,13 @@ let primero = null; try { primero = $('Primer mensaje').first().json || null; } 
 const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && ident.ok !== true && ident.motivo === 'sin_ficha';
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), comprobante_marcado, charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
+return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), comprobante_marcado, staff_reciente, charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
 JS_DESPACHO = """const ctx = $('Armar contexto').first().json;
 let o = {}; try { o = $('Orquestador').first().json || {}; } catch (x) { o = { error: 'sin salida' }; }
-return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '', comprobante_marcado: ctx.comprobante_marcado === true }) }];"""
+return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '', comprobante_marcado: ctx.comprobante_marcado === true, staff_reciente: ctx.staff_reciente === true }) }];"""
 
 JS_RES = """const r = (n) => { try { const x = $(n); return x.isExecuted ? (x.first().json || null) : null; } catch (y) { return null; } };
 const res = { turnos: r('Agente Turnos'), pagos: r('Agente Pagos'), informacion: r('Agente Información'), urgencias: r('Agente Urgencias') };
