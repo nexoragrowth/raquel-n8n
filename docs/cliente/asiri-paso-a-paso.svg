@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1319" width="1600" height="1319" font-family="Arial, Helvetica, sans-serif" role="img" aria-label="Paso a paso de un mensaje en Asiri: llega, controles, quién escribió, limpieza, espera de 22 segundos, si le toca a Asiri, urgencias, cerebro v7 y respuesta; unos 40 segundos en total.">
+<defs><marker id="f2" viewBox="0 0 10 10" refX="5" refY="9" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,0 L5,10 z" fill="#3c4a43"/></marker></defs>
+<rect x="0" y="0" width="1600" height="1319" fill="#ffffff"/>
+<text x="40" y="54" font-size="30" font-weight="700" fill="#16211b">Paso a paso de un mensaje</text>
+<text x="40" y="84" font-size="16" fill="#4b5a52">Qué le pasa a un WhatsApp de una paciente desde que llega hasta que Asiri contesta · por dentro (técnico) y en simple</text>
+<g font-size="13" font-weight="700" fill="#4b5a52"><text x="40" y="130">PASO</text><text x="400" y="130">POR DENTRO (TÉCNICO)</text><text x="1060" y="130">EN SIMPLE</text></g>
+<rect x="40" y="150" width="1520" height="92" rx="12" fill="#f4f6f5" stroke="#b5c2bb" stroke-width="1.2"/>
+<circle cx="70" cy="184" r="17" fill="#3c4a43"/>
+<text x="70" y="190" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<text x="98" y="190" font-size="18" font-weight="700" fill="#16211b">Llega el mensaje</text>
+<text x="98" y="216" font-size="15" font-weight="700" fill="#15803d">0 s</text>
+<text x="400" y="180" font-size="13.5" fill="#26332c">Evolution GO (la conexión de WhatsApp) llama al webhook evolution-v2 de n8n.</text>
+<text x="400" y="201" font-size="13.5" fill="#26332c">Webhook Validator comprueba el token de la instancia.</text>
+<text x="1060" y="180" font-size="14.5" fill="#16211b">WhatsApp le avisa al sistema que la paciente escribió.</text>
+<rect x="40" y="256" width="1520" height="92" rx="12" fill="#f4f6f5" stroke="#b5c2bb" stroke-width="1.2"/>
+<circle cx="70" cy="290" r="17" fill="#3c4a43"/>
+<text x="70" y="296" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<text x="98" y="296" font-size="18" font-weight="700" fill="#16211b">Controles</text>
+<text x="400" y="286" font-size="13.5" fill="#26332c">Kill-switch: Redis bot:status (/bot off y /bot on desde celulares autorizados).</text>
+<text x="400" y="307" font-size="13.5" fill="#26332c">¿Dentalink responde? · Rate limit: hasta 10 mensajes cada 15 minutos.</text>
+<text x="1060" y="286" font-size="14.5" fill="#16211b">¿Asiri está prendido? ¿La agenda anda?</text>
+<text x="1060" y="307" font-size="14.5" fill="#16211b">¿No es una catarata de mensajes?</text>
+<rect x="40" y="362" width="1520" height="92" rx="12" fill="#f4f6f5" stroke="#b5c2bb" stroke-width="1.2"/>
+<circle cx="70" cy="396" r="17" fill="#3c4a43"/>
+<text x="70" y="402" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<text x="98" y="402" font-size="18" font-weight="700" fill="#16211b">¿Quién escribió?</text>
+<text x="400" y="392" font-size="13.5" fill="#26332c">Es fromMe? → si salió del WhatsApp del consultorio se guarda como wa_outbound</text>
+<text x="400" y="413" font-size="13.5" fill="#26332c">y activa el modo humano (pacientes.human_takeover, ventana de 1 h).</text>
+<text x="1060" y="392" font-size="14.5" fill="#16211b">Si escribió la secretaria, no es para Asiri: queda anotado</text>
+<text x="1060" y="413" font-size="14.5" fill="#16211b">y Asiri se calla 1 hora en ese chat.</text>
+<rect x="40" y="468" width="1520" height="92" rx="12" fill="#f4f6f5" stroke="#b5c2bb" stroke-width="1.2"/>
+<circle cx="70" cy="502" r="17" fill="#3c4a43"/>
+<text x="70" y="508" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+<text x="98" y="508" font-size="18" font-weight="700" fill="#16211b">Limpieza y tipo</text>
+<text x="400" y="498" font-size="13.5" fill="#26332c">Filtrar duplicados y basura (reacciones, grupos, estados).</text>
+<text x="400" y="519" font-size="13.5" fill="#26332c">Audio → OpenAI lo transcribe · Imagen → visión (TIPO, MONTO, DESTINATARIO).</text>
+<text x="400" y="540" font-size="13.5" fill="#26332c">Documento, video, sticker, ubicación → marcador ([DOCUMENTO], [STICKER]…).</text>
+<text x="1060" y="498" font-size="14.5" fill="#16211b">Tira lo que no sirve, pasa los audios a texto y mira</text>
+<text x="1060" y="519" font-size="14.5" fill="#16211b">las fotos para saber si son comprobantes.</text>
+<rect x="40" y="574" width="1520" height="92" rx="12" fill="#fff8e6" stroke="#d9a521" stroke-width="2"/>
+<circle cx="70" cy="608" r="17" fill="#d9a521"/>
+<text x="70" y="614" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+<text x="98" y="614" font-size="18" font-weight="700" fill="#16211b">Espera de 22 s</text>
+<text x="98" y="640" font-size="15" font-weight="700" fill="#a16207">22 s</text>
+<text x="400" y="604" font-size="13.5" fill="#26332c">Buffer: Push + Wait de 22 s en Redis → «¿Soy el último?».</text>
+<text x="400" y="625" font-size="13.5" fill="#26332c">Si llegó otro mensaje, esta ejecución termina y la última junta</text>
+<text x="400" y="646" font-size="13.5" fill="#26332c">todo el texto (Preparar Mensaje Final).</text>
+<text x="1060" y="604" font-size="14.5" fill="#16211b">Espera a que la persona termine de escribir: la gente manda</text>
+<text x="1060" y="625" font-size="14.5" fill="#16211b">«hola» «quería saber» «el precio» en 3 mensajes.</text>
+<text x="1060" y="646" font-size="14.5" fill="#16211b">Asiri contesta una sola vez, a todo junto.</text>
+<rect x="40" y="680" width="1520" height="92" rx="12" fill="#f4f6f5" stroke="#b5c2bb" stroke-width="1.2"/>
+<circle cx="70" cy="714" r="17" fill="#3c4a43"/>
+<text x="70" y="720" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">6</text>
+<text x="98" y="720" font-size="18" font-weight="700" fill="#16211b">¿Le toca a Asiri?</text>
+<text x="400" y="710" font-size="13.5" fill="#26332c">Seg: Consultar Tipo → proveedor, colega o equipo = silencio.</text>
+<text x="400" y="731" font-size="13.5" fill="#26332c">Consultar Takeover → la secretaria escribió hace &lt; 1 h = silencio.</text>
+<text x="400" y="752" font-size="13.5" fill="#26332c">Check Session Age → más de 7 días sin hablar = memoria nueva.</text>
+<text x="1060" y="710" font-size="14.5" fill="#16211b">Si es un proveedor o una colega, o si la secretaria</text>
+<text x="1060" y="731" font-size="14.5" fill="#16211b">ya está hablando con esa persona, Asiri no se mete.</text>
+<rect x="40" y="786" width="1520" height="92" rx="12" fill="#fdf2f2" stroke="#d98c8c" stroke-width="2"/>
+<circle cx="70" cy="820" r="17" fill="#d98c8c"/>
+<text x="70" y="826" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">7</text>
+<text x="98" y="826" font-size="18" font-weight="700" fill="#16211b">¿Urgencia?</text>
+<text x="400" y="816" font-size="13.5" fill="#26332c">Triaje: ¿hay un seguimiento abierto? → Pre-Triaje (señales de urgencia).</text>
+<text x="400" y="837" font-size="13.5" fill="#26332c">Si es urgencia: el Triaje manda un video de ayuda y avisa a la Dra.</text>
+<text x="1060" y="816" font-size="14.5" fill="#16211b">Dolor, bracket suelto o aparato que lastima va directo</text>
+<text x="1060" y="837" font-size="14.5" fill="#16211b">al circuito de urgencias, no al bot común.</text>
+<rect x="40" y="892" width="1520" height="92" rx="12" fill="#e3f1e8" stroke="#16a34a" stroke-width="2"/>
+<circle cx="70" cy="926" r="17" fill="#16a34a"/>
+<text x="70" y="932" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">8</text>
+<text x="98" y="932" font-size="18" font-weight="700" fill="#16211b">Cerebro v7</text>
+<text x="98" y="958" font-size="15" font-weight="700" fill="#15803d">≈ 15 s</text>
+<text x="400" y="922" font-size="13.5" fill="#26332c">Armar contexto: 12 mensajes, turnos del celular en Dentalink, recordatorios</text>
+<text x="400" y="943" font-size="13.5" fill="#26332c">abiertos y datos de Conocimiento → Orquestador (gpt-5-mini, JSON de pasos)</text>
+<text x="400" y="964" font-size="13.5" fill="#26332c">→ agentes con herramientas → Componer: el código arma el texto y lo verifica.</text>
+<text x="1060" y="922" font-size="14.5" fill="#16211b">Lee la charla y los turnos de la persona, entiende qué pide,</text>
+<text x="1060" y="943" font-size="14.5" fill="#16211b">le pasa cada pedido al agente que sabe y arma una sola</text>
+<text x="1060" y="964" font-size="14.5" fill="#16211b">respuesta. Nada se agenda sin su «sí».</text>
+<rect x="40" y="998" width="1520" height="92" rx="12" fill="#f4f6f5" stroke="#b5c2bb" stroke-width="1.2"/>
+<circle cx="70" cy="1032" r="17" fill="#3c4a43"/>
+<text x="70" y="1038" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">9</text>
+<text x="98" y="1038" font-size="18" font-weight="700" fill="#16211b">Respuesta</text>
+<text x="400" y="1028" font-size="13.5" fill="#26332c">V7: Adaptador → «Escribiendo…» (typing) → Gate Humano Final: si la</text>
+<text x="400" y="1049" font-size="13.5" fill="#26332c">secretaria escribió mientras tanto, no se manda → Evolution /send/text.</text>
+<text x="400" y="1070" font-size="13.5" fill="#26332c">Guarda la charla en memoria y, si hace falta, avisa al grupo.</text>
+<text x="1060" y="1028" font-size="14.5" fill="#16211b">Aparece «escribiendo…» y, si nadie de la clínica se metió</text>
+<text x="1060" y="1049" font-size="14.5" fill="#16211b">en el medio, sale el mensaje. Si hace falta, avisa al grupo.</text>
+<rect x="40" y="1110" width="1520" height="58" rx="12" fill="#16211b"/>
+<text x="64" y="1146" font-size="17" font-weight="700" fill="#ffffff">Total: unos 40 segundos desde el último mensaje (mediana 41 s; 9 de cada 10 en menos de 48 s) = 22 s de espera + ≈ 15 s del cerebro + audio, foto y envío.</text>
+<text x="40" y="1196" font-size="17" font-weight="700" fill="#16211b">Qué pasó con los 518 mensajes de pacientes de la semana del 20 al 27/10</text>
+<rect x="40" y="1210" width="537" height="46" fill="#9db4dc" stroke="#ffffff" stroke-width="1"/>
+<text x="48" y="1230" font-size="12.5" font-weight="700" fill="#16211b">183 · 35%</text>
+<text x="48" y="1247" font-size="11.5" fill="#16211b">Secretaria ya atendiendo (modo humano)</text>
+<rect x="577" y="1210" width="340" height="46" fill="#e6c56a" stroke="#ffffff" stroke-width="1"/>
+<text x="585" y="1230" font-size="12.5" font-weight="700" fill="#16211b">116 · 22%</text>
+<text x="585" y="1247" font-size="11.5" fill="#16211b">Juntados con el siguiente (espera de 22 s)</text>
+<rect x="917" y="1210" width="138" height="46" fill="#c8b6e2" stroke="#ffffff" stroke-width="1"/>
+<text x="925" y="1230" font-size="12.5" font-weight="700" fill="#16211b">47 · 9%</text>
+<text x="925" y="1247" font-size="11.5" fill="#16211b">Proveedores y colegas</text>
+<rect x="1055" y="1210" width="123" height="46" fill="#cfd8d3" stroke="#ffffff" stroke-width="1"/>
+<text x="1063" y="1230" font-size="12.5" font-weight="700" fill="#16211b">42 · 8%</text>
+<text x="1063" y="1247" font-size="11.5" fill="#16211b">Sin contenido</text>
+<rect x="1178" y="1210" width="370" height="46" fill="#16a34a" stroke="#ffffff" stroke-width="1"/>
+<text x="1186" y="1230" font-size="12.5" font-weight="700" fill="#ffffff">126 · 24%</text>
+<text x="1186" y="1247" font-size="11.5" fill="#ffffff">Llegaron al cerebro</text>
+<rect x="1548" y="1210" width="12" height="46" fill="#7a8780" stroke="#ffffff" stroke-width="1"/>
+<text x="40" y="1282" font-size="14" fill="#26332c">De los 126 que llegaron al cerebro: 104 recibieron respuesta, 15 silencio a propósito («gracias», «ok») y 7 fueron urgencias al triaje. Fallos: 0. (4 más frenados por rate limit o validación.)</text>
+<text x="40" y="1305" font-size="12" fill="#6b7a72">Asiri v7 · versión del 31/10/2026 · tiempos y conteos medidos en producción (ejecuciones de n8n del 20 al 27/10)</text>
+</svg>
