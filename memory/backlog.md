@@ -1,5 +1,10 @@
 # Backlog — raquel-n8n
 
+## ⇢ 2026-11-01 — SPRINT post-capacitación (detalle completo en `docs/sprint-2026-11-01.md`)
+Orden: S0 (antes de la capacitación) → S1 agente orquestador real (en sombra) → S3 pantalla "Hoy" (atención, métricas, agendar) → S2 editor de prompts → S4 confiabilidad/seguridad.
+Decisiones que bloquean (Lucas): 1 "desplegá" regla 6 h · 2 "OK limpiar" bandeja · 3 nombre de la secretaria · 4 diseño del agente orquestador · 5 qué mensajes quedan fijos · 6 alcance del editor de prompts · 7 cierre de casos auto vs manual · 8 tiempos objetivo con la Dra. · 9 qué reglas de Conocimiento pasan a los agentes · 10 cortesía a "gracias".
+Regla: lo técnico se ejecuta solo; lo que cambia cómo habla/decide el bot o qué controla la clínica se aprueba antes (memoria `feedback-no-decidir-producto`).
+
 ## ⇢ 2026-10-28 (tarde) — después de la auditoría v6→v7 (`docs/auditoria-v6-v7-2026-10-28.md`)
 - [ ] **OK de Lucas para desplegar** `scripts/apply_cerebro_auditoria.py --apply` (arreglos ya probados; backup + check_triaje incluidos) y correr la batería en sombra con el modelo real sobre lo tocado (sticker, comprobante, mensaje mixto, respuesta a la secretaria, audio con texto previo).
 - [ ] **Editor de prompts del panel (diseño B):** catálogo + `v7/prompt_core.js` + slots `prm_*` + UI `/asiri/instrucciones` + probador en sombra. Despliega 5 workflows con el default idéntico; luego filas.
