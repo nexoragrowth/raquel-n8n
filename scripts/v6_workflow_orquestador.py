@@ -17,6 +17,7 @@ llama "V7: Cerebro". Plomería reusada del cerebro (v7_workflow_cerebro): Histor
 Los nodos que las expresiones de los prompts del v6 necesitan (Edit Fields - Extraer Datos, Extraer Horarios y Precio, Preparar Mensaje Final) existen con el mismo nombre y campos."""
 import copy
 import json
+import re
 import uuid
 from pathlib import Path
 
@@ -75,6 +76,13 @@ NO_CONV_CC = "NO conversas de temas personales, NO opinas, NO das diagnósticos 
 MAX_ESC_CC = "- Máximo UNA llamada a `escalar_a_secretaria` por turno. Si escalás, enviá el canned y terminá.\n"
 CIERRES_CC = '- Cierres y avisos en camino ("ok", "gracias", "estoy llegando", "ya llegué"): Devolvé `[NO_REPLY]`.\n'
 # (viejo, nuevo, destino, razón). destino: "padre" = la regla vive ahora en el prompt del padre; "eliminado" = ya no tiene sentido; "reemplazado" = cambia de forma.
+MARC = "[DATOS_DE_PAGO]"   # marcador de los datos bancarios: lo pega el código (V6Salida), ningún modelo los ve ni los escribe
+
+
+def _P(campo):
+    return "{{ $('Extraer Horarios y Precio').item.json.pago_" + campo + " }}"
+
+
 _ID = (IDENT, "", "padre", "identidad y trato: ahora los tiene el padre, que es quien le habla al paciente")
 EDITS = {
     "Sub-Agent Agendar": [
@@ -84,6 +92,8 @@ EDITS = {
         ('- Máximo UNA llamada a `escalar_a_secretaria` por turno. Si escalás, enviá: "Le transmito su caso a la secretaria para que le responda a la brevedad en su horario de atención. ¡Muchas gracias!" y terminá.',
          "- Si escalás, terminá ahí; el mensaje de derivación lo escribe el orquestador.", "padre", "una sola derivación por mensaje y el texto de derivación: ahora viven en el padre (una vez, no en cada especialista)"),
         ('- Cierres y avisos de llegada ("ok", "gracias", "estoy llegando", "ya llegué"): Devolvé `[NO_REPLY]`.\n', "", "padre", "el silencio lo decide el padre (herramienta no_responder)"),
+        ("Alias: " + _P("alias") + "\nTitular: " + _P("titular") + "\n", MARC + "\n", "reemplazado",
+         "datos bancarios por código: el modelo no ve alias ni titular; el texto fijo lleva el marcador y el verificador pega los datos exactos"),
     ],
     "Sub-Agent Confirmar": [
         _ID,
@@ -91,6 +101,8 @@ EDITS = {
         ("No informes montos de tratamientos, cuotas ni retenedores (solo la secretaria). ", "", "eliminado", "duplicaba la política de montos de Información/General; el padre solo permite el precio de la consulta"),
         (MAX_ESC_CC, "- Si escalás, terminá ahí.\n", "padre", "una sola derivación por mensaje: regla del padre"),
         (CIERRES_CC, "", "padre", "el silencio lo decide el padre (no_responder)"),
+        ("Alias: " + _P("alias") + "\nTitular: " + _P("titular") + "\nCUIT/CUIL: " + _P("cuit") + "\nCBU: " + _P("cbu") + "\nBanco: " + _P("banco") + "\n", MARC + "\n", "reemplazado",
+         "datos bancarios por código: el modelo no ve alias, CBU ni CUIT; el texto fijo lleva el marcador y el verificador pega los datos exactos"),
         ('- Horas en formato 24 hs (ej: "15:30 hs"). NO inventes turnos.', "", "padre", "formato de horas y 'no inventes': el padre redacta y solo afirma lo que un especialista dijo"),
     ],
     "Sub-Agent Cancelar": [
@@ -116,6 +128,15 @@ EDITS = {
         ('\n\n6. AVISOS DE LLEGADA / EN CAMINO:\n   - Si el paciente avisa que está en camino ("estoy llegando", "ya llegué", "estoy abajo", "a dos cuadras"), responde brevemente confirmando o devolvé `[NO_REPLY]`.',
          "", "padre", "avisos de llegada: el silencio lo decide el padre (no_responder)"),
         (", el trato de usted ni", " ni", "padre", "trato de usted: regla del padre"),
+        ("- Datos bancarios (Transferencia):\n  Alias: " + _P("alias") + "\n  Titular: " + _P("titular") + "\n  CUIT/CUIL: " + _P("cuit") + "\n  CBU: " + _P("cbu") + "\n  Banco: " + _P("banco") + "\n",
+         "- Datos bancarios (alias, CBU, CUIT, cuenta): no los tenés ni los escribís; los pega el sistema con la herramienta datos_pago del orquestador.\n", "reemplazado",
+         "datos bancarios por código: ningún especialista los ve ni los escribe"),
+        ("Si pregunta precios, formas de pago, alias, horarios o dirección,", "Si pregunta precios, formas de pago, horarios o dirección,", "reemplazado", "el alias ya no está entre los datos que ve el especialista"),
+        ("Si pregunta por el alias o pide datos para transferir, brinda el Alias y Titular claramente.",
+         "Si pregunta por el alias o pide datos para transferir, NO los escribas: devolvé en DATOS: pide datos para transferir (el orquestador los agrega).", "reemplazado", "datos bancarios por código"),
+        ("- Para dudas sobre ortodoncia, brackets, alineadores, tratamientos o convenios, consulta SIEMPRE la tool `buscar_conocimiento`.\n   - Si `buscar_conocimiento` no tiene la respuesta o es una consulta clínica específica, deriva a la secretaria con `escalar_a_secretaria`.",
+         "- Dudas sobre ortodoncia, brackets, alineadores, tratamientos o convenios: no tenés base de conocimiento; devolvé FUERA_DE_AREA: consulta de tratamiento, y derivá a la secretaria con `escalar_a_secretaria`.", "reemplazado",
+         "buscar_conocimiento (RAG sobre knowledge_base) trae la entrada 24 con alias, CBU y CUIT y no se puede excluir una fila: la herramienta sale del orquestador"),
         (": NO se informan por WhatsApp (pedido de la Dra., 16/10). Si los preguntan, NO des ningún monto: respondé", ": si los preguntan, respondé", "padre",
          "la política de montos (solo el precio de la consulta) vive ahora en el padre; acá queda la acción (qué responder y avisar)"),
         ('- Tono cordial, profesional y conciso (trato de usted).\n- Horas en formato 24 hs (ej: "8:00 hs", "15:30 hs").\n- NUNCA inventes turnos, direcciones fuera de Balcarce 37 ni prometas diagnósticos médicos.',
@@ -153,7 +174,26 @@ SIMULADAS = {
     "escalar_a_secretaria": ({"resumen": "Paciente consulta algo que no puedo resolver."},
                              _Q + "return JSON.stringify({ ok: true, enviado: true, resumen: q.resumen, _simulado: true });"),
 }
-LECTURA = ["ver_profesionales", "buscar_horarios", "buscar_paciente_dentalink", "ver_turnos_paciente", "obtener_historial_paciente", "consultar_recordatorios_abiertos", "buscar_conocimiento"]
+LECTURA = ["ver_profesionales", "buscar_horarios", "buscar_paciente_dentalink", "ver_turnos_paciente", "obtener_historial_paciente", "consultar_recordatorios_abiertos"]
+# Herramientas del v6 que NO se copian: buscar_conocimiento es un RAG sobre toda la tabla knowledge_base, que incluye la entrada 24 (alias, CBU, CUIT): un modelo no puede ver los datos bancarios.
+SIN_COPIAR = ["buscar_conocimiento", "Embeddings OpenAI"]
+
+
+def sin_pago_kb(query):
+    """Consulta 'Get KB Horarios y Precio' del v6 sin la entrada 24 (datos bancarios): los arma solo el código."""
+    assert query.count("20, 21, 24, 25") == 1
+    return query.replace("20, 21, 24, 25", "20, 21, 25")
+
+
+def sin_pago_extraer(js):
+    """'Extraer Horarios y Precio' del v6 sin los datos bancarios (FALLBACK_PAGO, pagoRow, pago_* y sus campos de salida)."""
+    js = re.sub(r"const FALLBACK_PAGO = \{.*?\};\n", "", js, flags=re.S)
+    js = js.replace("const pagoRow = porId(24);\n", "")
+    js = re.sub(r"// Los valores \(alias, nombres\).*?no cualquier punto\.\n", "", js, flags=re.S)   # comentario con un alias de ejemplo
+    js = re.sub(r"// Datos de cuenta:.*?const pago_banco = [^\n]*\n\n", "", js, flags=re.S)
+    js = js.replace("pago_titular, pago_cuit, pago_alias, pago_cbu, pago_cuenta, pago_banco, ", "")
+    assert not re.search(r"pago_|FALLBACK_PAGO|pagoRow|cbu|cuit|porId\(24\)", js, re.I), "quedó algo de pago en Extraer Horarios y Precio"
+    return js
 
 # ------------------------------------------------------------------------------------------------ código de los nodos propios
 JS_EDIT_FIELDS = """const e = $('Entrada').first().json;
@@ -171,7 +211,7 @@ return [{ json: { sistema: ctx.sistema_orq + '\\n\\nCONTEXTO DE ESTE MENSAJE (lo
 JS_VERIFICAR = """const r = (n) => { try { const x = $(n); return x.isExecuted ? (x.first().json || null) : null; } catch (y) { return null; } };
 const e = $('Entrada').first().json;
 const ctx = $('Armar contexto').first().json;
-const v = V6Salida.verificar({ salida: r('""" + PADRE + """'), texto_paciente: e.texto, modo: e.modo, contexto: ctx.contexto, consulta: ctx.consulta,
+const v = V6Salida.verificar({ salida: r('""" + PADRE + """'), texto_paciente: e.texto, modo: e.modo, contexto: ctx.contexto, consulta: ctx.consulta, datos_pago: ctx.datos_pago,
   ctx: { staff_reciente: ctx.staff_reciente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, comprobante_marcado: ctx.comprobante_marcado === true } });
 return [{ json: v }];"""
 JS_SALIDA = """const e = $('Entrada').first().json;
@@ -179,10 +219,27 @@ const v = $('Verificar salida').first().json;
 const vivo = e.modo === 'vivo';   // solo avisa con modo 'vivo' EXPLÍCITO
 if (vivo) for (const a of (v.avisos || [])) { try { await this.helpers.httpRequest({ method: 'POST', url: '""" + GRUPO + """', qs: { phone: e.phone, resumen: a.texto }, json: true }); } catch (x) { /* el aviso nunca rompe la respuesta */ } }
 const texto = v.texto; const silencio = v.silencio === true || !texto;
-return [{ json: { texto, enviar: !silencio, silencio, derivar_triaje: false, triaje: null, texto_original: null, modo: vivo ? 'vivo' : 'sombra', motivo_chequeo: v.motivo_verificador || null, motivo_banlist: null,
+return [{ json: { texto, enviar: !silencio, silencio, derivar_triaje: v.derivar_triaje === true, triaje: v.derivar_triaje ? v.triaje : null, texto_original: null, datos_pago_agregados: v.datos_pago_agregados || null, sesion_memoria: $('Sesión de memoria').first().json.sesion_memoria, modo: vivo ? 'vivo' : 'sombra', motivo_chequeo: v.motivo_verificador || null, motivo_banlist: null,
   fallo_agente: v.fallo_agente === true, modo_humano: false, descartar_propuesta: false, tools: v.traza || [], agentes: v.agentes || [], plan: v.plan || {}, avisos: v.avisos || [],
   motivo_verificador: v.motivo_verificador || null, usado_respaldo: v.usado_respaldo === true } }];"""
 
+# Clave de la memoria Postgres del padre. Vivo: el teléfono (como el v6). Fuera de 'vivo' (o en la variante sombra): 'sombra:' + sesión + teléfono, y si la prueba trae `historial_json`
+# (o `sesion_sombra`), la sesión es un hash de ese historial + el texto: dos corridas de prueba distintas NO comparten memoria.
+JS_SESION = """const e = $('Entrada').first().json;
+const SIEMPRE_SOMBRA = __SOMBRA__;
+const phone = String(e.phone || '');
+const hash = (s) => { let h = 0x811c9dc5; for (const ch of String(s)) { h ^= ch.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); };
+let sesion_memoria = phone;
+if (SIEMPRE_SOMBRA || e.modo !== 'vivo') {
+  const explicita = String(e.sesion_sombra || '').trim().slice(0, 60);
+  const hj = String(e.historial_json || '').trim();
+  const aislada = explicita || (hj ? hash(hj + '|' + String(e.texto || '')) : '');
+  sesion_memoria = 'sombra:' + (aislada ? aislada + ':' : '') + phone;
+}
+return [{ json: { ...e, sesion_memoria } }];"""
+
+DATOS_PAGO_DESC = ("El paciente pide los datos para pagar o transferir (alias, CBU, CUIT, cuenta, banco). Devuelve el marcador " + MARC + ": escribilo en tu respuesta donde van los datos y el sistema "
+                   "pega los exactos. Nunca escribas vos un alias, CBU, CUIT o número de cuenta.")
 NO_RESPONDER_DESC = ("No responderle nada al paciente (silencio): agradece o se despide sin pedir nada, avisa que está llegando, manda solo un sticker o emoji, 'ok' sin nada pendiente, "
                      "o le habla a la clínica sin pedir nada nuevo. No la combines con otros especialistas.")
 
@@ -215,7 +272,8 @@ def wf_v6_orquestador(modo_sombra=False, esfuerzo=ESFUERZO):
     w6, nodos6 = _cargar_v6()
     g = Grafo(NOMBRE_SOMBRA if modo_sombra else NOMBRE_VIVO)
     # ---- plomería (la del cerebro actual)
-    g.trigger({"phone": "5490000000651", "texto": "Hola", "pushName": "", "modo": "vivo", "historial_json": ""}, 0, 300)
+    g.trigger({"phone": "5490000000651", "texto": "Hola", "pushName": "", "modo": "vivo", "historial_json": "", "sesion_sombra": ""}, 0, 300)
+    g.code("Sesión de memoria", JS_SESION.replace("__SOMBRA__", "true" if modo_sombra else "false"), 110, 300)
     g.postgres("Historial", SQL_HISTORIAL, "$json.phone", 220, 300)
     g.postgres("Recordatorios", SQL_RECORDATORIOS, f"{E}.phone", 440, 300, una_vez=True)
     g.postgres("Primer mensaje", SQL_PRIMERO, f"{E}.phone", 550, 420, una_vez=True)
@@ -227,12 +285,14 @@ def wf_v6_orquestador(modo_sombra=False, esfuerzo=ESFUERZO):
     g.si("¿Charla de la clínica?", f"{CTX}.charla_de_la_clinica === true", 1100, 300)
     # ---- nodos que las expresiones de los prompts del v6 necesitan (mismo nombre, mismos campos)
     g.code("Edit Fields - Extraer Datos", JS_EDIT_FIELDS, 1320, 400)
-    kb = _copiar(g, nodos6["Get KB Horarios y Precio"], 1540, 400)
+    kb_p = copy.deepcopy(nodos6["Get KB Horarios y Precio"]["parameters"])
+    kb_p["query"] = sin_pago_kb(kb_p["query"])
+    kb = _copiar(g, nodos6["Get KB Horarios y Precio"], 1540, 400, kb_p)
     g.nodos[-1]["executeOnce"] = True
     ex = copy.deepcopy(nodos6["Extraer Horarios y Precio"])
     viejo = "const original = $('Parse Intent').item.json;"
     assert ex["parameters"]["jsCode"].count(viejo) == 1
-    ex["parameters"]["jsCode"] = ex["parameters"]["jsCode"].replace(viejo, "const original = $('Edit Fields - Extraer Datos').first().json;")
+    ex["parameters"]["jsCode"] = sin_pago_extraer(ex["parameters"]["jsCode"].replace(viejo, "const original = $('Edit Fields - Extraer Datos').first().json;"))
     _copiar(g, ex, 1760, 400)
     g.code("Preparar Mensaje Final", JS_PREPARAR, 1980, 400)
     _code_con(g, "Armar mensaje del padre", JS_MENSAJE, 2200, 400, ("orquestador_core",))
@@ -242,13 +302,17 @@ def wf_v6_orquestador(modo_sombra=False, esfuerzo=ESFUERZO):
     g.conectar_ai("Modelo " + PADRE, PADRE, "ai_languageModel")
     mem = copy.deepcopy(nodos6["Postgres Chat Memory"])
     # misma memoria que el v6 (sessionKey = teléfono). En la variante sombra, y en toda ejecución que no sea 'vivo', otra clave: no se mezcla con la memoria real del paciente.
-    pref = "'sombra:' + " if modo_sombra else f"({E}.modo === 'vivo' ? '' : 'sombra:') + "
-    mem["parameters"]["sessionKey"] = "={{ " + pref + "$('Preparar Mensaje Final').first().json.phone }}"
+    # La clave la arma el nodo «Sesión de memoria» (JS_SESION): vivo = teléfono; no vivo = 'sombra:' + (hash del historial_json/texto o sesion_sombra) + teléfono.
+    mem["parameters"]["sessionKey"] = "={{ $('Sesión de memoria').first().json.sesion_memoria }}"
     _copiar(g, mem, 2420, 900, mem["parameters"])
     g.conectar_ai(mem["name"], PADRE, "ai_memory")
     g._nodo("no_responder", "@n8n/n8n-nodes-langchain.toolCode", 1.1, {"name": "no_responder", "language": "javaScript", "description": NO_RESPONDER_DESC,
             "jsCode": "return JSON.stringify({ ok: true, silencio: true });"}, 2640, 80)
     g.conectar_ai("no_responder", PADRE, "ai_tool")
+    # datos_pago: SIN modelo. Devuelve solo el marcador; el verificador (V6Salida) lo reemplaza por los datos armados por el código (alias, titular, CUIT/CUIL, CBU, cuenta, banco).
+    g._nodo("datos_pago", "@n8n/n8n-nodes-langchain.toolCode", 1.1, {"name": "datos_pago", "language": "javaScript", "description": DATOS_PAGO_DESC,
+            "jsCode": "return JSON.stringify({ ok: true, marcador: '" + MARC + "', instruccion: 'Escribí el marcador " + MARC + " donde van los datos; el sistema los pega.' });"}, 2640, 160)
+    g.conectar_ai("datos_pago", PADRE, "ai_tool")
 
     # ---- los 5 especialistas del v6, COPIADOS, como Agent Tool del padre
     herramientas_vistas = {}
@@ -268,7 +332,7 @@ def wf_v6_orquestador(modo_sombra=False, esfuerzo=ESFUERZO):
         g.conectar_ai(lm, tool, "ai_languageModel")
         g.conectar_ai(tool, PADRE, "ai_tool")
         # herramientas del especialista (compartidas: un nodo por herramienta, conectado a cada agente que la usaba)
-        for t in _tools_de(w6, orig):
+        for t in [t for t in _tools_de(w6, orig) if t not in SIN_COPIAR]:
             if t not in herramientas_vistas:
                 n6 = nodos6[t]
                 yy = 60 + 90 * len(herramientas_vistas)
@@ -280,17 +344,11 @@ def wf_v6_orquestador(modo_sombra=False, esfuerzo=ESFUERZO):
                 herramientas_vistas[t] = True
             g.conectar_ai(t, tool, "ai_tool")
         y += 200
-    if g.nodos:  # embeddings de buscar_conocimiento (vector store): lo usa General en el v6
-        for s, v in w6["connections"].items():
-            for d in [d for l in v.get("ai_embedding", [[]]) for d in l]:
-                if d["node"] in herramientas_vistas and not any(m["name"] == s for m in g.nodos):
-                    _copiar(g, nodos6[s], 3800, 700)
-                    g.conectar_ai(s, d["node"], "ai_embedding")
 
     # ---- después del padre: verificación por código y salida
     _code_con(g, "Verificar salida", JS_VERIFICAR, 4100, 300, ("chequeo_salida", "orquestador_core", "verificador_core", "v6_salida_core"))
     g._nodo("Salida", "n8n-nodes-base.code", 2, {"jsCode": JS_SALIDA}, 4320, 300)
-    for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Datos del consultorio", 0),
+    for a, b, s_ in [("Entrada", "Sesión de memoria", 0), ("Sesión de memoria", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Datos del consultorio", 0),
                      ("Datos del consultorio", "Identificar paciente", 0), ("Identificar paciente", "Redis GET propuesta (entrada)", 0), ("Redis GET propuesta (entrada)", "Armar contexto", 0),
                      ("Armar contexto", "¿Charla de la clínica?", 0), ("¿Charla de la clínica?", "Verificar salida", 0), ("¿Charla de la clínica?", "Edit Fields - Extraer Datos", 1),
                      ("Edit Fields - Extraer Datos", kb, 0), (kb, "Extraer Horarios y Precio", 0), ("Extraer Horarios y Precio", "Preparar Mensaje Final", 0),
