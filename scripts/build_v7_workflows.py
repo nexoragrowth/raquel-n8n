@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from v7_lib import DENTALINK, Grafo, V7
 from v7_workflow_cerebro import wf_cerebro
+from v7_workflow_cerebro_agente import wf_cerebro_agente
 from v7_workflow_clinica import wf_clinica
 from v7_workflows_confirmar_clinica import wf_confirmar_turno, wf_confirmar_una
 from v7_workflows_herramientas import wf_buscar_horarios, wf_elegir_ficha, wf_gestionar_turno, wf_proponer, wf_ver_turnos
@@ -153,7 +154,9 @@ return [{{ json: {{ avisado: !!f.aviso }} }}];""", 5280, 300)
 # se retiraron del build: sus JSON y generadores quedaron en v7/_retirados/ (y en n8n siguen como estaban: crear_v7_en_n8n.py nunca borra).
 WORKFLOWS = {"ejecutar_propuesta": wf_ejecutar, "ver_turnos": wf_ver_turnos, "elegir_ficha": wf_elegir_ficha, "proponer": wf_proponer, "buscar_horarios": wf_buscar_horarios, "confirmar_una": wf_confirmar_una, "confirmar_turno": wf_confirmar_turno, "clinica": wf_clinica, "gestionar_turno": wf_gestionar_turno,
              "agente_turnos": wf_agente_turnos, "agente_pagos": wf_agente_pagos, "agente_informacion": wf_agente_informacion, "agente_urgencias": wf_agente_urgencias,
-             "cerebro": wf_cerebro}
+             "cerebro": wf_cerebro,
+             # (02/11) "v7 Cerebro Agente": orquestador = AGENTE con los sub-agentes como herramientas. Solo se genera; el despliegue en n8n es aparte (no está en crear_v7_en_n8n.py).
+             "cerebro_agente": wf_cerebro_agente}
 
 
 def main():

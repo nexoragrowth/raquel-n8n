@@ -185,7 +185,8 @@ const VerificadorCore = (() => {
     // ---- el texto del agente sale: lo que agrega el CÓDIGO (datos de pago, derivación, presentación, mensajes fijos, corte de bucle) ----
     const avisos = avisosPre.slice(); let datos_pago_agregados = null;
     if (res.pagos && res.pagos.datos_pago) {
-      if (st.datosPago) { texto = texto.replace(/\s+$/, '') + '\n' + st.datosPago; datos_pago_agregados = 'pedido'; }
+      // El read-back va SIEMPRE al final (el paciente tiene que ver «¿Procedo?» último): los datos bancarios se pegan antes.
+      if (st.datosPago) { texto = (rbHerr && texto.includes(rbHerr)) ? texto.replace(rbHerr, '').replace(/\s+$/, '') + '\n' + st.datosPago + '\n\n' + rbHerr : texto.replace(/\s+$/, '') + '\n' + st.datosPago; datos_pago_agregados = 'pedido'; }
       else avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] El paciente pidió los datos para transferir y no están cargados (KB 24): pasárselos a mano.' });
     }
     if (st.datosPago && okLibro.some((l) => (l.tipo === 'reserva' || l.tipo === 'sumar') && l.primera_consulta === true) && !/\bCBU\b/i.test(texto)) {

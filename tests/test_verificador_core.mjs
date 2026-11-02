@@ -241,3 +241,7 @@ test('V50 reserva de primera consulta: el pedido de pago + datos lo agrega el c�
   const r = ver(ag(ok, [paso('turnos', sub('turnos', ok, 'escrito_ok'), { pedido: 'sí' })]), { estado: { libros } });
   assert.ok(r.texto.startsWith(ok) && r.texto.includes('Para confirmarlo definitivamente') && r.texto.split('Alias:').length === 2);
 });
+test('V51 el read-back queda ÚLTIMO aunque haya datos de pago: los datos bancarios se pegan antes de «¿Procedo?»', () => {
+  const r = ver(ag('Perfecto. ' + RB, [paso('turnos', sub('turnos', RB, 'readback_pendiente', { readback: true }), { pedido: 'cambiar' }), paso('pagos', sub('pagos', 'Le paso los datos para transferir:', 'datos_enviados', { datos_pago: true }), { pedido: 'alias' })]), { estado: { prop: PROP, vistos: VISTOS } });
+  assert.equal(r.usado_respaldo, false, JSON.stringify(r.motivo_verificador)); assert.ok(r.texto.endsWith(RB)); assert.ok(r.texto.indexOf('Alias:') < r.texto.indexOf('Le confirmo')); assert.equal(r.texto.split('Le confirmo').length, 2);
+});
