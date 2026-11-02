@@ -3134,3 +3134,8 @@ antes del 15/8: VPS Hostinger vs quedarse en v3 free (con la carga nueva puede a
 - **Panel en producción SIN las novedades** (`/pacientes` da 404): falta `bash deploy/redeploy.sh` (lo bloquea el sistema de permisos para Claude). Hasta entonces, crear turno desde el chat del panel FALLA (400 de Dentalink, formato de hora).
 - Fin de semana sin mensajes (último entrante sáb 31/10 12:09): es el patrón normal (sáb 24/10: 5, dom 25/10: 0). Instancia `raquel` conectada. Chequeos programados en esta sesión: 02/11 9:22 y 11:43 (solo lectura).
 
+## 02/11 — panel DESPLEGADO (HEAD 51c054f), lo corrió Lucas
+- `bash deploy/redeploy.sh` desde **Git Bash** en la carpeta del panel (en PowerShell, `bash` abre WSL, que no tiene la clave `~/.ssh/raquel_vps`). Contenedor healthy, /login 200; `/pacientes`, `/pacientes/[id]`, `/citas` ahora existen (307 al login sin sesión; antes `/pacientes` daba 404).
+- Publicado: calendario con acciones (Mes/Semana/Día, Confirmar/Anular/Mover, Nuevo turno), Pacientes (buscador y ficha editable), Mensajes fijos de Asiri, y el arreglo de crear turno desde el chat (hora H:i).
+- Pendiente de verificar en el navegador con sesión real: agendar y anular un turno de prueba (ficha 608 "Test - Lucas") desde la pantalla Citas y desde el chat; Mensajes fijos visibles en Asiri.
+
