@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from v7_lib import DENTALINK, Grafo, V7
 from v7_workflow_cerebro import wf_cerebro
 from v7_workflow_cerebro_agente import wf_cerebro_agente
+from v6_workflow_orquestador import wf_v6_orquestador
 from v7_workflow_clinica import wf_clinica
 from v7_workflows_confirmar_clinica import wf_confirmar_turno, wf_confirmar_una
 from v7_workflows_herramientas import wf_buscar_horarios, wf_elegir_ficha, wf_gestionar_turno, wf_proponer, wf_ver_turnos
@@ -156,7 +157,10 @@ WORKFLOWS = {"ejecutar_propuesta": wf_ejecutar, "ver_turnos": wf_ver_turnos, "el
              "agente_turnos": wf_agente_turnos, "agente_pagos": wf_agente_pagos, "agente_informacion": wf_agente_informacion, "agente_urgencias": wf_agente_urgencias,
              "cerebro": wf_cerebro,
              # (02/11) "v7 Cerebro Agente": orquestador = AGENTE con los sub-agentes como herramientas. Solo se genera; el despliegue en n8n es aparte (no está en crear_v7_en_n8n.py).
-             "cerebro_agente": wf_cerebro_agente}
+             "cerebro_agente": wf_cerebro_agente,
+             # (02/11) "v6 Orquestador": agente padre con los 5 especialistas del v6 (copiados) como Agent Tool. Variante sombra = herramientas que escriben, simuladas. Solo se genera.
+             "v6_orquestador": lambda: wf_v6_orquestador(False),
+             "v6_orquestador_sombra": lambda: wf_v6_orquestador(True)}
 
 
 def main():
