@@ -17,7 +17,8 @@ import crear_v7_en_n8n as D
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 ROOT = D.ROOT
 IDS = json.loads(D.IDS.read_text(encoding="utf-8"))
-AGENTE, TEST = IDS["cerebro_agente"], IDS["test"]
+DESTINO = sys.argv[2] if len(sys.argv) > 2 else "cerebro_agente"
+AGENTE, TEST = IDS[DESTINO], IDS["test"]
 
 
 def put_settings(wid, quitar_error_wf):
@@ -37,7 +38,7 @@ def main():
         put_settings(TEST, True)
         D.api(f"/workflows/{AGENTE}/activate", "POST")
         print("agente ENCENDIDO (solo durante la prueba), sin aviso de errores al grupo")
-        r = subprocess.run([sys.executable, bateria, "cerebro_agente"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        r = subprocess.run([sys.executable, bateria, DESTINO], capture_output=True, text=True, encoding="utf-8", errors="replace")
         print(r.stdout)
         if r.returncode != 0:
             print(r.stderr[-1500:])
