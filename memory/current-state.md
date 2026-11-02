@@ -3129,3 +3129,8 @@ antes del 15/8: VPS Hostinger vs quedarse en v3 free (con la carga nueva puede a
 - Límites conocidos: el buscador no resuelve "ñ" (Nunez ≠ Núñez); `crearTurnoAction` valida "fecha pasada" en UTC (21–24 h de Jujuy puede rechazar un turno para el mismo día); profesional id 2 dado de baja: ahora solo se ofrecen habilitados (el nombre aparece completo, "Rodríguez Raquel").
 - Fuera de alcance por decisión pendiente: registrar pagos (P3) e historia clínica (P4).
 
+## 02/11 01:30 — listo para la capacitación (salvo el redeploy del panel)
+- **Bot: 8/8 en la batería en sombra con el modelo real.** Corrección: el caso 5 ("ya le mandé los estudios") no fallaba por el `source`: la prueba tenía fijo el mensaje de la secretaria el 28/10 y caía fuera de las 6 h. Con "hace 2 h" la regla calla bien.
+- **Panel en producción SIN las novedades** (`/pacientes` da 404): falta `bash deploy/redeploy.sh` (lo bloquea el sistema de permisos para Claude). Hasta entonces, crear turno desde el chat del panel FALLA (400 de Dentalink, formato de hora).
+- Fin de semana sin mensajes (último entrante sáb 31/10 12:09): es el patrón normal (sáb 24/10: 5, dom 25/10: 0). Instancia `raquel` conectada. Chequeos programados en esta sesión: 02/11 9:22 y 11:43 (solo lectura).
+
