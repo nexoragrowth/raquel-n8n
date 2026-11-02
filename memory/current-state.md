@@ -1,5 +1,11 @@
 # Estado actual — raquel-n8n
 
+## 2026-11-02 — "v6 Orquestador" construido SOLO en el repo (sin desplegar)
+
+- Pedido de Lucas (patrón "Ultimate Assistant"): agente padre con memoria + los 5 especialistas del v6 como Agent Tool; el padre redacta. Mínimo cambio sobre el v6: solo se reemplaza el Router.
+- Generador `scripts/v6_workflow_orquestador.py` (`wf_v6_orquestador(modo_sombra)`), JSON en `v7/workflows/v6_orquestador*.json`, prompt del padre `v7/prompt_orquestador_v6.md`, verificador `v7/v6_salida_core.js`, tests `tests/test_v6_orquestador.py` (103), diseño y tabla de cambios de prompts en `docs/v6-orquestador-diseno.md`.
+- Falta: importar en n8n (inactivo), correr la sombra y revisar. Activar solo con OK de Lucas.
+
 ## 2026-10-05 05:53 ART — Suite de Testing Sintético Aislado: 9/9 según el runner (CON CORRECCIONES de Claude, 06:10 ART)
 
 > **Correcciones verificadas contra producción (leer antes de creer el "9/9"):**
