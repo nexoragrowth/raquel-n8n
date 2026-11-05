@@ -18,7 +18,7 @@ PROMPTS = {k: (V7 / f"prompt_sub_{k}.md").read_text(encoding="utf-8").strip() fo
 
 ENT = "$('Entrada').first().json"
 EJEMPLO = {"tel": "5490000000651", "exec_id_actual": "0", "modo": "sombra", "texto_paciente": "Hola", "ultimo_asiri": "", "textos_paciente": "[]", "turnos_json": "[]",
-           "contexto": "", "datos": "", "pedido": ""}
+           "contexto": "", "datos": "", "pedido": "", "propuesta_staff": ""}
 F = {k: f"{ENT}.{k}" for k in ("tel", "exec_id_actual", "modo", "texto_paciente", "ultimo_asiri", "textos_paciente")}
 AGENDA = {k: F[k] for k in ("tel", "exec_id_actual")}
 ESCRIBE = {k: F[k] for k in ("tel", "exec_id_actual", "modo")}
@@ -31,12 +31,19 @@ HERRAMIENTAS = [
      AGENDA, {"nombre": "Nombre y/o apellido del paciente tal como lo dijo, o vacío si dio el DNI.", "dni": "DNI del paciente si lo dio, o vacío."}),
     ("buscar_horarios", "buscar_horarios", "Busca los turnos disponibles; el sistema le muestra el bloque al paciente. Solo se puede reservar lo que esta herramienta ofreció. Día puntual: desde = hasta = esa fecha. Si ninguno le sirve: desde = el día siguiente al último ofrecido (máximo dos bloques por conversación).",
      AGENDA, {"desde": "Opcional. Fecha YYYY-MM-DD desde la que buscar.", "hasta": "Opcional. Fecha límite inclusiva YYYY-MM-DD (para un día puntual, la misma que desde)."}),
-    ("gestionar_turno", "gestionar_turno", "Reserva, suma, cambia o cancela un turno en dos pasos. 1.º: con los datos, devuelve la confirmación que el sistema le muestra al paciente (no escribe nada). 2.º: si en su PRÓXIMO mensaje el paciente la acepta, llamala con confirma=true: el código verifica que vio esa confirmación y recién ahí escribe en la agenda. Tipos: cambio, reserva, sumar, cancelacion. Paciente nuevo: tipo reserva + nuevo_nombre, nuevo_apellido y nuevo_dni.",
+    ("gestionar_turno", "gestionar_turno", "Reserva, suma, cambia o cancela un turno en dos pasos. 1.º: con los datos, devuelve la confirmación que el sistema le muestra al paciente (no escribe nada). 2.º: si en su PRÓXIMO mensaje el paciente la acepta, llamala con confirma=\"si\": el código verifica que vio esa confirmación y recién ahí escribe en la agenda. Tipos: cambio, reserva, sumar, cancelacion. Paciente nuevo: tipo reserva + nuevo_nombre, nuevo_apellido y nuevo_dni.",
      {**F}, {"tipo": "cambio | reserva | sumar | cancelacion", "fecha": "Fecha YYYY-MM-DD del turno nuevo (vacío si es cancelacion). De buscar_horarios.", "hora": "Hora HH:MM del turno nuevo (vacío si es cancelacion). De buscar_horarios.",
                       "fecha_turno_viejo": "Fecha YYYY-MM-DD del turno que se cambia o cancela. Vacío si es reserva o sumar.",
                       "nuevo_nombre": "Solo paciente nuevo (sin ficha): su nombre, tal como lo escribió. Si no, vacío.", "nuevo_apellido": "Solo paciente nuevo: su apellido, tal como lo escribió. Si no, vacío.",
                       "nuevo_dni": "Solo paciente nuevo: su DNI, tal como lo escribió. Si no, vacío.",
-                      "confirma": "true SOLO si el MENSAJE ACTUAL del paciente acepta la CONFIRMACIÓN PENDIENTE; si no, vacío."}),
+                      "confirma": "si | vacío. Escribí si SOLO cuando el MENSAJE ACTUAL del paciente acepta la CONFIRMACIÓN PENDIENTE; en cualquier otro caso dejalo vacío."}),
+    # (05/11, incidente José 331596) El paciente acepta un CAMBIO que le propuso la clínica a mano. El modelo COPIA del mensaje de la clínica (entiende "8 y 40",
+    # "6 de la tarde", "este jueves"); el código verifica cada dato contra el mensaje crudo del staff (propuesta_staff, lo pone el cerebro) y contra la agenda.
+    # Todo texto (nada booleano): el esquema string no tiene cómo romperse.
+    ("aceptar_propuesta_clinica", "gestionar_turno", "El paciente ACEPTA la PROPUESTA DE LA CLÍNICA (mover su turno a otro día u horario que le ofreció el staff). Copiá los datos del mensaje de la clínica; el código los verifica contra ese mensaje y la agenda: si ya está cargado se lo confirma, si no le muestra la confirmación del cambio. Una vez.",
+     {**F, "accion": "'propuesta_staff'", "propuesta_staff": f"{ENT}.propuesta_staff"},
+     {"fecha": "Fecha YYYY-MM-DD del turno NUEVO que propone la clínica (\"ese mismo día\" = la del turno que se mueve).", "hora": "Hora HH:MM del turno NUEVO, en 24 h (\"8 y 40\" = 08:40; \"6 de la tarde\" = 18:00).",
+      "fecha_turno_viejo": "Fecha YYYY-MM-DD del turno que tiene y se mueve (de los turnos vigentes del contexto).", "para": "Nombre del paciente si el mensaje de la clínica lo nombra; si no, vacío."}),
     # (21/10, incidente familia con dos turnos el mismo día) UNA llamada confirma todos los que correspondan: sin datos = todos los recordatorios
     # pendientes (lo que hacía el v6 con "Confirmo"); con fecha / hora / nombre = solo los que coinciden.
     # (21/10, Lucas) Cualquier forma de "sí" a un recordatorio confirma TODO: "Confirmo", "hola siii vamos a ir con martin", "ahí estaremos", "dale 👍".
@@ -53,7 +60,7 @@ HERRAMIENTAS = [
 ]
 POR_NOMBRE = {h[0]: h for h in HERRAMIENTAS}
 TOOLS = {
-    "turnos": ["ver_turnos", "elegir_ficha", "buscar_horarios", "gestionar_turno", "confirmar_turno", "lista_espera"],
+    "turnos": ["ver_turnos", "elegir_ficha", "buscar_horarios", "gestionar_turno", "aceptar_propuesta_clinica", "confirmar_turno", "lista_espera"],
     "pagos": ["registrar_pago", "datos_pago"],
     "informacion": [],
     "urgencias": ["derivar_triaje"],

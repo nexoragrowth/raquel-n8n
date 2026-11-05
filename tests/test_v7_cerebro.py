@@ -75,7 +75,7 @@ def esc(id_, orquestador, texto="Hola", redis=None, pg=None, modo="vivo", subwf=
     trig = {"phone": TEL, "texto": texto, "pushName": "CELE", "modo": modo, "historial_json": "", **(extra.pop("trigger", {}))}
     sw = {"Identificar paciente": IDENT, "Derivar a secretaria": {"ok": True, "derivado": True, "texto_para_el_paciente": DERIVA},
           "Pasar a humano": {"ok": True, "humano": True, "texto_para_el_paciente": DERIVA}, **(subwf or {})}
-    pg_ = {"Historial": [{}], "Recordatorios": [{}], "Primer mensaje": [{}], "Datos del consultorio": KB, "Guardar en memoria": {}, **(pg or {})}
+    pg_ = {"Historial": [{}], "Recordatorios": [{}], "Primer mensaje": [{}], "Entrantes": [{}], "Datos del consultorio": KB, "Guardar en memoria": {}, **(pg or {})}
     return {"id": id_, "trigger": trig, "ahora": AHORA, "exec_id": EXEC, "redis": redis or {}, "pg": pg_, "subwf": sw, "llm": {"Orquestador": orquestador}, **extra}
 
 
@@ -377,6 +377,54 @@ def main():
     a = M["MF-E sin ninguna fila msg_"]["reps"][0]
     chequear("MF-E sin filas msg_ (hoy, en producción) todo sale exactamente igual que antes", "Disculpe, no le entendí bien" in a["salida"]["texto"] and "Soy Asiri, la secretaria virtual de la Dra. Raquel." in a["salida"]["texto"], a["salida"]["texto"])
     chequear("MF-F el cerebro lee las filas msg_ de la base (consulta SQL) y las pasa al armado final", "left(clave, 4) = 'msg_'" in txt and "mensajes: ctx.mensajes" in txt)
+
+    # (05/11, incidente José 331590) El paciente acepta un cambio que la secretaria le propuso a mano: el cerebro le pasa a Turnos el mensaje CRUDO del staff.
+    print("PROPUESTA DE LA CLÍNICA")
+    PRE = "[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. Mensaje del staff, no es output tuyo.]: "
+    PROP_TXT = ("Buenas noches sr. José, disculpe el día Martes 17 de Noviembre (día de su turno), la Dra. tiene médico, por lo tanto, se tiene que retirar temprano. "
+                "Podríamos reagendar su turno para las 8:40 hs de ese mismo día?")
+    fila = lambda c, iso, **kw: {"message": {"type": "ai", "content": PRE + c, "additional_kwargs": {"source": "wa_outbound", "was_multimedia": False, "from_iri_or_dra": True, **kw}}, "created_at": iso}
+    YA = "Perfecto, el turno de José queda el martes 17/11 a las 08:40 con la Dra. Raquel."
+    FYI = "[FYI] José aceptó la propuesta de la clínica; el turno ya figura en la agenda (martes 17/11 a las 08:40) y Asiri se lo confirmó."
+    T_YA = sub("turnos", YA, "ya_en_agenda", avisos=[{"nivel": "FYI", "texto": FYI}], traza=[{"tool": "aceptar_propuesta_clinica", "input": {}, "obs": "{\"etapa\":\"ya_en_agenda\"}"}])
+    ORQ_P = orq({"a": "turnos", "pedido": "responde a la propuesta de la clínica"})
+    VISTOS_J = json.dumps([{"id": 9412, "id_paciente": 5, "fecha": "2026-11-17", "hora_inicio": "08:40", "id_estado": 7, "estado_anulacion": 0}])
+    P = correr(wf, [
+        esc("PC-1 propuesta del staff hace 8 h y el paciente la acepta", ORQ_P, texto="Hola buenos dias\nDale hagamos el cambio\nNo hay problema",
+            pg={"Historial": [fila(PROP_TXT, "2026-10-05T04:00:00Z")]}, subwf={"Agente Turnos": T_YA}, redis={f"turnos_vistos:{TEL}": VISTOS_J}),
+        esc("PC-2 después del staff habló Asiri", ORQ_P, texto="dale", pg={"Historial": [{"message": {"type": "ai", "content": "Le paso con la secretaria.", "additional_kwargs": {"source": "asiri_v7"}}, "created_at": "2026-10-05T05:00:00Z"},
+            fila(PROP_TXT, "2026-10-05T04:00:00Z")]}, subwf={"Agente Turnos": sub("turnos", "", "no_reply", codigo="[NO_REPLY]")}),
+        esc("PC-3 propuesta de hace 3 días", ORQ_P, texto="dale", pg={"Historial": [fila(PROP_TXT, "2026-10-02T04:00:00Z")]}, subwf={"Agente Turnos": sub("turnos", "", "no_reply", codigo="[NO_REPLY]")}),
+        esc("PC-4 sombra", ORQ_P, texto="dale", modo="sombra", pg={"Historial": [fila(PROP_TXT, "2026-10-05T04:00:00Z")]}, subwf={"Agente Turnos": T_YA}, redis={f"turnos_vistos:{TEL}": VISTOS_J}),
+    ])
+    a = P["PC-1 propuesta del staff hace 8 h y el paciente la acepta"]["reps"][0]
+    ent = (llamados(a, "Agente Turnos") or [{}])[0].get("entradas", {})
+    ps = json.loads(ent.get("propuesta_staff") or "null")
+    chequear("PC-1 Turnos recibe propuesta_staff con el texto CRUDO completo del staff (sin prefijo) y su hora; el contexto muestra la PROPUESTA DE LA CLÍNICA",
+             ps and ps["texto"] == PROP_TXT and ps["ms"] == MS("2026-10-05T04:00:00Z") and "PROPUESTA DE LA CLÍNICA SIN RESPONDER" in ent.get("contexto", ""), ent)
+    chequear("PC-1 el paciente recibe el texto del código y el FYI sale al grupo (modo vivo)", a["salida"]["texto"] == YA and any("aceptó la propuesta de la clínica" in str((x.get("qs") or {}).get("resumen", "")) for x in a["avisos"]),
+             (a["salida"]["texto"], a["avisos"]))
+    for k in ("PC-2 después del staff habló Asiri", "PC-3 propuesta de hace 3 días"):
+        a = P[k]["reps"][0]; ent = (llamados(a, "Agente Turnos") or [{}])[0].get("entradas", {})
+        chequear(f"{k[:4]} sin propuesta vigente: propuesta_staff vacío y sin bloque en el contexto", ent.get("propuesta_staff", "") == "" and "PROPUESTA DE LA CLÍNICA" not in ent.get("contexto", ""), ent.get("propuesta_staff"))
+    a = P["PC-4 sombra"]["reps"][0]
+    chequear("PC-4 en sombra el FYI NO sale (solo con modo 'vivo' explícito)", a["salida"]["texto"] == YA and not a["avisos"], a["avisos"])
+    P2 = correr(wf, [
+        esc("PC-5 el paciente ya había contestado (no quedó en memoria)", ORQ_P, texto="dale", pg={"Historial": [fila(PROP_TXT, "2026-10-05T04:00:00Z")], "Entrantes": [{"created_at": "2026-10-05T05:00:00.000Z"}]},
+            subwf={"Agente Turnos": sub("turnos", "", "no_reply", codigo="[NO_REPLY]")}),
+        esc("PC-6 rechaza la propuesta (Bautista)", orq({"a": "turnos", "pedido": "acepta la propuesta de la clínica"}), texto="no puedo, me quedo con el del 28",
+            pg={"Historial": [fila(PROP_TXT, "2026-10-05T04:00:00Z")]}, subwf={"Agente Turnos": sub("turnos", "", "no_reply", codigo="[NO_REPLY]")}),
+        esc("PC-7 'Hola buenos dias' solo, con propuesta sin responder", orq({"a": "menu_bienvenida"}), texto="Hola buenos dias", pg={"Historial": [fila(PROP_TXT, "2026-10-05T04:00:00Z")]}),
+        esc("PC-8 el staff habla de cambiarle el arco (no es su turno)", orq({"a": "no_reply"}), texto="dale", pg={"Historial": [fila("Buenas, mañana a las 10:00 la Dra. puede cambiarle el arco a Santi, ¿lo puede traer?", "2026-10-05T04:00:00Z")]}),
+    ])
+    a = P2["PC-5 el paciente ya había contestado (no quedó en memoria)"]["reps"][0]; ent = (llamados(a, "Agente Turnos") or [{}])[0].get("entradas", {})
+    chequear("PC-5 (revisión R6) contestó después de la propuesta según mensajes_entrantes_live → sin propuesta vigente", ent.get("propuesta_staff", "") == "" and "PROPUESTA DE LA CLÍNICA" not in ent.get("contexto", ""), ent.get("propuesta_staff"))
+    a = P2["PC-6 rechaza la propuesta (Bautista)"]["reps"][0]
+    chequear("PC-6 (revisión ALTA 2) rechazo → silencio, sin derivar ni avisar al grupo", a["salida"]["silencio"] is True and not llamados(a, "Derivar a secretaria") and not a["avisos"], (a["salida"]["texto"], a["avisos"]))
+    a = P2["PC-7 'Hola buenos dias' solo, con propuesta sin responder"]["reps"][0]
+    chequear("PC-7 (revisión MEDIA 4) un saludo solo tras la propuesta no recibe el menú (silencio): el 'dale' siguiente la sigue encontrando", a["salida"]["silencio"] is True, a["salida"]["texto"])
+    a = P2["PC-8 el staff habla de cambiarle el arco (no es su turno)"]["reps"][0]
+    chequear("PC-8 (revisión ALTA 1) 'cambiarle el arco' no es una PROPUESTA DE LA CLÍNICA: no aparece el bloque", "PROPUESTA DE LA CLÍNICA SIN RESPONDER" not in json.dumps(a["pedidos"], ensure_ascii=False), a["salida"])
 
     print(f"\n{total - fallas}/{total} {'TODO OK' if not fallas else str(fallas) + ' FALLAS'}")
     sys.exit(1 if fallas else 0)

@@ -101,7 +101,7 @@ def wf_gestionar_turno():
     El modelo aporta tipo/fecha/hora/turno viejo/datos del nuevo/confirma; teléfono, ejecución, modo, último mensaje de Asiri y mensajes del paciente los pone el código."""
     g = Grafo("v7 Tool - gestionar_turno")
     g.trigger({"tel": "5490000000651", "exec_id_actual": "1234", "modo": "vivo", "texto_paciente": "", "ultimo_asiri": "", "tipo": "cambio", "fecha": "", "hora": "", "fecha_turno_viejo": "",
-               "nuevo_nombre": "", "nuevo_apellido": "", "nuevo_dni": "", "confirma": "", "textos_paciente": "[]"}, 0, 200)
+               "nuevo_nombre": "", "nuevo_apellido": "", "nuevo_dni": "", "confirma": "", "textos_paciente": "[]", "accion": "", "propuesta_staff": "", "para": ""}, 0, 200)
     g.redis_get("Redis GET ficha", "'ficha:' + $json.tel", "ficha_raw", 220, 200)
     g.redis_get("Redis GET turnos_vistos", "'turnos_vistos:' + $('Entrada').first().json.tel", "turnos_raw", 440, 200)
     g.redis_get("Redis GET ofertas", "'ofertas:' + $('Entrada').first().json.tel", "ofertas_raw", 660, 200)
@@ -113,7 +113,10 @@ const estado = { tel: e.tel, exec_id: String(e.exec_id_actual), ficha: j('Redis 
 // (08/10) Mensajes del paciente de las últimas 12 h (los arma el cerebro, respetando historial_json): para verificar que el DNI que copió el modelo lo escribió el paciente.
 let tp = null; try { tp = JSON.parse(e.textos_paciente || 'null'); } catch (x) { tp = null; }
 if (Array.isArray(tp)) estado.textos_paciente = tp.map(String);
-const d = AgendaCore.decidir({ tipo: e.tipo, fecha: e.fecha, hora: e.hora, fecha_turno_viejo: e.fecha_turno_viejo || undefined,
+// (05/11) aceptar_propuesta_clinica: accion fija 'propuesta_staff' + el mensaje crudo del staff que armó el cerebro ({texto, ms}); el modelo no aporta nada.
+let ps = null; try { ps = JSON.parse(e.propuesta_staff || 'null'); } catch (x) { ps = null; }
+estado.propuesta_staff = ps && typeof ps === 'object' ? ps : null;
+const d = AgendaCore.decidir({ accion: String(e.accion || ''), para: String(e.para || ''), tipo: e.tipo, fecha: e.fecha, hora: e.hora, fecha_turno_viejo: e.fecha_turno_viejo || undefined,
   nuevo_nombre: e.nuevo_nombre || '', nuevo_apellido: e.nuevo_apellido || '', nuevo_dni: e.nuevo_dni || '', confirma: e.confirma }, estado, new Date().toISOString());
 return [{ json: { etapa: d.etapa, propuesta_json: d.propuesta ? JSON.stringify(d.propuesta) : null, resultado: d.resultado || null } }];""", 880, 200, usar=("agenda_core",))
     g.si("¿Ejecutar?", "$json.etapa === 'ejecutar'", 1100, 200)

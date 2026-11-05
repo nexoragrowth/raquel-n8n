@@ -28,6 +28,48 @@ const HistorialCore = (() => {
     }
     return turnos.reverse();   // cronológico: lo más nuevo al final
   }
+  // (05/11, incidente José 331590) ¿Lo último que NO escribió el paciente es una PROPUESTA de la clínica escrita a mano? ESTADO (quién escribió y cuándo)
+  // + texto CRUDO de la clínica (no el del paciente, y no el recortado a 220 del contexto). Devuelve { texto, ms } o null.
+  //   - solo mensajes del staff humano: "[ATENCION HUMANA…" con from_iri_or_dra (los del sub-WF Cancelar del v6 van sin prefijo y no cuentan);
+  //   - una ráfaga: mensajes del staff seguidos, con menos de 10 min entre uno y otro ("…¿a las 17:40?" + "Por favor me confirma");
+  //   - null si el más nuevo es multimedia (no se puede leer), un recordatorio automático de Dentalink ("Estimado…, le recordamos…") o un pedido de
+  //     CONFIRMAR asistencia sin cambio (eso sigue por confirmar_turno, como hoy), o si pasaron más de `maxMs`.
+  const PREFIJO_STAFF = /^\[ATENCION HUMANA[^\]]*\]:?\s*/i;
+  const AUTOMATICO = /^\s*estimad[oa]s?\b[\s\S]{0,200}le recordamos|recordamos que el d[ií]a/i;
+  const SOLO_CONFIRMAR = (s) => { const n = String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); return /confirm/.test(n) && !/\b(re ?agend|agend|re ?program|cambi|adelant|atras|posterg|pasar|pasamos|pasemos|mover|movemos|corr(er|emos))/.test(n); };
+  // entrantesMs (05/11, revisión R6): horas de TODOS los mensajes del paciente (mensajes_entrantes_live, que el v6 llena antes del modo humano y aunque Asiri
+  // calle; n8n_chat_histories no los guarda en esos casos). Si contestó después de la propuesta (fuera del lote actual: margenMs), ya no está "sin responder";
+  // si contestó entre dos mensajes del staff, la ráfaga se corta ahí.
+  function ultimoStaff(rows, ahoraMs, maxMs, entrantesMs, margenMs) {
+    const ent = (Array.isArray(entrantesMs) ? entrantesMs : []).map(Number).filter((x) => x > 0);
+    const hayEntrante = (desde, hasta) => ent.some((x) => x > desde && x < hasta);
+    const partes = []; let msNuevo = null, msAnterior = null;
+    for (const r of rows || []) {
+      let m = r && r.message;
+      if (typeof m === 'string') { try { m = JSON.parse(m); } catch (e) { continue; } }
+      if (!m || typeof m !== 'object') continue;
+      if (m.type === 'human') break;
+      const c = String(m.content || '').trim();
+      const k = m.additional_kwargs || {};
+      const esStaff = m.type === 'ai' && PREFIJO_STAFF.test(c) && k.from_iri_or_dra === true;
+      if (!esStaff) break;
+      const t = Date.parse(String(r.created_at || ''));
+      if (isNaN(t)) break;
+      if (msAnterior !== null && (msAnterior - t > 10 * 60 * 1000 || hayEntrante(t, msAnterior))) break;
+      const cuerpo = c.replace(PREFIJO_STAFF, '').replace(/\s*\[MEDIA:[^\]]*\]/g, '').trim();
+      const multimedia = k.was_multimedia === true || /^\[mensaje multimedia/i.test(cuerpo) || /^\[(imagen|audio|video|documento|sticker)\]/i.test(cuerpo);
+      if (multimedia || !cuerpo || AUTOMATICO.test(cuerpo)) { if (!partes.length) return null; break; }
+      if (msNuevo === null) msNuevo = t;
+      msAnterior = t;
+      partes.unshift(cuerpo);
+    }
+    if (!partes.length || (maxMs && ahoraMs - msNuevo > maxMs)) return null;
+    // (05/11, revisión con el modelo real M1) margen de 10 min: un "Hola buenos días" de hace 2 min (que Asiri calla) no es contestar la propuesta; un rechazo de hace horas sí.
+    if (hayEntrante(msNuevo, ahoraMs - (margenMs === undefined ? 10 * 60 * 1000 : margenMs))) return null;
+    const texto = partes.join('\n');
+    if (SOLO_CONFIRMAR(texto)) return null;
+    return { texto, ms: msNuevo };
+  }
   // Texto único que se le pasa al agente como mensaje de usuario.
   // `ident` = salida de la herramienta ver_turnos (ya resuelta por el código ANTES de que Asiri responda): fichas del celular y turnos vigentes.
   function identidad(ident) {
@@ -65,12 +107,14 @@ const HistorialCore = (() => {
     // (08/10, Lucas) Antes decía "PENDIENTES DE CONFIRMAR" y el modelo abría con "¿Me confirma su asistencia…?". Pedir confirmación es tarea del recordatorio, no de Asiri.
     if (recordatorios && recordatorios.length) partes.push('RECORDATORIOS YA ENVIADOS (sin respuesta; NO le pidas que confirme: si él confirma, confirmar_turno): ' + recordatorios.join(' | '));
     if (x.confirmacion_pendiente && x.confirmacion_pendiente.texto) partes.push('CONFIRMACIÓN PENDIENTE (el paciente la vio y todavía no contestó; hace ' + Number(x.confirmacion_pendiente.minutos || 0) + ' min): «' + corta(x.confirmacion_pendiente.texto, 400) + '»');
+    // (05/11) Lo último que no escribió el paciente es una propuesta de la clínica escrita a mano (ultimoStaff): el paciente puede estar respondiéndola.
+    if (x.propuesta_clinica && x.propuesta_clinica.texto) partes.push('PROPUESTA DE LA CLÍNICA SIN RESPONDER (la escribió el staff hace ' + Math.max(0, Math.round(Number(x.propuesta_clinica.horas || 0))) + ' h; es lo último que se le dijo): «' + corta(x.propuesta_clinica.texto, 500) + '»');
     partes.push('CONVERSACIÓN RECIENTE (lo más nuevo abajo):\n' + (historial.length ? historial.join('\n') : '(es la primera vez que escribe)'));
     partes.push('MENSAJE ACTUAL DEL PACIENTE:\n' + mensaje);
     return partes.join('\n\n');
   }
   // (08/10, orquestador) Se BORRARON las funciones de cierre, de pregunta pendiente, de saludo y de pedido de información: eran regex que decidían la intención del paciente
   // (silencio ante un "gracias", menú ante un saludo). Ahora lo decide el ORQUESTADOR (la IA) con el contexto; "conversación nueva" es un dato (12 h sin mensajes).
-  return { armar, mensajeAgente, identidad, corta };
+  return { armar, mensajeAgente, identidad, corta, ultimoStaff };
 })();
 if (typeof module !== 'undefined') module.exports = HistorialCore;
