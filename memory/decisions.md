@@ -969,3 +969,9 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Medido:** de 27 respuestas del v7 dentro de las 24 h posteriores a un mensaje del staff, 23 fueron pasada la hora (64 min a 23,6 h: el silencio ya había vencido, por diseño) y 4 en el mismo minuto del mensaje del staff (carrera: la secretaria escribe mientras el cerebro procesa; Gate Humano Final falla abierto).
 - **Cómo se ataca:** (a) las 23: regla del prompt del orquestador "le contesta al STAFF sin pedirnos nada nuevo, aunque cuente algo → no_reply" (en el repo, deploy pendiente); (b) las 4: arreglar la carrera en Gate Humano Final (backlog).
 
+
+## 2026-11-11 — La entrada descarta mensajes con más de 15 min de atraso (lo aplicó Lucas)
+- **Qué:** paso 4 del "Webhook Validator" de O155: si `info.Timestamp` tiene más de 15 min, el mensaje se descarta sin respuesta.
+- **Por qué:** WhatsApp estuvo cortado del 09/11 (mediodía) al 11/11 (~13 h). Al reconectar, Evolution entregó mensajes del lunes y el bot los contestó a las 00:35 y 01:25; la Dra. se quejó.
+- **Dónde:** copia del workflow vivo en `workflows/history/O155MqHgOSaNZ9ye_POST_descartar_atrasados_lucas_2026-11-11.json` (el script `apply_v6_descartar_atrasados.py` que cita el comentario no está en el repo).
+- **Pendiente:** segundo canal de alertas (el corte pasó 2 días sin que nadie lo note) y revisar los recordatorios del 10/11 y 11/11.
