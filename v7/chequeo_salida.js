@@ -22,7 +22,8 @@ const ChequeoSalida = (() => {
       for (const m of l.matchAll(/\b(\d{1,2}):(\d{2})\b/g)) tokens.push({ i: m.index, tipo: 'h', h: hh(m[1], m[2]) });
       // (07/10) "jueves 22" sin mes: fecha con mes desconocido (xx-22). Antes la hora siguiente se pegaba a la fecha anterior de la línea
       // ("cambiar su turno del 16/10 10:30 por jueves 22 a las 8:00" → "16/10 08:00", inventado; examen DANA-04).
-      for (const m of l.matchAll(/\b(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+(\d{1,2})\b(?!\s*(?:de\s+[a-z]|\/))/g)) tokens.push({ i: m.index, tipo: 'f', md: `xx-${String(Number(m[1])).padStart(2, '0')}` });
+      // (11/11) "jueves 8:00–12:00" es un HORARIO de atención, no "el jueves 8": un número seguido de ":" es hora (el agente lo bloqueaba al dar los horarios del Conocimiento).
+      for (const m of l.matchAll(/\b(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+(\d{1,2})\b(?!\s*(?:de\s+[a-z]|\/)|:\d)/g)) tokens.push({ i: m.index, tipo: 'f', md: `xx-${String(Number(m[1])).padStart(2, '0')}` });
       tokens.sort((a, b) => a.i - b.i);
       let fecha = null;
       for (const t of tokens) { if (t.tipo === 'f') fecha = t.md; else if (fecha) out.push(`${fecha} ${t.h}`); }

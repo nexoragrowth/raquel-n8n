@@ -11,7 +11,9 @@ def wf_ver_turnos():
     """v7 Tool - ver_turnos: resuelve las fichas del celular (una vez, Redis 2 h), trae los turnos vigentes de TODAS y los deja en Redis para las guardas."""
     g = Grafo("v7 Tool - ver_turnos")
     g.trigger({"tel": "5490000000651", "exec_id_actual": "1234"}, 0, 300)
-    g.redis_get("Redis GET ficha", "'ficha:' + $json.tel", "ficha_raw", 220, 300)
+    # (11/11) Escenario de PRUEBA (fichas y citas inventadas que carga el webhook de prueba): solo para el celular de Lucas o sintéticos.
+    g.redis_get("Redis GET escenario", "'escenario:' + $json.tel", "escenario_raw", 110, 420)
+    g.redis_get("Redis GET ficha", "'ficha:' + $('Entrada').first().json.tel", "ficha_raw", 220, 300)
     g.code("¿Qué ficha hay?", """const e = $('Entrada').first().json;
 let est = null; try { est = JSON.parse($input.first().json.ficha_raw || 'null'); } catch (x) { est = null; }
 const tiene = !!(est && Array.isArray(est.fichas) && est.fichas.length);
@@ -32,19 +34,20 @@ return estado.fichas.map((f, i) => ({ json: { idx: i, ficha_id: f.id, hoy, estad
     g.dentalink("GET citas por ficha", "GET", f"'{DENTALINK}/pacientes/' + $json.ficha_id + '/citas'", None, 1980, 360, query_expr="JSON.stringify({ fecha: { gte: $json.hoy } })")
     g.code("Armar turnos", """const items = $('Items por ficha').all();
 const estado = items[0].json.estado; const hoy = items[0].json.hoy;
-const resps = $input.all().map((i) => i.json);
+const esc = EscenarioPrueba.leer($('Redis GET escenario').first().json.escenario_raw, $('Entrada').first().json.tel);
+const resps = esc ? estado.fichas.map((f) => ({ data: esc.citas[String(f.id)] || [] })) : $input.all().map((i) => i.json);
 if (resps.some((r) => r && r.error)) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude consultar los turnos en la agenda. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION); no inventes turnos.' } } }];
 const turnos = FichaCore.turnosVistos(estado.fichas, resps, hoy);
 const varias = estado.fichas.length > 1;
 return [{ json: { terminado: false, turnos, resultado: { ok: true, varias_fichas: varias, ficha_elegida: estado.elegida !== null, paciente_elegido: estado.elegida !== null ? ((estado.fichas.find((f) => f.id === estado.elegida) || {}).nombre || null) : null, pacientes: varias ? estado.fichas.map((f) => f.nombre) : undefined, turnos: FichaCore.resumenTurnos(estado.fichas, turnos),
   turnos_menos_48h: FichaCore.resumenTurnos(estado.fichas, FichaCore.menos48h(turnos, Date.now())),
-  para_asiri: varias && estado.elegida === null ? 'Este celular tiene varias fichas: preguntá para quién es (nombre o DNI) y llamá a elegir_ficha antes de proponer cualquier cambio.' : 'Estos son los turnos vigentes. No muestres ids.' } } }];""", 2200, 360, usar=("ficha_core",))
+  para_asiri: varias && estado.elegida === null ? 'Este celular tiene varias fichas: preguntá para quién es (nombre o DNI) y llamá a elegir_ficha antes de proponer cualquier cambio.' : 'Estos son los turnos vigentes. No muestres ids.' } } }];""", 2200, 360, usar=("ficha_core", "escenario_core"))
     g.si("¿Termina? (turnos)", "$json.terminado === true", 2420, 360)
     g.redis_set("Redis SET turnos_vistos", "'turnos_vistos:' + $('Entrada').first().json.tel", "JSON.stringify($('Armar turnos').first().json.turnos)", 7200, 2640, 420)
     g.code("Devolver", """const j = $input.first().json;
 if (j.resultado) return [{ json: j.resultado }];
 return [{ json: $('Armar turnos').first().json.resultado }];""", 2860, 360)
-    for a, b, s_ in [("Entrada", "Redis GET ficha", 0), ("Redis GET ficha", "¿Qué ficha hay?", 0), ("¿Qué ficha hay?", "¿Ya hay ficha?", 0), ("¿Ya hay ficha?", "Items por ficha", 0), ("¿Ya hay ficha?", "GET fichas del celular", 1),
+    for a, b, s_ in [("Entrada", "Redis GET escenario", 0), ("Redis GET escenario", "Redis GET ficha", 0), ("Redis GET ficha", "¿Qué ficha hay?", 0), ("¿Qué ficha hay?", "¿Ya hay ficha?", 0), ("¿Ya hay ficha?", "Items por ficha", 0), ("¿Ya hay ficha?", "GET fichas del celular", 1),
                      ("GET fichas del celular", "Armar ficha", 0), ("Armar ficha", "¿Termina? (ficha)", 0), ("¿Termina? (ficha)", "Devolver", 0), ("¿Termina? (ficha)", "Redis SET ficha", 1), ("Redis SET ficha", "Items por ficha", 0),
                      ("Items por ficha", "GET citas por ficha", 0), ("GET citas por ficha", "Armar turnos", 0), ("Armar turnos", "¿Termina? (turnos)", 0), ("¿Termina? (turnos)", "Devolver", 0),
                      ("¿Termina? (turnos)", "Redis SET turnos_vistos", 1), ("Redis SET turnos_vistos", "Devolver", 0)]:

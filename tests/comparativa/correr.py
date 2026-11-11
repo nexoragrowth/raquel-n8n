@@ -15,11 +15,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import crear_v7_en_n8n as D
 from casos import CASOS
 import os
-if os.environ.get("COMPARATIVA_CASOS"):   # casos reales armados por extraer_reales.py (archivo fuera del repo)
+CON_CONTEXTO = os.environ.get("COMPARATIVA_CASOS") == "contexto"
+if CON_CONTEXTO:   # (11/11) contexto armado a mano: fichas, turnos y recordatorios inventados (casos_contexto.py)
+    from casos_contexto import CASOS
+elif os.environ.get("COMPARATIVA_CASOS"):   # casos reales armados por extraer_reales.py (archivo fuera del repo)
     CASOS = json.loads(Path(os.environ["COMPARATIVA_CASOS"]).read_text(encoding="utf-8"))
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-TEL = "5491161461034"
+TEL = "5490000000777" if CON_CONTEXTO else "5491161461034"   # con contexto: celular SINTÉTICO (sin fichas reales en Dentalink)
+MARCA_REC = "comparativa_ctx"
 IDS = json.loads(D.IDS.read_text(encoding="utf-8"))
 PROBAR = [sys.executable, "-W", "ignore", str(ROOT / "scripts" / "probar_v7.py")]
 LIMPIAR = Path(sys.argv[0]).resolve().parent / "limpiar_sombra.py"
@@ -43,6 +47,32 @@ def sh(*a):
 
 def limpiar_memoria():
     subprocess.run([sys.executable, str(LIMPIAR)], capture_output=True)
+
+
+def db():
+    import re, psycopg2
+    env = {}
+    for l in (ROOT / ".env").read_text(encoding="utf-8", errors="replace").splitlines():
+        m = re.match(r"\s*(SUPABASE_DB_[A-Z]+)\s*=\s*(.*)", l)
+        if m: env[m.group(1)] = m.group(2).strip().strip("'\"")
+    return psycopg2.connect(host=env["SUPABASE_DB_HOST"], port=env["SUPABASE_DB_PORT"], dbname=env["SUPABASE_DB_NAME"], user=env["SUPABASE_DB_USER"], password=env["SUPABASE_DB_PASSWORD"], sslmode="require")
+
+
+def recordatorios(filas):
+    """Borra los recordatorios de prueba del celular sintético y siembra los del caso (marca MARCA_REC)."""
+    c = db(); cur = c.cursor()
+    cur.execute("DELETE FROM recordatorios_enviados WHERE telefono = %s AND workflow_execution_id = %s", (TEL, MARCA_REC))
+    for r in filas or []:
+        cur.execute("INSERT INTO recordatorios_enviados (telefono, chat_remote_jid, id_cita_dentalink, id_paciente_dentalink, nombre_paciente, fecha_turno, hora_turno, tipo, workflow_execution_id) "
+                    "VALUES (%s, %s, %s, %s, %s, %s::date, %s::time, '48h', %s)",
+                    (TEL, TEL + "@s.whatsapp.net", r["id_cita_dentalink"], r["id_paciente_dentalink"], r["nombre_paciente"], r["fecha_turno"], r["hora_turno"], MARCA_REC))
+    c.commit(); c.close()
+
+
+def escenario(e):
+    f = Path(os.environ.get("TEMP", ".")) / "escenario_comparativa.json"
+    f.write_text(json.dumps({"destino": "escenario", "tel": TEL, "escenario": e or {"fichas": [], "citas": {}}}, ensure_ascii=False), encoding="utf-8")
+    return sh("--archivo", str(f))
 
 
 def put_sin_error_wf(wid):
@@ -74,6 +104,10 @@ def main():
                     continue
                 limpiar_memoria()
                 sh("--destino", "reset", "--campo", f"tel={TEL}")
+                if CON_CONTEXTO:
+                    if c.get("escenario"):
+                        escenario(c["escenario"])
+                    recordatorios(c.get("recordatorios"))
                 campos = ["--destino", d, "--campo", f"phone={TEL}", "--campo", "modo=sombra", "--campo", f"texto={c['texto']}"]
                 if c["hist"]:
                     campos += ["--campo", "historial_json=" + json.dumps(historial(c["hist"]), ensure_ascii=False)]
@@ -92,6 +126,9 @@ def main():
                 print(f"{c['id']:14} {d:24} {seg:5}s  {'SILENCIO' if res.get('silencio') else (res.get('texto') or res.get('error') or '')[:90]!r}", flush=True)
     finally:
         limpiar_memoria()
+        if CON_CONTEXTO:
+            recordatorios([])
+            sh("--destino", "reset", "--campo", f"tel={TEL}")
         for d in agentes + ["test"]:
             try:
                 D.api(f"/workflows/{IDS[d]}/deactivate", "POST")

@@ -46,7 +46,11 @@ for (const [nodo, clave] of [['Pagos forzado', 'pagos'], ['Turnos forzado', 'tur
 }
 if (String($('Entrada').first().json.texto || '').toUpperCase().indexOf('[AUDIO]') >= 0 && ctx.audio_transcripto !== true) extra.push('El paciente mandó un audio que NO se pudo transcribir: pedile que lo escriba, con esta frase: ' + OrquestadorCore.TEXTOS.PEDIR_TEXTO);
 if (ctx.staff_reciente === true) extra.push('El último mensaje que NO es del paciente lo escribió la clínica (STAFF) hace menos de 6 h: si solo corresponde derivar, llamá no_responder.');
-extra.push('MENÚ (si saluda solo o pide información sin decir de qué, pegalo tal cual):\\n' + (ctx.menu || ''));
+// (11/11, Lucas) Conocimiento es la fuente: lo que el prompt no dice, el agente lo responde con lo que cargó la clínica, formulado por él.
+extra.push('CONOCIMIENTO DE LA CLÍNICA (cargado por la clínica en el panel; respondé con esto, con tus palabras, sin agregar datos que no estén):\\n'
+  + String(ctx.datos_info || '').replace(/^DATOS DEL CONSULTORIO[^\\n]*\\n/, '')
+  + (ctx.anuncio ? '\\n- Presentación para quien llega por un anuncio ("quiero más información"): ' + ctx.anuncio : ''));
+extra.push('MENÚ (si saluda solo, sin pedir nada, pegalo tal cual):\\n' + (ctx.menu || ''));
 return [{ json: { texto_agente: ctx.contexto + '\\n\\n' + extra.join('\\n\\n') } }];"""
 
 JS_VERIFICAR = JS_RES1 + """const e = $('Entrada').first().json;

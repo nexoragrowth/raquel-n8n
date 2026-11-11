@@ -78,6 +78,7 @@ def wf_confirmar_una():
     # (08/10) INCIDENTE: el trigger no declaraba `modo`, n8n lo descartaba y en "sombra" se confirmaron de verdad 11 citas reales (retrospectiva del 06/10).
     # Ahora solo escribe con modo === 'vivo' explícito; cualquier otra cosa (o nada) es sombra: verifica pero no hace el PUT ni marca el recordatorio.
     g.trigger({"tel": "5490000000651", "exec_id_actual": "1234", "modo": "vivo", "cand_json": ""}, 0, 300)
+    g.redis_get("Redis GET escenario", "'escenario:' + $json.tel", "escenario_raw", 440, 420)   # (11/11) escenario de prueba (ver Verificar)
     g.code("Elegir cita", """const e = $('Entrada').first().json;
 let cand = null; try { cand = JSON.parse(e.cand_json || 'null'); } catch (x) { cand = null; }
 if (!cand || !cand.cita_id) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude identificar el turno a confirmar.' } } }];
@@ -85,8 +86,12 @@ return [{ json: { terminado: false, cand } }];""", 660, 300)
     g.si("¿Termina? (elegir)", "$json.terminado === true", 880, 300)
     g.dentalink("GET cita", "GET", f"'{DENTALINK}/citas/' + $json.cand.cita_id", None, 1100, 360)
     g.code("Verificar", """const cand = $('Elegir cita').first().json.cand;
-const r = ConfirmarCore.verificar(cand, $input.first().json);
-return [{ json: r.fin ? { terminado: true, resultado: r.fin } : { terminado: false, cand, ya: r.ya } }];""", 1320, 360, usar=("confirmar_core",))
+// (11/11) Escenario de PRUEBA: en sombra y con el celular de Lucas o sintético, la cita sale del escenario cargado por el webhook de prueba.
+const e = $('Entrada').first().json;
+const esc = e.modo !== 'vivo' ? EscenarioPrueba.leer($('Redis GET escenario').first().json.escenario_raw, e.tel) : null;
+const citaEsc = esc ? EscenarioPrueba.cita(esc, cand.cita_id) : null;
+const r = ConfirmarCore.verificar(cand, citaEsc ? { data: citaEsc } : $input.first().json);
+return [{ json: r.fin ? { terminado: true, resultado: r.fin } : { terminado: false, cand, ya: r.ya } }];""", 1320, 360, usar=("confirmar_core", "escenario_core"))
     g.si("¿Termina? (verificar)", "$json.terminado === true", 1540, 360)
     g.si("¿Es sombra?", "$('Entrada').first().json.modo !== 'vivo'", 1650, 300)
     g.si("¿Ya estaba confirmada?", "$json.ya === true", 1760, 420)
@@ -107,7 +112,7 @@ const cand = $('Elegir cita').first().json.cand || null;
 const sombra = e.modo !== 'vivo';
 if (j.resultado) return [{ json: { ok: false, motivo: j.resultado.motivo || 'error_tecnico', para_asiri: j.resultado.para_asiri || null, ya: false, escribio: false, simulado: sombra || undefined, cand } }];
 return [{ json: { ok: true, ya: j.ya === true, escribio: j.escribio === true || j.ya === true || sombra, simulado: sombra || undefined, motivo: null, para_asiri: null, cand } }];""", 3080, 360, usar=("confirmar_core",))
-    for a, b, s_ in [("Entrada", "Elegir cita", 0), ("Elegir cita", "¿Termina? (elegir)", 0),
+    for a, b, s_ in [("Entrada", "Redis GET escenario", 0), ("Redis GET escenario", "Elegir cita", 0), ("Elegir cita", "¿Termina? (elegir)", 0),
                      ("¿Termina? (elegir)", "Final", 0), ("¿Termina? (elegir)", "GET cita", 1), ("GET cita", "Verificar", 0), ("Verificar", "¿Termina? (verificar)", 0), ("¿Termina? (verificar)", "Final", 0),
                      ("¿Termina? (verificar)", "¿Es sombra?", 1), ("¿Es sombra?", "Final", 0), ("¿Es sombra?", "¿Ya estaba confirmada?", 1), ("¿Ya estaba confirmada?", "¿Viene de un recordatorio?", 0), ("¿Ya estaba confirmada?", "PUT confirmar", 1),
                      ("PUT confirmar", "Evaluar confirmación", 0), ("Evaluar confirmación", "¿Termina? (confirmar)", 0), ("¿Termina? (confirmar)", "Final", 0), ("¿Termina? (confirmar)", "¿Viene de un recordatorio?", 1),

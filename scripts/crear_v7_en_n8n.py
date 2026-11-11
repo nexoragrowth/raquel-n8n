@@ -49,19 +49,27 @@ def wf_test(ids, ruta):
     """Webhook de prueba (ruta secreta, inactivo por defecto): body {destino: 'cerebro'|<herramienta>, ...campos de entrada}. Nunca escribe nada en modo sombra."""
     g = Grafo("v7 Test (sombra)")
     g._nodo("Webhook", "n8n-nodes-base.webhook", 2, {"httpMethod": "POST", "path": ruta, "responseMode": "lastNode", "options": {}}, 0, 200, {"webhookId": secrets.token_hex(8)})
-    g.code("Despachar", "const ids = " + json.dumps(ids) + ";\nconst b = $input.first().json.body || {};\nconst destino = String(b.destino || 'cerebro');\n// (08/10) Pedido de Lucas: pruebas SOLO con su número o con celulares sintéticos, nunca con el de un paciente (la retrospectiva con el celular de cada\n// paciente confirmó 11 turnos reales el 06/10). Lo garantiza el servidor, no cada script; vale también para el reinicio (borra claves de Redis).\nconst telPedido = String(b.tel || b.phone || '');\nconst permitido = telPedido === '5491161461034' || /^5490000000\\d{3}$/.test(telPedido) || /^549999\\d{7}$/.test(telPedido);\nif (!permitido) return [{ json: { error: 'teléfono no permitido para pruebas (solo el de Lucas o celulares sintéticos)', tel: telPedido } }];\nif (destino === 'reset') return [{ json: { reset: true, tel: String(b.tel || '') } }];\nconst wid = ids[destino];\nif (!wid) return [{ json: { error: 'destino desconocido: ' + destino, destinos: Object.keys(ids) } }];\nconst { destino: _d, modo: _m, ...entrada } = b;\n// SIEMPRE sombra: este webhook existe solo para probar; nadie puede pedirle una ejecución en vivo desde afuera.\nreturn [{ json: { ...entrada, modo: 'sombra', workflow_id: wid } }];", 220, 200)
+    g.code("Despachar", "const ids = " + json.dumps(ids) + ";\nconst b = $input.first().json.body || {};\nconst destino = String(b.destino || 'cerebro');\n// (08/10) Pedido de Lucas: pruebas SOLO con su número o con celulares sintéticos, nunca con el de un paciente (la retrospectiva con el celular de cada\n// paciente confirmó 11 turnos reales el 06/10). Lo garantiza el servidor, no cada script; vale también para el reinicio (borra claves de Redis).\nconst telPedido = String(b.tel || b.phone || '');\nconst permitido = telPedido === '5491161461034' || /^5490000000\\d{3}$/.test(telPedido) || /^549999\\d{7}$/.test(telPedido);\nif (!permitido) return [{ json: { error: 'teléfono no permitido para pruebas (solo el de Lucas o celulares sintéticos)', tel: telPedido } }];\nif (destino === 'reset') return [{ json: { reset: true, tel: String(b.tel || '') } }];\n// (11/11) Escenario de prueba: fichas y citas inventadas (v7/escenario_core.js). Se guarda 15 min; el reinicio lo borra.\nif (destino === 'escenario') { const esc = b.escenario || {}; const f = Array.isArray(esc.fichas) ? esc.fichas : []; return [{ json: { escenario: true, tel: telPedido, esc: JSON.stringify(esc), ficha: JSON.stringify({ fichas: f, elegida: f.length === 1 ? f[0].id : null }) } }]; }\nconst wid = ids[destino];\nif (!wid) return [{ json: { error: 'destino desconocido: ' + destino, destinos: Object.keys(ids) } }];\nconst { destino: _d, modo: _m, ...entrada } = b;\n// SIEMPRE sombra: este webhook existe solo para probar; nadie puede pedirle una ejecución en vivo desde afuera.\nreturn [{ json: { ...entrada, modo: 'sombra', workflow_id: wid } }];", 220, 200)
     g._nodo("Ejecutar", "n8n-nodes-base.executeWorkflow", 1.2, {"workflowId": {"__rl": True, "value": "={{ $json.workflow_id }}", "mode": "id"}, "workflowInputs": {"mappingMode": "autoMapInputData", "value": {}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": False, "convertFieldsToString": False}, "options": {}}, 440, 200, {"alwaysOutputData": True})
+    g.si("¿Escenario?", "$json.escenario === true", 300, 340)
+    g.redis_set("Redis SET escenario", "'escenario:' + $json.tel", "$json.esc", 900, 440, 340)
+    g.redis_set("Redis SET ficha (escenario)", "'ficha:' + $('Despachar').first().json.tel", "$('Despachar').first().json.ficha", 900, 600, 340)
+    g.code("Escenario listo", "return [{ json: { escenario: 'ok', tel: $('Despachar').first().json.tel } }];", 760, 340)
     g.si("¿Reinicio?", "$json.reset === true", 330, 200)
     # (08/10) + v7s:avisos y v7s:pago: las marcas de sombra (tope de avisos / pago ya anotado, 30 y 15 min) se arrastraban de un escenario al
     # siguiente en el mismo celular de prueba → modo humano o "ya anotado" falsos.
-    claves = ["ficha", "turnos_vistos", "ofertas", "lotes", "bloque", "bloque_req", "propuesta", "pago", "v7s:avisos", "v7s:pago", "v7s:deriva", "v7s:noentendi"]   # (08/10) + contadores del orquestador
+    claves = ["escenario", "ficha", "turnos_vistos", "ofertas", "lotes", "bloque", "bloque_req", "propuesta", "pago", "v7s:avisos", "v7s:pago", "v7s:deriva", "v7s:noentendi"]   # (08/10) + contadores del orquestador
     x = 440
     for c in claves:
         g.redis_del(f"Redis DEL {c}", f"'{c}:' + $('Despachar').first().json.tel", x, 60)
         x += 160
     g.code("Reinicio listo", "return [{ json: { reinicio: 'ok', tel: $('Despachar').first().json.tel } }];", x, 60)
     g.conectar("Webhook", "Despachar")
-    g.conectar("Despachar", "¿Reinicio?")
+    g.conectar("Despachar", "¿Escenario?")
+    g.conectar("¿Escenario?", "Redis SET escenario", 0)
+    g.conectar("¿Escenario?", "¿Reinicio?", 1)
+    g.conectar("Redis SET escenario", "Redis SET ficha (escenario)")
+    g.conectar("Redis SET ficha (escenario)", "Escenario listo")
     g.conectar("¿Reinicio?", "Redis DEL " + claves[0], 0)
     g.conectar("¿Reinicio?", "Ejecutar", 1)
     for a_, b_ in zip(["Redis DEL " + c for c in claves], ["Redis DEL " + c for c in claves[1:]] + ["Reinicio listo"]):

@@ -143,6 +143,12 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 total++; if (eq(C.parejas(BLOQUE), ['10-22 08:00', '10-22 09:20', '10-23 09:10', '11-02 16:20'])) console.log('  ok    E1 el bloque entero da las 4 parejas'); else { fallas++; console.log('  FALLA E1', C.parejas(BLOQUE)); }
 total++; if (eq(C.parejas('el jueves 22/10 a las 9:20'), ['10-22 09:20'])) console.log('  ok    E2 "22/10 a las 9:20" se normaliza a 09:20'); else { fallas++; console.log('  FALLA E2', C.parejas('el jueves 22/10 a las 9:20')); }
 total++; if (eq(C.parejas('Atendemos de 8:00 a 12:00'), [])) console.log('  ok    E3 horas sin fecha no generan parejas'); else { fallas++; console.log('  FALLA E3'); }
+// (11/11) Horarios del Conocimiento: "jueves 8:00" no es "el jueves 8" (el agente quedaba bloqueado al presentar la clínica).
+const HORARIOS = 'Horarios de atención: martes y jueves 8:00–12:00, viernes 8:30–12:00, lunes y miércoles 15:00–19:00.';
+total++; if (eq(C.parejas(HORARIOS), [])) console.log('  ok    E4 "jueves 8:00–12:00" es horario de atención: sin parejas'); else { fallas++; console.log('  FALLA E4', C.parejas(HORARIOS)); }
+caso('E5 la presentación con los horarios de atención pasa', { texto: 'La primera consulta sale $50.000.\n\n' + HORARIOS, libros: [] }, pasa);
+total++; if (eq(C.parejas('el jueves 22 a las 9:20'), ['xx-22 09:20'])) console.log('  ok    E6 "jueves 22 a las 9:20" sigue siendo fecha + hora'); else { fallas++; console.log('  FALLA E6', C.parejas('el jueves 22 a las 9:20')); }
+caso('E7 un turno inventado con día de la semana sigue bloqueado', { texto: 'Le ofrezco el jueves 29 a las 11:00.', libros: [] }, { accion: 'reemplazar', motivo: 'horario_no_ofrecido' });
 
 console.log(`\n${total - fallas}/${total} ${fallas ? 'FALLAS: ' + fallas : 'TODO OK'}`);
 process.exit(fallas ? 1 : 0);
