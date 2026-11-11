@@ -23,6 +23,7 @@ from v7_workflow_cerebro import (CTX, E, GRUPO, JS_CONTEXTO, JS_DESPACHO, MODO, 
 NOMBRE = "v7 Cerebro Agente"
 PROMPT_AGENTE = (V7 / "prompt_orquestador_agente.md").read_text(encoding="utf-8").strip()
 ESFUERZO = "medium"
+MODELO = "gpt-5-mini"   # (11/11) se probó gpt-5 con 15 casos reales: no mejoró y tardó más (29 s prom., hasta 83 s)
 MAX_ITER = 8
 AGENTE = "Orquestador Agente"
 PLAN = "$('Pedidos por estado').first().json"
@@ -142,7 +143,7 @@ def wf_cerebro_agente(esfuerzo=ESFUERZO):
     g.subworkflow("Turnos forzado", "@@ID:agente_turnos@@", _fijos_forzado("turnos"), 1950, 160)
     g.code("Armar mensaje del agente", JS_MENSAJE, 2170, 300, usar=("orquestador_core",))
     g.agente(AGENTE, f"$('Armar mensaje del agente').first().json.texto_agente", f"{CTX}.sistema_orq", 2390, 300, max_iter=MAX_ITER)
-    g.modelo("Modelo Orquestador Agente", "gpt-5-mini", esfuerzo, 2390, 560)
+    g.modelo("Modelo Orquestador Agente", MODELO, esfuerzo, 2390, 560)
     g.conectar_ai("Modelo Orquestador Agente", AGENTE, "ai_languageModel")
     y = 60
     for clave in ("turnos", "pagos", "informacion", "urgencias"):

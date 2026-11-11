@@ -1,5 +1,13 @@
 # Estado actual — raquel-n8n
 
+## 2026-11-11 — Cerebro Agente (orquestador multiagente) probado con 60 mensajes reales en sombra
+
+- Lucas confirmó: quiere orquestador multiagente. Elegido el **Cerebro Agente** (`y8wIF1rR87bAAvYU`, inactivo): agente padre sobre los MISMOS 4 workflows del v7, lee lo que devuelven y redacta.
+- `tests/comparativa/extraer_reales.py` arma casos con mensajes reales (28/10–11/11, salida fuera del repo) y `correr.py` los lee con `COMPARATIVA_CASOS`. Corren con el número de Lucas (el webhook de prueba no acepta otro).
+- Resultado 60 casos: 0 errores, 34 respuestas distintas, latencia 22 s vs 23 s del v7. El Agente entiende mejor la intención ("hoy no llegamos", links, "¿están trabajando?") pero pregunta de más.
+- Ajustes al prompt (una pregunta por mensaje, día pedido a turnos, anuncios, links). gpt-5 probado como orquestador: no mejoró y tardó más → queda gpt-5-mini.
+- Límite de la prueba: con el número de Lucas, Turnos ve sus fichas de prueba (pide "¿para quién?") y no los turnos del paciente real; varios "no le entendí" son el chequeo de horarios bloqueando turnos que el paciente real sí tiene. Para medir de verdad hace falta el ESPEJO en vivo (la entrada O155 llama al Agente en sombra con el teléfono real, sin enviar ni escribir) → necesita "desplegá" de Lucas.
+
 ## 2026-11-02 — "v6 Orquestador" construido SOLO en el repo (sin desplegar)
 
 - Pedido de Lucas (patrón "Ultimate Assistant"): agente padre con memoria + los 5 especialistas del v6 como Agent Tool; el padre redacta. Mínimo cambio sobre el v6: solo se reemplaza el Router.

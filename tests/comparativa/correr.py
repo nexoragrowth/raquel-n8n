@@ -14,6 +14,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import crear_v7_en_n8n as D
 from casos import CASOS
+import os
+if os.environ.get("COMPARATIVA_CASOS"):   # casos reales armados por extraer_reales.py (archivo fuera del repo)
+    CASOS = json.loads(Path(os.environ["COMPARATIVA_CASOS"]).read_text(encoding="utf-8"))
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 TEL = "5491161461034"

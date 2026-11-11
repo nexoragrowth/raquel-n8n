@@ -80,7 +80,7 @@ def main():
              all(nodos[h]["type"].endswith("toolWorkflow") for h in herr - {"no_responder"}) and nodos["no_responder"]["type"].endswith("toolCode") and "silencio" in nodos["no_responder"]["parameters"]["jsCode"]
              and not re.search(r"fetch|http|redis|require", nodos["no_responder"]["parameters"]["jsCode"], re.I))
     mod = nodos["Modelo Orquestador Agente"]["parameters"]
-    chequear("E4 gpt-5-mini con razonamiento medio, conectado como ai_languageModel", mod["model"]["value"] == "gpt-5-mini" and mod["options"]["reasoningEffort"] == "medium"
+    chequear("E4 el modelo del generador (CA.MODELO) con razonamiento medio, conectado como ai_languageModel", mod["model"]["value"] == CA.MODELO and mod["options"]["reasoningEffort"] == "medium"
              and any(d["node"] == AGENTE for d in wf["connections"]["Modelo Orquestador Agente"]["ai_languageModel"][0]))
     chequear("E4b el agente tiene tope de vueltas (latencia y costo acotados)", ag_n["parameters"]["options"]["maxIterations"] == CA.MAX_ITER and CA.MAX_ITER <= 8, ag_n["parameters"]["options"])
     ids = set(re.findall(r"@@ID:([a-z_]+)@@", txt))
