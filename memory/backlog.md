@@ -2,7 +2,7 @@
 
 ## ⇢ 2026-11-12 — Cerebro Agente y bot vivo
 - [x] 12/11: desplegado `apply_arreglos_espejo.py` (5 workflows) y freno `guarda_vivo.py` + `diff_vivo.py`. Lo del 05/11 vino de la otra compu (merge 5ac9ae3, con sus tests).
-- [P1] Subir esta rama (`git push`) para que la otra compu haga `git pull` y quede con el freno y la regla 10. El repo es PÚBLICO: antes, revisar que lo nuevo no tenga secretos (y SEG-02: pasarlo a privado).
+- [x] Rama subida 12/11 (2895946; scan sin secretos ni datos reales). La otra compu: `git pull` antes de trabajar. Sigue abierto SEG-02: pasar el repo a privado. Ojo: en esta compu gh tiene activa la cuenta `propmatchar` (sin permiso); se sube con `LucasEzequielSilva`.
 - [P3] Filas viejas de celulares sintéticos (5490000000xxx, ago–oct) en n8n_chat_histories / conversaciones / mensajes_entrantes_live: limpiar con OK.
 - [P2] Sub-agente Turnos: `lista_espera` a un paciente SIN turno dice "quiere adelantar su turno" (real r017, 05/11). Pedir turno vigente en el código de la herramienta.
 - [P2] Espejo diario: correr `extraer_reales.py --contexto` + `correr.py cerebro,cerebro_agente` con los mensajes del día y revisar diferencias, hasta pasar el agente al número de Lucas.
