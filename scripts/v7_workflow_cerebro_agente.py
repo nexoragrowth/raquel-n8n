@@ -54,7 +54,11 @@ extra.push('CONOCIMIENTO DE LA CLÍNICA (cargado por la clínica en el panel; re
   + (ctx.anuncio ? '\\n- Presentación para quien llega por un anuncio ("quiero más información"): ' + ctx.anuncio : ''));
 extra.push('MENÚ (si saluda solo, sin pedir nada, pegalo tal cual):\\n' + (ctx.menu || ''));
 // (11/11) El contexto compartido nombra gestionar_turno (herramienta del sub-agente, no de este agente): acá se habla de la herramienta «turnos».
-const contexto = String(ctx.contexto || '').replace(/ofrecé horarios y, cuando elija uno, pedile nombre, apellido y DNI y pasalos a gestionar_turno\\./g, 'llamá a la herramienta turnos: ella busca los horarios LIBRES (no son los días de atención) y pide los datos cuando elija.').replace(/gestionar_turno/g, 'turnos');
+const contexto = String(ctx.contexto || '').replace(/ofrecé horarios y, cuando elija uno, pedile nombre, apellido y DNI y pasalos a gestionar_turno\\./g, 'llamá a la herramienta turnos: ella busca los horarios LIBRES (no son los días de atención) y pide los datos cuando elija.').replace(/gestionar_turno/g, 'turnos')
+  // (11/11) Familia: esa frase es para el sub-agente; el agente la copiaba y preguntaba "¿para quién?" aunque el paciente ya había nombrado a uno.
+  .replace(/TODAVÍA no sabés para quién es:[^.]*\\. /, 'Si nombra a uno de ellos, es ese: ponelo en el pedido y NO preguntes para quién. Si no lo dice y turnos lo pregunta, preguntalo vos. ')
+  // Pregunta por sus turnos ("¿me quedó uno o los dos?"): la lista ya está acá; la responde él, sin llamar a turnos.
+  .replace('Turnos vigentes: ', 'Turnos vigentes (si pregunta cuáles o cuántos tiene, respondé vos con esta lista, sin llamar a turnos): ');
 return [{ json: { texto_agente: contexto + '\\n\\n' + extra.join('\\n\\n') } }];"""
 
 JS_VERIFICAR = JS_RES1 + """const e = $('Entrada').first().json;

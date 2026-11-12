@@ -5,7 +5,9 @@
 - **Arreglo (solo en el agente inactivo y8wIF1rR87bAAvYU):** la línea de horarios de atención no va en el Conocimiento del agente (la da la herramienta informacion, que lee el mismo Conocimiento); `gestionar_turno` → `turnos` en su contexto; descripción de turnos = "única fuente de horarios libres"; prompt: reclamo por turno no dado → derivar_secretaria.
 - **Resultado:** 7 casos con contexto armado (nuevo, anuncio, día pedido, info de hoy, link, reclamo) × 2 corridas = 14/14 bien, 5–19 s. Modelo: queda gpt-5-mini.
 - **Trampa encontrada:** `apply_cerebro_agente.py` subía el JSON ya generado; si no se corría el build, se probaba la versión vieja. Ahora regenera solo.
-- **Falta:** los casos con fichas/turnos (confirmar, familia, cambio) necesitan `apply_escenario_prueba.py --apply` (toca ver_turnos y confirmar_una vivas; requiere "desplegá" de Lucas). Después: espejo en sombra con mensajes reales → su número → todos.
+- **Escenarios desplegados (Lucas: "desplegá", 11/11 ~21:30):** `apply_escenario_prueba.py --apply` en ver_turnos y confirmar_una (backups `*_1794443495.json`); el diff real fue solo el nodo nuevo + `Redis GET ficha` leyendo el tel de Entrada (el resto, ids). Ejecuciones posteriores en success.
+- **Batería completa con contexto (20 casos):** 14/20 a la primera; arreglada la familia (el agente copiaba "preguntá para quién es" del contexto compartido; ahora: si nombra a uno es ese; pregunta por sus turnos → responde con la lista del contexto). Familia + confirmar 2×6 bien.
+- **Pendiente del agente:** "lo podemos adelantar" → el sub-agente Turnos busca solo ese día ("Para ese día no hay turnos"); a veces agrega "No veo turnos vigentes…" al final; los casos nova-1/2 caen en la regla de 48 h (correcto por regla: los casos están mal armados, usar D3+). Siguiente: espejo en sombra con mensajes reales (toca la entrada O155 → "desplegá") → número de Lucas → todos.
 
 ## 2026-11-11 — Cerebro Agente (orquestador multiagente) probado con 60 mensajes reales en sombra
 
