@@ -1,5 +1,11 @@
 # Backlog — raquel-n8n
 
+## ⇢ 2026-11-12 — Cerebro Agente y bot vivo
+- [P1] "desplegá" de Lucas → `python scripts/apply_arreglos_espejo.py --apply` ("No veo turnos vigentes" bajo los horarios + "jueves 8:00"). El diff ya está revisado: solo esos 2 cambios.
+- [P1] Averiguar desde dónde se desplegó lo del 05/11 (propuesta de la clínica) y si tenía pruebas propias; ya está en el repo (5bb6b9e), pero sin sus tests.
+- [P2] Sub-agente Turnos: `lista_espera` a un paciente SIN turno dice "quiere adelantar su turno" (real r017, 05/11). Pedir turno vigente en el código de la herramienta.
+- [P2] Espejo diario: correr `extraer_reales.py --contexto` + `correr.py cerebro,cerebro_agente` con los mensajes del día y revisar diferencias, hasta pasar el agente al número de Lucas.
+
 ## ⇢ 2026-11-01 — SPRINT post-capacitación (detalle completo en `docs/sprint-2026-11-01.md`)
 Orden: S0 (antes de la capacitación) → S1 agente orquestador real (en sombra) → S3 pantalla "Hoy" (atención, métricas, agendar) → S2 editor de prompts → S4 confiabilidad/seguridad.
 Decisiones que bloquean (Lucas): 1 "desplegá" regla 6 h · 2 "OK limpiar" bandeja · 3 nombre de la secretaria · 4 diseño del agente orquestador · 5 qué mensajes quedan fijos · 6 alcance del editor de prompts · 7 cierre de casos auto vs manual · 8 tiempos objetivo con la Dra. · 9 qué reglas de Conocimiento pasan a los agentes · 10 cortesía a "gracias".
@@ -574,3 +580,7 @@ Al costado (no bloquean): commit del panel (modo humano 1 h + KPI + arreglo del 
 
 - [x] 2026-10-16 v7: pedido de pago solo en la primera consulta (plan §3.2 #1), desplegado.
 - [x] 2026-10-15 v6 y v7: confirmar antes de cancelar (regla de Lucas), probado en vivo.
+
+- [P1 · 02/11/2026] Autonomía de la clínica: casos de urgencia con material aprobado por la Dra. (video/texto) cargables desde el panel, junto al editor de prompts. Opción recomendada: avisar al grupo + mandar SOLO material aprobado; el modelo no improvisa indicaciones (regla Mariela). Decide Lucas con la Dra. qué casos y qué material. Límites fijos quedan en código. Objetivo: que en feb 2027 la clínica no dependa de Claude.
+
+- [P2 · 02/11/2026] Rebrand del panel con la marca de la web www.raquelrodriguez.com.ar, modo claro y oscuro con selector (Lucas). Tokens sacados de su CSS: letra DM Sans; claro fondo hsl(210 20% 98%), tinta/primario hsl(220 15% 12%), acento salvia hsl(180 25% 55%), borde hsl(210 12% 88%); oscuro fondo #0a0e14, superficie #111820, elevado #1a2230, borde rgba(200,220,240,.06). Ícono: cuadrado rx16 con degradé #FFE0FF a #D9C7FF y R itálica serif #1A1A20 (copia en docs/cliente/marca-icono-web.svg). Hacer DESPUÉS de la capacitación del 02/11 y mostrar capturas antes de subir.

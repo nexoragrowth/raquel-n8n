@@ -975,3 +975,15 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Por qué:** WhatsApp estuvo cortado del 09/11 (mediodía) al 11/11 (~13 h). Al reconectar, Evolution entregó mensajes del lunes y el bot los contestó a las 00:35 y 01:25; la Dra. se quejó.
 - **Dónde:** copia del workflow vivo en `workflows/history/O155MqHgOSaNZ9ye_POST_descartar_atrasados_lucas_2026-11-11.json` (el script `apply_v6_descartar_atrasados.py` que cita el comentario no está en el repo).
 - **Pendiente:** segundo canal de alertas (el corte pasó 2 días sin que nadie lo note) y revisar los recordatorios del 10/11 y 11/11.
+
+## 2026-11-12 — Antes de desplegar, el generado tiene que ser igual a lo vivo salvo lo que se quiere cambiar
+- **Qué:** todo `apply_*` que pisa workflows vivos muestra el diff nodo por nodo contra lo vivo (como `apply_arreglos_espejo.py`); si aparece algo que no es el cambio buscado, se frena y se trae lo vivo al repo primero.
+- **Por qué:** el 05/11 se desplegó la "propuesta de la clínica" (incidente José) sin commitearla; un despliegue desde el repo la hubiera borrado sin aviso. Se encontró el 12/11 al simular.
+- **Revisable:** no (es una guarda).
+
+## 2026-11-12 — El espejo del Cerebro Agente se hace con mensajes reales re-jugados, no en paralelo en la entrada
+- **Qué:** `extraer_reales.py --contexto` + `correr.py`: mensaje real + historial + fichas/turnos reales copiados (ids falsos) a un celular sintético, en sombra.
+- **Por qué:** el espejo en paralelo usa el teléfono real y pisa las claves de Redis del bot vivo (ofertas, propuesta, bloque): el paciente podría quedar sin poder elegir el horario que le ofreció el bot de verdad. Además no requiere tocar la entrada O155.
+- **Descartado:** nodo en O155 que llame al agente con `modo: sombra` (necesitaba claves aparte en todos los workflows).
+- **Revisable:** sí, si algún día se separan las claves de sombra.
+
