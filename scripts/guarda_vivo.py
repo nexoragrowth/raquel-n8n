@@ -48,9 +48,14 @@ def _commit():
         return ""
 
 
+def _nombre(n):
+    """El repo es público: los números largos de los nombres (p. ej. "TEST - Check Memory 549…") se enmascaran."""
+    return re.sub(r"\d{7,}", lambda m: m.group(0)[:3] + "…" + m.group(0)[-2:], str(n or ""))
+
+
 def registrar(wid, wf, por):
     d = _leer()
-    d[wid] = {"huella": huella(wf), "nombre": wf.get("name"), "fecha": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "script": por, "commit": _commit()}
+    d[wid] = {"huella": huella(wf), "nombre": _nombre(wf.get("name")), "fecha": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "script": por, "commit": _commit()}
     HUELLAS.write_text(json.dumps(d, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     print(f"   [guarda_vivo] huella de «{wf.get('name')}» registrada: commiteá y subí workflows/vivo_huellas.json (git push)")
 
