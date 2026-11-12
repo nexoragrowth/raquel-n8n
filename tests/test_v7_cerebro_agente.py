@@ -108,7 +108,7 @@ def main():
     chequear("E9 ningún workflow generado lleva claves ni tokens escritos", not any(s in txt for s in ("sb_secret", "Bearer ", "apikey", "Token ")))
     chequear("E10 mismo disparador y mismas entradas que el cerebro actual", nodos["Entrada"]["parameters"] == {n["name"]: n for n in viejo["nodes"]}["Entrada"]["parameters"])
     viejos = {n["name"]: n for n in viejo["nodes"]}
-    for nombre in ("Historial", "Recordatorios", "Primer mensaje", "Datos del consultorio", "Identificar paciente", "Redis GET propuesta (entrada)", "Redis GET libro", "Redis GET hechos", "Redis SET hechos", "Guardar en memoria", "Redis DEL propuesta", "Redis SET propuesta enviada"):
+    for nombre in ("Historial", "Recordatorios", "Primer mensaje", "Entrantes", "Datos del consultorio", "Identificar paciente", "Redis GET propuesta (entrada)", "Redis GET libro", "Redis GET hechos", "Redis SET hechos", "Guardar en memoria", "Redis DEL propuesta", "Redis SET propuesta enviada"):
         chequear(f"E11 nodo '{nombre}' idéntico al del cerebro actual (importado, no reescrito)", {k: v for k, v in nodos[nombre].items() if k not in ("id", "position")} == {k: v for k, v in viejos[nombre].items() if k not in ("id", "position")})
     ctx_js = nodos["Armar contexto"]["parameters"]["jsCode"]; ctx_viejo = viejos["Armar contexto"]["parameters"]["jsCode"]
     chequear("E12 'Armar contexto' es el mismo código que el actual (contexto, 6 h de staff, comprobante marcado, mensajes fijos, corte de bucle); solo cambia el prompt", ctx_js.split("\n", 1)[1] == ctx_viejo.split("\n", 1)[1] and json.dumps(CA.PROMPT_AGENTE, ensure_ascii=False) in ctx_js and "Sos el ORQUESTADOR" not in ctx_js)

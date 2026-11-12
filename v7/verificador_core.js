@@ -205,6 +205,20 @@ const VerificadorCore = (() => {
     if (derivar && ctx.staff_reciente === true) avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri derivó a la secretaria pero la clínica le escribió hace menos de 6 h (el aviso no se envió): «' + cita + '». Revisar.' });
     const textoDeriv = (humano && humano.res && humano.res.texto_para_el_paciente) || (derivar && derivar.res && derivar.res.texto_para_el_paciente) || ((humano || derivar) ? T.DERIVA : '');
     if (textoDeriv && !norm(texto).includes(norm(textoDeriv))) texto = texto.replace(/\s+$/, '') + '\n\n' + textoDeriv;
+    // (12/11, espejo con mensajes reales) El porqué que dio un agente al pedir derivar (p. ej. turno a menos de 48 h) va antes de "le paso con la
+    // secretaria" si el agente escribió solo la derivación (pasó: "No voy a poder ir, estoy enfermo" → solo "Le paso con la secretaria").
+    const porque = AGENTES.map((a) => res[a]).find((x) => x && x.derivar && x.texto);
+    if (porque && textoDeriv && norm(texto.split(textoDeriv).join('')).length < 15 && !norm(texto).includes(norm(porque.texto))) texto = porque.texto + '\n\n' + texto.trim();
+    // (12/11) Información no pregunta: el cerebro actual le saca las preguntas por código (sinPreguntas). Si el agente copió una pregunta que solo vino de
+    // Información ("¿Para quién es (nombre o DNI)?" ante "¿hasta qué hora está hoy?"), se saca igual. La oferta de turno de primera consulta queda.
+    if (res.informacion && res.informacion.texto) {
+      const otras = AGENTES.filter((a) => a !== 'informacion').map((a) => (res[a] && res[a].texto) || '').join('\n');
+      for (const q of String(res.informacion.texto).match(/¿[^¿?]*\?/g) || []) {
+        if (T.OFERTA_PRIMERA.includes(q) || otras.includes(q) || !texto.includes(q)) continue;
+        texto = texto.split(q).join('').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+      }
+      if (!texto) return respaldo('vacio');
+    }
     const modo_humano = !!humano || !!(derivar && derivar.res && derivar.res.modo_humano);
 
     const msgs = OC.mensajesDe(st.mensajes);

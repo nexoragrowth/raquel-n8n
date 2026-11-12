@@ -56,6 +56,13 @@ console.log('\nTURNOS (el texto sale de las herramientas; el modelo devuelve un 
   t('T5 "¿Cuál de estos turnos?" con la lista armada por código (Turnos no escribe fechas)', s5.texto === '¿Cuál de estos turnos?\n- viernes 16/10 a las 09:10\n- miércoles 4/11 a las 09:10', s5);
   const s6 = O.salidaTurnos({ output: 'MOSTRAR_TURNOS' }, { turnos: ['viernes 16/10 a las 09:10'] });
   t('T6 "¿cuándo es mi turno?" → lo dice el código con los turnos de la agenda', s6.texto === 'Su turno vigente es el viernes 16/10 a las 09:10.', s6);
+  // (12/11, espejo con mensajes reales) paciente nuevo: "Quería saber si tiene turno para el viernes a la tarde" → horarios, sin "No veo turnos vigentes"
+  const s6b = O.salidaTurnos({ output: 'MOSTRAR_TURNOS', intermediateSteps: [paso('buscar_horarios', { ok: true, bloque: BLOQUE })] }, { turnos: [] });
+  t('T6b sin turnos propios y con horarios ofrecidos: no agrega "No veo turnos vigentes"', s6b.texto === BLOQUE, s6b);
+  const s6c = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: true, bloque: BLOQUE }), paso('gestionar_turno', { ok: false, motivo: 'sin_ficha' })] }, { turnos: [] });
+  t('T6c gestionar_turno sin ficha + horarios ofrecidos: solo los horarios', s6c.texto === BLOQUE, s6c);
+  const s6d = O.salidaTurnos({ output: 'MOSTRAR_TURNOS' }, { turnos: [] });
+  t('T6d "¿cuándo es mi turno?" sin turnos y sin horarios: sigue diciendo que no ve turnos', s6d.texto === O.TEXTOS.SIN_TURNOS, s6d);
   const s7 = O.salidaTurnos({ output: 'FUERA_DE_ALCANCE' }, {});
   t('T7 FUERA_DE_ALCANCE: sin texto, marcado (el cerebro deriva)', s7.fuera_de_alcance === true && !s7.texto, s7);
   const s8 = O.salidaTurnos({ output: 'Le cuento que el turno quedó listo para el martes 4/11 a las 10:00.' }, {});

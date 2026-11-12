@@ -199,7 +199,7 @@ const AgendaCore = (() => {
   const textoExito = (p) => (p.tipo === 'cambio' ? `Listo, quedó reprogramado su turno: anulé el del ${corto(p.cita_vieja.fecha, p.cita_vieja.hora)} y le reservé el ${corto(p.slot.fecha, p.slot.hora)}.`
     : p.tipo === 'cancelacion' ? `Listo, su turno del ${corto(p.cita_vieja.fecha, p.cita_vieja.hora)} quedó cancelado.`
     : p.paciente_nuevo ? `Listo, le reservé el ${corto(p.slot.fecha, p.slot.hora)} a nombre de ${p.paciente_nuevo.nombre} ${p.paciente_nuevo.apellidos}.` : `Listo, le reservé el ${corto(p.slot.fecha, p.slot.hora)}.`);
-  const nuevoLedger = (p) => ({ propuesta: p && p.id, tipo: p && p.tipo, escrituras: [] });
+  const nuevoLedger = (p) => ({ propuesta: p && p.id, tipo: p && p.tipo, ...(p && p.origen ? { origen: p.origen } : {}), escrituras: [] });
 
   // 1) chequeos previos a tocar nada
   // entrada: { propuesta, exec_id_actual, enviada, modo }
@@ -212,6 +212,14 @@ const AgendaCore = (() => {
     if (ahora - p.creada_ms > TTL_PROPUESTA_MS) return { fin: { ...no('vencida', 'La propuesta venció. Volvé a proponer.'), ledger } };
     if (p.exec_id === entrada.exec_id_actual || entrada.enviada !== true) {
       return { fin: { ...no('readback_no_visto', 'El paciente todavía no vio el texto de confirmación: mandáselo tal cual y esperá su respuesta en el próximo mensaje.'), ledger } };
+    }
+    // (05/11, revisión adversarial R5) El "sí" puede llegar horas después del read-back (vence a las 12 h): si el horario nuevo ya pasó (o falta menos de
+    // media hora) o el turno que se cambiaba ya pasó, no se escribe nada. Antes solo se chequeaba al proponer.
+    if (p.slot && esISO(p.slot.fecha) && normHora(p.slot.hora) && msTurno(p.slot.fecha, p.slot.hora) - ahora < 30 * 60 * 1000) {
+      return { fin: { ...no('horario_pasado', 'El horario de la confirmación ya pasó: no se cambió nada en la agenda.'), ledger } };
+    }
+    if (p.cita_vieja && esISO(p.cita_vieja.fecha) && msTurno(p.cita_vieja.fecha, p.cita_vieja.hora) <= ahora) {
+      return { fin: { ...no('horario_pasado', 'El turno que se iba a cambiar o cancelar ya pasó: no se tocó nada.'), ledger } };
     }
     if (entrada.modo !== 'vivo') {   // (08/10) solo escribe con modo 'vivo' EXPLÍCITO: si el modo no llega, es sombra (incidente de confirmar_turno del 06/10)
       return { fin: { ok: true, simulado: true, habria_hecho: { tipo: p.tipo, slot: p.slot, cita_vieja: p.cita_vieja, ...(p.paciente_nuevo ? { alta_paciente: p.paciente_nuevo } : {}) }, readback_text: textoExito(p), primera_consulta: p.tipo !== 'cambio' && !!p.paciente_nuevo, ledger } };
@@ -233,6 +241,8 @@ const AgendaCore = (() => {
     const ok = d && Number(d.id) === Number(p.cita_vieja.id) && d.fecha === p.cita_vieja.fecha && normHora(d.hora_inicio) === p.cita_vieja.hora
       && Number(d.id_paciente) === Number(p.paciente_id) && vigente(d);
     if (!ok) return { fin: { ...no('cita_cambio', 'El turno cambió o ya no está vigente: no se tocó nada. Mostrale sus turnos de nuevo con ver_turnos.'), ledger: estado.ledger } };
+    // (05/11, revisión P3) Un cambio que propuso la clínica conserva la duración de la cita original (la secretaria elige huecos a mano, a veces de 20 min).
+    if (p.origen === 'staff' && Number(d.duracion) > 0) return { ok: true, propuesta: { ...p, duracion: Number(d.duracion) }, ledger: estado.ledger };
     return { ok: true, propuesta: p, ledger: estado.ledger };
   }
   // 3b) paciente nuevo: antes de reservar, el alta en la agenda (solo reservas con paciente_nuevo; el resto pasa de largo).
@@ -276,8 +286,9 @@ const AgendaCore = (() => {
       aviso_clinica: `[ACCIÓN] Paciente nuevo por WhatsApp: ${nombreCompleto(p.paciente_nuevo)} (DNI ${p.paciente_nuevo.dni}) quería el ${corto(p.slot.fecha, p.slot.hora)} y la agenda no aceptó el alta. Asiri no reservó: darlo de alta y agendar a mano.`, ledger } };
   }
   // 4) cuerpos de las escrituras
-  const armarReserva = (p) => ({ id_dentista: 1, id_sucursal: 1, id_sillon: 1, id_paciente: p.paciente_id, fecha: p.slot.fecha, hora_inicio: p.slot.hora, duracion: 40,
-    comentario: p.tipo === 'cambio' ? `Reprogramado por Asiri (WhatsApp), reemplaza cita #${p.cita_vieja.id}` : 'Reservado por Asiri (WhatsApp)' });
+  const armarReserva = (p) => ({ id_dentista: 1, id_sucursal: 1, id_sillon: 1, id_paciente: p.paciente_id, fecha: p.slot.fecha, hora_inicio: p.slot.hora,
+    duracion: p.origen === 'staff' && Number(p.duracion) > 0 ? Number(p.duracion) : 40,
+    comentario: p.tipo === 'cambio' ? (p.origen === 'staff' ? `Reprogramado por Asiri a pedido de la clínica (WhatsApp), reemplaza cita #${p.cita_vieja.id}` : `Reprogramado por Asiri (WhatsApp), reemplaza cita #${p.cita_vieja.id}`) : 'Reservado por Asiri (WhatsApp)' });
   const armarAnulacion = () => ({ id_estado: 1 });
   // Lo que la clínica tiene que saber de un alta (va en el aviso FYI de la reserva).
   const notaAlta = (p) => (!p.paciente_nuevo || !p.alta ? null
@@ -354,7 +365,9 @@ const AgendaCore = (() => {
   const sinTildes = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const normT = (x) => sinTildes(x).replace(/[^a-z0-9:/? ]+/g, ' ').replace(/\s+/g, ' ').trim();
   function hashTexto(s) { let h = 5381; const t = normT(s); for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); }
-  const esVerdadero = (v) => v === true || String(v || '').trim().toLowerCase() === 'true';
+  // (05/11, incidente 331596) `confirma` se pide como la palabra "si": con la descripción "true…" el modelo mandó un booleano, el esquema (string) lo rechazó y
+  // se cayó el agente entero. Se aceptan las dos formas por si acaso (true booleano llega igual si algún día el esquema cambia).
+  const esVerdadero = (v) => v === true || ['true', 'si'].includes((sinTildes(v).match(/[a-z]+/) || [''])[0]);
   // ¿Hay una confirmación guardada que el paciente vio (es lo último que le dijo Asiri) y sigue vigente? Es estado, no lectura del texto del paciente.
   function pendienteVista(pg, ultimoAsiri, ahoraISO) {
     return !!(pg && pg.estado === 'pendiente' && pg.readback_text && ultimoAsiri && normT(ultimoAsiri).includes(normT(pg.readback_text))
@@ -370,6 +383,8 @@ const AgendaCore = (() => {
   }
   // entrada: lo que decide el modelo { tipo, fecha, hora, fecha_turno_viejo, nuevo_*, confirma }; estado: el de proponer + { ultimo_asiri, propuesta_guardada, textos_paciente? }
   function decidir(entrada, estado, ahoraISO) {
+    // (05/11) aceptar_propuesta_clinica: el modelo no manda datos; todo sale del mensaje del staff y de la agenda (decidirPropuestaStaff).
+    if (entrada && entrada.accion === 'propuesta_staff') return decidirPropuestaStaff(entrada, estado, ahoraISO);
     const pg = estado.propuesta_guardada;
     // El agente dijo que el paciente aceptó: se ejecuta la confirmación GUARDADA (la que vio el paciente), no lo que mande el modelo en esta llamada.
     // (15/10, prueba en vivo) La guardada tiene que haberse ENVIADO en un mensaje ANTERIOR: si el agente la armó en esta misma ejecución y en la misma
@@ -392,9 +407,188 @@ const AgendaCore = (() => {
     }
     // Sin "confirma" (o sin confirmación vigente que el paciente haya visto) NUNCA se escribe: se muestra el read-back.
     return { etapa: 'confirmacion', propuesta: r.propuesta, resultado: { etapa: 'confirmacion', ok: true, texto_para_el_paciente: r.readback_text,
-      para_asiri: '[Nota interna para vos, NO la repitas al paciente] El sistema le manda este texto. Cuando el paciente acepte en su PRÓXIMO mensaje, llamá gestionar_turno con confirma=true: recién ahí se escribe en la agenda.' } };
+      para_asiri: '[Nota interna para vos, NO la repitas al paciente] El sistema le manda este texto. Cuando el paciente acepte en su PRÓXIMO mensaje, llamá gestionar_turno con confirma="si": recién ahí se escribe en la agenda.' } };
   }
 
-  return { proponer, decidir, pendienteVista, dniEnMensajes, hashTexto, ejecutar, pasoInicial, pasoConsumo, pasoCita, pasoBuscarDni, pasoAlta, pasoReserva, pasoAnulacion, armarPaciente, armarReserva, armarAnulacion, normHora, vigente, TTL_PROPUESTA_MS, MIN_ANTICIPACION_MS };
+  // ----------------------------------------------------------------- propuesta de la CLÍNICA (05/11, incidente José 331590; casos 324904 Hernán, Santiago T., 16/09, 03/10)
+  // La secretaria le escribe a mano al paciente proponiendo MOVER su turno ("¿Podríamos reagendar su turno para las 8:40 hs de ese mismo día?") y el paciente
+  // contesta "dale". Antes no había camino: decidir solo ejecuta confirmaciones que armó Asiri y proponer exige horarios de buscar_horarios → tipo_invalido,
+  // no_ofrecido y el agente se caía. Ahora (herramienta aceptar_propuesta_clinica):
+  //   - el MODELO copia del mensaje de la clínica la fecha y la hora NUEVAS, la fecha del turno que se mueve y para quién (entiende "8 y 40", "6 de la tarde",
+  //     "este jueves"); el CÓDIGO verifica cada dato contra el mensaje CRUDO del staff (como el DNI: que esté escrito ahí) y contra la agenda. Ante la duda, deriva.
+  //   - A) si la agenda YA tiene ese turno para esa ficha (la secretaria lo movió antes de preguntar, como con José) y no queda otro turno suyo en esas fechas
+  //     (posible duplicado): no escribe nada, contesta con texto del código + FYI con lo que se le dijo;
+  //   - B) si no: arma la propuesta de CAMBIO y el read-back de siempre, con la fecha y hora PRIMERO. Recién con el "sí" a ESE read-back se escribe por el camino
+  //     de siempre (candado, re-verificación de la cita vieja y del horario, reservar → anular → verificar). Regla dura del read-back intacta.
+  // El horario NO sale de buscar_horarios: lo propuso la clínica. La regla de 48 h (política para cambios que pide el PACIENTE) no se aplica a esta ruta.
+  // (05/11, revisión adversarial) Primera versión: el CÓDIGO leía fecha y hora del texto libre; fallaba con "8 y 40", "6 de la tarde", "al 19" y adivinaba el turno
+  // viejo. Ahora lee el modelo y el código solo verifica.
+  const VENTANA_STAFF_MS = 48 * 60 * 60 * 1000;
+  const MESES_N = { enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12 };
+  const DIA_NOMBRE = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  const isoJujuy = (ms) => new Date(ms - 3 * 3600 * 1000).toISOString().slice(0, 10);
+  const diasEntre = (a, b) => Math.round((fechaDe(b) - fechaDe(a)) / 86400000);
+  // ¿El mensaje de la clínica propone MOVER un turno? (texto de la clínica, nunca del paciente). Verbo de cambio + alguna hora escrita; una señal de turno NUEVO
+  // ("podemos agendar el próximo turno de Delfi", caso real 30/10) gana: eso lo agenda la secretaria. Lo usa el cerebro para mostrar la PROPUESTA DE LA CLÍNICA.
+  const VERBO_CAMBIO = /\b(re ?agend\w*|re ?program\w*|cambi\w*|adelant\w*|atras\w*|posterg\w*|pasar\w*|pasamos|pasemos|mover\w*|movemos|corr(?:er\w*|emos))\b/;
+  const TURNO_NUEVO = /\b(agend\w*|proximo turno|nuevo turno|otro turno|turno nuevo|sacar\w* (?:un )?turno)\b/;
+  const HAY_HORA = /(?<![\d\/])\d{1,2}\s*[:.,h]\s*\d{2}(?![\d\/])|\ba las \d{1,2}\b|(?<![\d\/])\d{1,2}\s*(?:hs|hrs|horas)\b/;
+  // (05/11, revisión con el modelo real) además tiene que hablar de un TURNO / horario / cita: "mañana a las 10:00 la Dra. puede cambiarle el arco a Santi" o
+  // "¿puede pasar a las 10 a retirar los estudios?" no son mover su turno (el modelo los aceptaba 3/3 y el read-back anulaba su control).
+  const DE_TURNO = /\b(turnos?|horarios?|citas?|control(?:es)?)\b/;   // "el control de Delfi" = su turno
+  function esPropuestaDeCambio(texto) { const n = sinTildes(texto); return VERBO_CAMBIO.test(n) && !TURNO_NUEVO.test(n) && HAY_HORA.test(n) && DE_TURNO.test(n); }
+  // ¿Esa hora (HH:MM, 24 h) está ESCRITA en el mensaje de la clínica? "8:40", "08.40", "8 y 40", "8 40", "8,40"; "9 y media"; "a las 9", "17 hs"; "6 de la tarde".
+  function horaEnTexto(hora, texto) {
+    const hh = normHora(hora); if (!hh) return false;
+    const h = Number(hh.slice(0, 2)), m = Number(hh.slice(3)); const n = ' ' + sinTildes(texto).replace(/\s+/g, ' ') + ' ';
+    const formas = [h]; if (h > 12 && /\b(tarde|noche)\b/.test(n)) formas.push(h - 12);
+    const mm = String(m).padStart(2, '0');
+    return formas.some((H) => {
+      const hR = '0?' + H;
+      const pruebas = m > 0
+        ? [new RegExp('(?<![\\d\\/])' + hR + '\\s*(?:[:.,h]|\\s+y\\s+|\\s)\\s*' + mm + '(?![\\d\\/])')]
+          .concat(m === 30 ? [new RegExp('(?<![\\d\\/])' + hR + '\\s+y\\s+media\\b')] : []).concat(m === 15 ? [new RegExp('(?<![\\d\\/])' + hR + '\\s+y\\s+cuarto\\b')] : [])
+        : [new RegExp('(?<![\\d\\/.:,])' + hR + '\\s*(?:hs|hrs|horas|h)\\b'), new RegExp('\\ba las ' + hR + '(?!\\d|\\s*[:.,]\\s*\\d|\\s+y\\s)'), new RegExp('(?<![\\d\\/])' + hR + '\\s*[:.]\\s*00(?!\\d)')];
+      return pruebas.some((re) => re.test(n));
+    });
+  }
+  // ¿Esa fecha está respaldada por lo que ESCRIBIÓ la clínica? → 'ok' | 'inconsistente' (día de la semana que no coincide: "Lunes 19 de Noviembre") | false.
+  // Respaldo: el número del día (con su mes si lo escribió), el día de la semana dentro de las 2 semanas del mensaje, hoy / mañana / pasado mañana (contra la
+  // fecha del MENSAJE DEL STAFF, no de hoy) o "ese mismo día" si es el día del turno que se mueve.
+  function fechaEnTexto(fecha, texto, msStaff, fechaViejo) {
+    if (!esISO(fecha)) return false;
+    const base = isoJujuy(Number(msStaff) || Date.now());
+    if (fecha < base || diasEntre(base, fecha) > 120) return false;
+    const n = ' ' + sinTildes(texto).replace(/\s+/g, ' ') + ' ';
+    const dia = Number(fecha.slice(8)), mes = Number(fecha.slice(5, 7)), nombre = DIA_NOMBRE[fechaDe(fecha).getUTCDay()];
+    let m; const reDia = /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)[\s,]*(?:el\s+|dia\s+)?(\d{1,2})\b/g;
+    while ((m = reDia.exec(n))) if (Number(m[2]) === dia && m[1] !== nombre) return 'inconsistente';
+    const reNum = new RegExp('(?<![\\d:.,\\/])0?' + dia + '(?![\\d])(\\s*(?:de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)|\\/\\s*(\\d{1,2})))?', 'g');
+    while ((m = reNum.exec(n))) {
+      const antes = n.slice(Math.max(0, m.index - 7), m.index), despues = n.slice(m.index + m[0].length, m.index + m[0].length + 6);
+      if (/las\s*$/.test(antes) || /^\s*(?:hs|hrs|horas|h\b|[:.,]\s*\d|y\s)/.test(despues)) continue;   // es una hora, no un día
+      const mesEscrito = m[2] ? MESES_N[m[2]] : m[3] ? Number(m[3]) : null;
+      if (mesEscrito === null || mesEscrito === mes) return 'ok';
+    }
+    const d = diasEntre(base, fecha);
+    if (new RegExp('\\b' + nombre + '\\b').test(n) && d >= 0 && d <= 13) return 'ok';
+    if (d === 0 && /\bhoy\b/.test(n)) return 'ok';
+    if (d === 2 && /\bpasado manana\b/.test(n)) return 'ok';
+    if (d === 1 && /(?<!(?:\bla|\buna|\besta|\bpor la|\bde la)\s)\bmanana\b/.test(n) && !/\bpasado manana\b/.test(n)) return 'ok';
+    if (fechaViejo && fecha === fechaViejo && /\b(mismo dia|ese dia)\b/.test(n)) return 'ok';
+    return false;
+  }
+  // (05/11, revisión B2) Horas distintas escritas en el mensaje (en minutos, 12 h: "17:00" y "5 de la tarde" son la misma). Si hay más de una, el mensaje
+  // nombra el horario VIEJO y el NUEVO: el código no confía en cuál copió el modelo como nuevo.
+  function horasEscritas(texto) {
+    const n = ' ' + sinTildes(texto).replace(/\s+/g, ' ') + ' '; const out = new Set(); let m;
+    const add = (h, mi) => { h = Number(h); mi = Number(mi); if (h >= 0 && h <= 23 && mi >= 0 && mi <= 59) out.add((h % 12) * 60 + mi); };
+    const re1 = /(?<![\d\/])(\d{1,2})\s*(?:[:.,h]|\s+y\s+)\s*(\d{2})(?![\d\/])/g; while ((m = re1.exec(n))) add(m[1], m[2]);
+    const re2 = /(?<![\d\/])(\d{1,2})\s+y\s+media\b/g; while ((m = re2.exec(n))) add(m[1], 30);
+    const re3 = /\ba las (\d{1,2})(?!\d|\s*[:.,]\s*\d|\s+y\s)/g; while ((m = re3.exec(n))) add(m[1], 0);
+    const re4 = /(?<![\d\/.:,])(\d{1,2})\s*(?:hs|hrs|horas)\b/g; while ((m = re4.exec(n))) add(m[1], 0);
+    return out;
+  }
+  const minutos12 = (hora) => { const h = normHora(hora); return h ? (Number(h.slice(0, 2)) % 12) * 60 + Number(h.slice(3)) : -1; };
+  // ¿Qué números de día (1-31) escribió la clínica? (para saber si nombra otro día además del que copió el modelo)
+  function diasEscritos(texto) {
+    const n = ' ' + sinTildes(texto).replace(/\s+/g, ' ') + ' '; const out = new Set(); let m;
+    const re = /(?<![\d:.,\/])(\d{1,2})(?![\d])/g;
+    while ((m = re.exec(n))) {
+      const antes = n.slice(Math.max(0, m.index - 7), m.index), despues = n.slice(m.index + m[0].length, m.index + m[0].length + 6);
+      if (/las\s*$/.test(antes) || /^\s*(?:hs|hrs|horas|h\b|[:.,]\s*\d|y\s)/.test(despues)) continue;
+      const d = Number(m[1]); if (d >= 1 && d <= 31) out.add(d);
+    }
+    return out;
+  }
+  const tokensDe = (s) => sinTil(s).replace(/[^a-z ]/g, ' ').split(/\s+/).filter((t) => t.length >= 3);
+  // ¿Ese nombre (o su forma corta: "Delfi" por Delfina, "Joa" no: menos de 4 letras) está escrito en el texto?
+  const nombreEnTexto = (nombre, texto) => { const tn = tokensDe(texto); return tokensDe(nombre).some((p) => tn.some((t) => t === p || (t.length >= 4 && p.startsWith(t)) || (p.length >= 4 && t.startsWith(p)))); };
+  const lim200 = (s) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > 200 ? t.slice(0, 199) + '…' : t; };
+
+  // entrada: { fecha, hora, fecha_turno_viejo, para } (lo copió el modelo del mensaje de la clínica); estado: { tel, exec_id, ficha, turnos_vistos, propuesta_staff: { texto, ms } }
+  function decidirPropuestaStaff(entrada, estado, ahoraISO) {
+    const ahora = Date.parse(ahoraISO);
+    const ps = estado.propuesta_staff;
+    const e = entrada || {};
+    const DERIVA_NOTA = '[Nota interna para vos, NO la repitas al paciente] No se tocó la agenda: el sistema le pasa la respuesta a la secretaria con el motivo. Respondé [LISTO].';
+    const derivar = (motivo, detalle) => ({ etapa: 'error', resultado: { etapa: 'error', ...no(motivo, DERIVA_NOTA), derivar_staff: detalle } });
+    if (!ps || !String(ps.texto || '').trim()) {
+      // (05/11, revisión P1) si lo último es un read-back que armó Asiri (también uno de una propuesta de la clínica), el "sí" va por gestionar_turno, no acá.
+      return { etapa: 'error', resultado: { etapa: 'error', ...no('sin_propuesta_staff', '[Nota interna para vos, NO la repitas al paciente] No hay una propuesta de la clínica sin responder. Si hay CONFIRMACIÓN PENDIENTE y el paciente la acepta, gestionar_turno con confirma="si".') } };
+    }
+    const msStaff = Number(ps.ms);
+    if (!(msStaff > 0) || ahora - msStaff > VENTANA_STAFF_MS) return derivar('staff_vencida', 'la propuesta tiene más de 48 h');
+    if (!esPropuestaDeCambio(ps.texto)) return derivar('staff_no_es_cambio', 'el mensaje no es mover un turno con día y hora');
+    const fecha = String(e.fecha || '').trim(), hora = normHora(e.hora), fViejo = String(e.fecha_turno_viejo || '').trim();
+    if (!esISO(fecha) || !hora) return derivar('staff_sin_fecha_hora', 'no pude leer la fecha y hora nuevas');
+    const hMin = Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3));
+    if (hMin < 7 * 60 || hMin > 21 * 60) return derivar('staff_hora_rara', 'hora ' + hora + ' fuera del horario de la clínica');
+    if (!horaEnTexto(hora, ps.texto)) return derivar('staff_hora_no_escrita', 'la hora ' + hora + ' no figura en el mensaje de la clínica');
+    const fr = fechaEnTexto(fecha, ps.texto, msStaff, fViejo);
+    if (fr === 'inconsistente') return derivar('staff_fecha_inconsistente', 'la fecha no coincide con el día de la semana');
+    if (fr !== 'ok') return derivar('staff_fecha_no_escrita', 'el ' + corto(fecha, hora) + ' no figura en el mensaje');
+    const vistos = estado.turnos_vistos;
+    if (!Array.isArray(vistos)) return derivar('staff_sin_agenda', 'no pude consultar la agenda');
+    const fichas = ((estado.ficha || {}).fichas) || [];
+    if (!fichas.length) return derivar('staff_sin_ficha', 'no hay ficha con este celular');
+    // Para quién: con una ficha, esa. Con varias, la que NOMBRA el mensaje de la clínica (o el modelo, si ese nombre está escrito ahí); si no, no se adivina.
+    let ficha = null;
+    if (fichas.length === 1) ficha = fichas[0];
+    else {
+      const porPara = e.para && nombreEnTexto(e.para, ps.texto) ? fichas.filter((f) => nombreEnTexto(e.para, f.nombre)) : [];
+      const nombradas = fichas.filter((f) => nombreEnTexto(f.nombre, ps.texto));
+      // (revisión B3) sin nombre, la fecha del turno viejo ESCRITA en el mensaje identifica la ficha si ese día hay un solo turno vigente de toda la familia.
+      const porFechaVieja = fViejo && Array.isArray(estado.turnos_vistos) && fechaEnTexto(fViejo, ps.texto, msStaff, fViejo) === 'ok'
+        ? [...new Set(estado.turnos_vistos.filter(vigente).filter((t) => t.fecha === fViejo).map((t) => Number(t.id_paciente)))].map((id) => fichas.find((f) => Number(f.id) === id)).filter(Boolean) : [];
+      if (porPara.length === 1) ficha = porPara[0];
+      else if (nombradas.length === 1) ficha = nombradas[0];
+      else if (!nombradas.length && !e.para && porFechaVieja.length === 1 && estado.turnos_vistos.filter(vigente).filter((t) => t.fecha === fViejo).length === 1) ficha = porFechaVieja[0];
+      else return derivar('staff_para_quien', 'varias fichas y el mensaje no dice de quién es el turno');
+    }
+    const F = Number(ficha.id);
+    const nombre = fichas.length > 1 ? (ficha.nombre || '') : '';
+    const suyos = vistos.filter(vigente).filter((t) => Number(t.id_paciente) === F && msTurno(t.fecha, t.hora_inicio) > ahora);
+    // A) La agenda ya está así. Si además queda OTRO turno suyo ese día o el día del turno que se movía, puede ser un duplicado: no se afirma nada.
+    // (revisión B2) el mensaje nombra más de un horario (el viejo y el nuevo): solo se acepta si la hora copiada NO es la de un turno vigente suyo (eso sería
+    // copiar el viejo); y nunca se afirma "ya está en la agenda" (el turno que coincide puede ser justamente el viejo).
+    const variasHoras = horasEscritas(ps.texto).size > 1;
+    if (variasHoras && suyos.some((t) => minutos12(t.hora_inicio) === minutos12(hora))) return derivar('staff_hora_ambigua', 'el mensaje nombra el horario viejo y el nuevo y no sé cuál es cuál');
+    // (revisión B2) si la fecha copiada es la del turno que se mueve y el mensaje nombra OTRO día, sin decir "ese mismo día": puede haber copiado la fecha vieja.
+    if (fViejo && fecha === fViejo && !/\b(mismo dia|ese dia)\b/.test(sinTildes(ps.texto)) && [...diasEscritos(ps.texto)].some((d) => d !== Number(fecha.slice(8)))) {
+      return derivar('staff_fecha_ambigua', 'el mensaje nombra dos días y no sé cuál es el nuevo');
+    }
+    const ya = suyos.find((t) => t.fecha === fecha && normHora(t.hora_inicio) === hora);
+    if (ya) {
+      const otros = suyos.filter((t) => t.id !== ya.id && (t.fecha === fecha || (fViejo && t.fecha === fViejo)));
+      if (otros.length) return derivar('staff_posible_duplicado', 'figura el ' + corto(fecha, hora) + ' y también el ' + corto(otros[0].fecha, normHora(otros[0].hora_inicio)) + ' (¿duplicado?)');
+      const quien = nombre ? 'el turno de ' + nombre : 'su turno';
+      return { etapa: 'ya_en_agenda', resultado: { etapa: 'ya_en_agenda', ok: true, cita_id: ya.id,
+        texto_para_el_paciente: 'Perfecto, ' + quien + ' queda el ' + corto(fecha, hora) + ' con la Dra. Raquel.',
+        aviso: '[FYI] ' + (nombre || 'El paciente') + ' aceptó la propuesta de la clínica («' + lim200(ps.texto) + '»). El turno ya figuraba así en la agenda y Asiri le confirmó: ' + corto(fecha, hora) + '.',
+        para_asiri: NOTA_PEGAR + 'La agenda ya tiene ese turno: no hay nada que cambiar.' } };
+    }
+    if (msTurno(fecha, hora) - ahora < 60 * 60 * 1000) return derivar('staff_horario_pasado', 'el horario propuesto ya pasó');
+    // B) El turno que se mueve: el ÚNICO turno vigente de esa ficha, o (si tiene varios) el de la fecha que copió el modelo, siempre que esa fecha esté escrita.
+    let viejo = null;
+    if (!suyos.length) return derivar('staff_sin_turno', 'no tiene un turno vigente para mover');
+    if (suyos.length === 1 && (!fViejo || fViejo === suyos[0].fecha)) viejo = suyos[0];
+    else {
+      const c = suyos.filter((t) => t.fecha === fViejo);
+      if (c.length !== 1 || fechaEnTexto(fViejo, ps.texto, msStaff, fViejo) !== 'ok') return derivar('staff_turno_ambiguo', 'no sé cuál de sus turnos mover');
+      viejo = c[0];
+    }
+    const vh = normHora(viejo.hora_inicio);
+    const para = nombre ? ' para ' + nombre : '';
+    // (05/11, revisión) La fecha y la hora van PRIMERO: "Le confirmo el cambio que le propuso la clínica…" invitaba a decir "sí" sin leer el horario.
+    const readback = 'Le confirmo' + para + ': ' + capital(largo(fecha, hora)) + ' hs con la Dra. Raquel, en lugar de su turno del ' + corto(viejo.fecha, vh) + ' (el cambio que le propuso la clínica). ¿Procedo con el cambio?';
+    const propuesta = { id: 's-' + estado.tel + '-' + hashTexto(ps.texto) + '-' + msStaff, tipo: 'cambio', estado: 'pendiente', creada_ms: ahora, exec_id: estado.exec_id, tel: estado.tel,
+      paciente_id: F, slot: { fecha, hora }, cita_vieja: { id: viejo.id, fecha: viejo.fecha, hora: vh }, readback_text: readback, origen: 'staff' };
+    // (revisión B1) en 8 de 18 corridas el agente seguía llamando herramientas en el mismo turno (gestionar_turno, buscar_horarios): se le dice que termine.
+    return { etapa: 'confirmacion', propuesta, resultado: { etapa: 'confirmacion', ok: true, origen: 'staff', texto_para_el_paciente: readback,
+      para_asiri: '[Nota interna para vos, NO la repitas al paciente] El sistema le manda este texto. Respondé [LISTO] YA: no llames ninguna otra herramienta. Cuando el paciente acepte en su PRÓXIMO mensaje, llamá gestionar_turno con confirma="si": recién ahí se escribe en la agenda.' } };
+  }
+
+  return { proponer, decidir, decidirPropuestaStaff, esPropuestaDeCambio, horaEnTexto, fechaEnTexto, pendienteVista, dniEnMensajes, hashTexto, ejecutar, pasoInicial, pasoConsumo, pasoCita, pasoBuscarDni, pasoAlta, pasoReserva, pasoAnulacion, armarPaciente, armarReserva, armarAnulacion, normHora, vigente, TTL_PROPUESTA_MS, MIN_ANTICIPACION_MS };
 })();
 if (typeof module !== 'undefined') module.exports = AgendaCore;

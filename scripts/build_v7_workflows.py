@@ -111,11 +111,15 @@ let aviso = null;
 if (r.aviso_clinica && !simulado) aviso = {{ nivel: 'ACCION', texto: r.aviso_clinica }};   // paciente nuevo que no se pudo dar de alta (o DNI de otra ficha): no se reservó nada
 else if (escribio && !simulado) {{
   // (20/10) "solo" se leía como "sin confirmar": siempre se ejecuta recién después del "sí" del paciente al read-back (AgendaCore.decidir).
-  if (r.ok === true) aviso = {{ nivel: 'FYI', texto: '[FYI] Asiri hizo un cambio en la agenda (el paciente lo confirmó con «sí»): ' + (r.readback_text || '') + (r.nota_alta ? ' ' + r.nota_alta : '') }};
+  // (05/11) Si el cambio lo había propuesto la clínica (aceptar_propuesta_clinica), el aviso lo dice: la secretaria estaba esperando esa respuesta.
+  if (r.ok === true) aviso = {{ nivel: 'FYI', texto: (led.origen === 'staff' ? '[FYI] Asiri aplicó el cambio que propuso la clínica (el paciente lo aceptó y confirmó con «sí»): ' : '[FYI] Asiri hizo un cambio en la agenda (el paciente lo confirmó con «sí»): ') + (r.readback_text || '') + (r.nota_alta ? ' ' + r.nota_alta : '') }};
   else if (r.parcial === true) aviso = {{ nivel: 'ACCION', texto: '[ACCIÓN] Escritura a medias, revisar la agenda: ' + (r.readback_text || '') }};
   else if (r.motivo === 'no_pude_cancelar') aviso = {{ nivel: 'ACCION', texto: '[ACCIÓN] No se pudo cancelar un turno que la paciente pidió cancelar. Revisar.' }};
 }}
-const salida = {{ ok: r.ok === true, motivo: r.motivo || null, parcial: r.parcial === true, simulado: r.simulado === true, nueva_cita: r.nueva_cita || null, vieja_anulada: r.vieja_anulada || null, readback_text: r.readback_text || null, para_asiri: r.para_asiri || null, habria_hecho: r.habria_hecho || null }};
+// (05/11, revisión P2) Un cambio que propuso la CLÍNICA y no se pudo aplicar (horario ocupado, el turno ya cambió, ya pasó…): la secretaria esperaba esa respuesta.
+if (!aviso && !simulado && led.origen === 'staff' && r.ok !== true && r.motivo !== 'ya_ejecutada')
+  aviso = {{ nivel: 'ACCION', texto: '[ACCIÓN] El paciente aceptó el cambio que propuso la clínica pero Asiri no lo pudo aplicar (' + (r.motivo || 'sin motivo') + '). Hacerlo a mano y avisarle.' }};
+const salida = {{ ok: r.ok === true, motivo: r.motivo || null, origen: led.origen || null, parcial: r.parcial === true, simulado: r.simulado === true, nueva_cita: r.nueva_cita || null, vieja_anulada: r.vieja_anulada || null, readback_text: r.readback_text || null, para_asiri: r.para_asiri || null, habria_hecho: r.habria_hecho || null }};
 return [{{ json: {{ tel: e.tel, exec_id: String(e.exec_id_actual), escribio, libro_key: 'escrituras:' + e.tel + ':' + e.exec_id_actual, libro_entry: libro, aviso, salida }} }}];""", 4180, 420)
     g.si("¿Escribió?", "$json.escribio === true", 4400, 420)
     g.si("¿Avisar?", "!!$json.aviso", 4620, 540)

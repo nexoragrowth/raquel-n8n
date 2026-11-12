@@ -66,7 +66,8 @@ def main():
     cerebro = B.wf_cerebro()
 
     print("A. Estructura de los sub-agentes")
-    esperado = {"turnos": {"ver_turnos", "elegir_ficha", "buscar_horarios", "gestionar_turno", "confirmar_turno", "lista_espera"}, "pagos": {"registrar_pago", "datos_pago"},
+    # (05/11) turnos suma aceptar_propuesta_clinica (incidente José: el paciente acepta un cambio que le propuso la clínica a mano)
+    esperado = {"turnos": {"ver_turnos", "elegir_ficha", "buscar_horarios", "gestionar_turno", "aceptar_propuesta_clinica", "confirmar_turno", "lista_espera"}, "pagos": {"registrar_pago", "datos_pago"},
                 "informacion": set(), "urgencias": {"derivar_triaje"}}
     for k, wf in subs.items():
         chequear(f"A1 {k}: tiene EXACTAMENTE sus herramientas (ninguna fuera de su lista)", set(tools_de(wf)) == esperado[k], sorted(tools_de(wf)))
@@ -101,7 +102,7 @@ def main():
              and all(".datos" not in next(n for n in subs[k]["nodes"] if n["name"] == "Agente")["parameters"]["options"]["systemMessage"] for k in ("turnos", "pagos", "urgencias")))
     prompts = {"orquestador": C.PROMPT_ORQ, **M.PROMPTS}
     for k, p in prompts.items():
-        tope = 3300 if k == "orquestador" else 2500   # (28/10) 2900 -> 3300 (audios transcriptos, comprobantes, mensajes mixtos; probado con el modelo real): la regla de audios transcriptos (+158) está probada con el modelo real; (08/10) +derivar cuando INFORMA algo y no_reply tras derivar (REAL-05/08); (20/10) +lo que NUNCA se deriva (vivo 318965); sigue ~8× más chico que los 22 k del v6
+        tope = 3600 if k == "orquestador" else 2800   # (12/11) 3300/2500 -> 3600/2800: lo desplegado el 05/11 (propuesta de la clínica, incidente José) ya medía 3533/2777; (28/10) 2900 -> 3300 (audios transcriptos, comprobantes, mensajes mixtos; probado con el modelo real): la regla de audios transcriptos (+158) está probada con el modelo real; (08/10) +derivar cuando INFORMA algo y no_reply tras derivar (REAL-05/08); (20/10) +lo que NUNCA se deriva (vivo 318965); sigue ~8× más chico que los 22 k del v6
         chequear(f"A10 prompt {k}: < {tope} caracteres ({len(p)})", len(p) < tope, len(p))
         chequear(f"A11 prompt {k}: sin 'Te esperamos', 'venite', 'ahora mismo' ni pedir que confirme la asistencia (control de texto NUESTRO)",
                  not re.search(r"te esperamos|los esperamos|lo esperamos|venite|ahora mismo|confirme su asistencia|pida confirmaci", p, re.I), p[:200])

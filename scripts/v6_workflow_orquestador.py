@@ -22,7 +22,7 @@ import uuid
 from pathlib import Path
 
 from v7_lib import ROOT, V7, Grafo
-from v7_workflow_cerebro import (E, GRUPO, JS_CONTEXTO, MODO, SQL_DATOS, SQL_HISTORIAL, SQL_PRIMERO, SQL_RECORDATORIOS, _code_con)
+from v7_workflow_cerebro import (E, GRUPO, JS_CONTEXTO, MODO, SQL_DATOS, SQL_ENTRANTES, SQL_HISTORIAL, SQL_PRIMERO, SQL_RECORDATORIOS, _code_con)
 
 NOMBRE_VIVO = "v6 Orquestador"
 NOMBRE_SOMBRA = "v6 Orquestador (sombra)"
@@ -277,6 +277,7 @@ def wf_v6_orquestador(modo_sombra=False, esfuerzo=ESFUERZO):
     g.postgres("Historial", SQL_HISTORIAL, "$json.phone", 220, 300)
     g.postgres("Recordatorios", SQL_RECORDATORIOS, f"{E}.phone", 440, 300, una_vez=True)
     g.postgres("Primer mensaje", SQL_PRIMERO, f"{E}.phone", 550, 420, una_vez=True)
+    g.postgres("Entrantes", SQL_ENTRANTES, f"{E}.phone", 605, 540, una_vez=True)   # (12/11) el contexto compartido la lee desde el 05/11
     g.postgres("Datos del consultorio", SQL_DATOS, "''", 660, 300, una_vez=True)
     g.subworkflow("Identificar paciente", "@@ID:ver_turnos@@", {"tel": f"{E}.phone", "exec_id_actual": "$execution.id"}, 770, 300)
     g.redis_get("Redis GET propuesta (entrada)", f"'propuesta:' + {E}.phone", "prop_entrada_raw", 825, 420)
@@ -348,7 +349,7 @@ def wf_v6_orquestador(modo_sombra=False, esfuerzo=ESFUERZO):
     # ---- después del padre: verificación por código y salida
     _code_con(g, "Verificar salida", JS_VERIFICAR, 4100, 300, ("chequeo_salida", "orquestador_core", "verificador_core", "v6_salida_core"))
     g._nodo("Salida", "n8n-nodes-base.code", 2, {"jsCode": JS_SALIDA}, 4320, 300)
-    for a, b, s_ in [("Entrada", "Sesión de memoria", 0), ("Sesión de memoria", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Datos del consultorio", 0),
+    for a, b, s_ in [("Entrada", "Sesión de memoria", 0), ("Sesión de memoria", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Entrantes", 0), ("Entrantes", "Datos del consultorio", 0),
                      ("Datos del consultorio", "Identificar paciente", 0), ("Identificar paciente", "Redis GET propuesta (entrada)", 0), ("Redis GET propuesta (entrada)", "Armar contexto", 0),
                      ("Armar contexto", "¿Charla de la clínica?", 0), ("¿Charla de la clínica?", "Verificar salida", 0), ("¿Charla de la clínica?", "Edit Fields - Extraer Datos", 1),
                      ("Edit Fields - Extraer Datos", kb, 0), (kb, "Extraer Horarios y Precio", 0), ("Extraer Horarios y Precio", "Preparar Mensaje Final", 0),

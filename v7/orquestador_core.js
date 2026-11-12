@@ -170,6 +170,14 @@ const OrquestadorCore = (() => {
     // último que no escribió el paciente es del STAFF (< 6 h) y el orquestador SOLO decidió derivar (ningún agente), la secretaria ya está en esa charla:
     // silencio y sin aviso al grupo. No toca pasar_a_humano, urgencias ni pedidos a agentes (turnos, pagos, información, recordatorio, confirmación).
     if (c.staff_reciente === true && plan.fija === 'derivar' && !AGENTES.some((a) => plan[a])) { plan.fija = 'no_reply'; plan.cita = ''; plan.motivo = 'contesta_al_staff'; plan.staff_silencio = true; }
+    // (05/11) Hay una PROPUESTA DE LA CLÍNICA sin responder (estado, la arma el cerebro): un saludo solo no lleva menú (le está contestando al staff; con el
+    // menú guardado como último mensaje de Asiri, la propuesta dejaba de ser "lo último que se le dijo" y el "dale" siguiente se perdía — revisión, JOSE_TRAS_MENU).
+    // componer usa la marca para callar (no derivar) si Turnos no tuvo nada que hacer: un rechazo o un "gracias" al staff no van al grupo.
+    if (c.staff_reciente === true) plan.staff_reciente = true;   // (05/11, revisión M2) lo usa componer: con el staff en el chat, "no había nada que aplicar" = silencio
+    if (c.propuesta_clinica === true) {
+      plan.propuesta_clinica = true;
+      if (plan.fija === 'menu' && !AGENTES.some((a) => plan[a])) { plan.fija = 'no_reply'; plan.motivo = 'saluda_tras_propuesta_de_la_clinica'; }
+    }
     if (c.charla_de_la_clinica) {
       plan.turnos = plan.pagos = plan.informacion = null; plan.turnos_por_estado = false;
       plan.fija = 'no_reply'; plan.cita = ''; plan.motivo = 'charla_de_la_clinica'; plan.charla_de_la_clinica = true;
@@ -203,6 +211,8 @@ const OrquestadorCore = (() => {
   const COD_SIMPLE = ['FUERA_DE_ALCANCE', 'URGENCIA', '[NO_REPLY]', '[LISTO]'];
   const lista = (ts) => ts.map((t) => '- ' + t).join('\n');
 
+  // (05/11) aceptar_propuesta_clinica es gestionar_turno con accion fija: mismo workflow, mismos resultados.
+  const esGestion = (tool) => tool === 'gestionar_turno' || tool === 'aceptar_propuesta_clinica';
   // Qué le dice al paciente cada resultado de herramienta de TURNOS (texto del código; nada sale del modelo).
   function textoTurnos(p) {
     const o = p.obs || {};
@@ -219,7 +229,14 @@ const OrquestadorCore = (() => {
       if (o.motivo === 'limite_de_bloques') return { texto: 'No tengo más horarios para ofrecerle por acá.', derivar: 'pidió más horarios de los que Asiri puede ofrecer', estado: 'limite' };
       return { error_tecnico: true, estado: 'error' };
     }
-    if (p.tool === 'gestionar_turno') {
+    if (esGestion(p.tool)) {
+      // (05/11) aceptar_propuesta_clinica: la agenda ya estaba como la propuso la clínica → texto del código + aviso FYI (la secretaria esperaba esa respuesta).
+      if (o.etapa === 'ya_en_agenda' && o.texto_para_el_paciente) return { texto: String(o.texto_para_el_paciente).trim(), estado: 'ya_en_agenda', aviso: o.aviso ? { nivel: 'FYI', texto: lim(o.aviso, 400) } : null };
+      // (05/11) No se pudo aplicar la propuesta de la clínica (fecha incoherente, varias horas, varios turnos…): no se tocó nada; se deriva con el motivo exacto.
+      if (o.derivar_staff) return { derivar: lim('aceptó el cambio que propuso la clínica; no aplicado: ' + o.derivar_staff, 120), estado: 'staff_derivado' };   // clinica_core corta el motivo a 120
+      // (05/11, revisión P2) El "sí" a un cambio que propuso la clínica no se pudo escribir: el [ACCIÓN] ya lo manda ejecutar_propuesta (no se deriva dos veces).
+      if (o.etapa === 'ejecutado' && o.origen === 'staff' && o.ok !== true && !o.texto_para_el_paciente && o.motivo !== 'ya_ejecutada')
+        return { texto: 'No pude completar el cambio en la agenda: su turno no se modificó. Ya le avisé a la secretaria para que lo resuelva.', estado: 'escrito_error' };
       if (o.texto_para_el_paciente) {
         const estado = o.etapa === 'confirmacion' ? 'readback_pendiente' : o.etapa === 'ejecutado' ? (o.ok === true ? 'escrito_ok' : 'escrito_error') : 'pregunta';
         return { texto: String(o.texto_para_el_paciente).trim(), readback: o.etapa === 'confirmacion', estado };
@@ -231,9 +248,10 @@ const OrquestadorCore = (() => {
       if (m === 'paciente_nuevo_sin_turnos' || m === 'sin_ficha') return { texto: TEXTOS.SIN_TURNOS, estado: 'sin_turnos' };
       if (m === 'reserva_rechazada') return { texto: 'Ese horario ya no está disponible; no se cambió nada en la agenda.', estado: 'escrito_error' };
       if (m === 'ya_ejecutada') return { texto: 'Ese pedido ya quedó registrado.', estado: 'escrito_ok', ya_ejecutada: true };
+      if (m === 'horario_pasado') return { texto: 'Ese horario ya pasó: no se cambió nada en la agenda.', estado: 'escrito_error' };
       if (m === 'no_pude_registrar' || m === 'dni_en_otra_ficha') return { texto: 'No pude registrarlo en la agenda: la secretaria le termina de agendar el turno.', estado: 'escrito_error' };
       if (m === 'no_pude_cancelar') return { texto: 'No pude cancelar el turno: sigue vigente. Ya le avisé a la clínica para que lo resuelva.', estado: 'escrito_error' };
-      if (['no_ofrecido', 'horario_invalido', 'no_hay_turno_para_sumar', 'tipo_invalido', 'fecha_invalida', 'ver_turnos_primero'].includes(m)) return { estado: m };   // el agente tiene que corregir el pedido
+      if (['no_ofrecido', 'horario_invalido', 'no_hay_turno_para_sumar', 'tipo_invalido', 'fecha_invalida', 'ver_turnos_primero', 'sin_propuesta_staff'].includes(m)) return { estado: m };   // el agente tiene que corregir el pedido
       return { error_tecnico: true, estado: 'error' };
     }
     if (p.tool === 'confirmar_turno') {
@@ -301,17 +319,18 @@ const OrquestadorCore = (() => {
     const base = { agente: 'turnos', codigo: cod, herramientas: ps.map((p) => ({ nombre: p.tool, ok: p.obs.ok === true, etapa: p.obs.etapa || null, motivo: p.obs.motivo || null })), traza: traza(ps),
       texto: '', estado: 'nada', fuera_de_alcance: false, urgencia: false, derivar: null, error_tecnico: false, readback: false,
       texto_libre_descartado: (!cod && textoModelo(a.output).trim()) ? lim(textoModelo(a.output), 300) : null };
-    if (a.error && !ps.length) return { ...base, estado: 'error', error_tecnico: true };
+    // (05/11, 331596) el porqué viaja al aviso [ACCIÓN] (antes decía solo "no pudo completar")
+    if (a.error && !ps.length) return { ...base, estado: 'error', error_tecnico: true, error_detalle: lim(a.error, 200) };
     const r = ps.map((p) => ({ tool: p.tool, input: p.input, ...textoTurnos(p) }));
     // (20/10, vivo 318973) "Para ese día no hay…" solo si esa búsqueda vacía era de UN día (desde = hasta, como pide el prompt de Turnos para "pal jueves").
     const diaPuntual = (i) => { let o = i; if (typeof o === 'string') { try { o = JSON.parse(o); } catch (x) { o = {}; } } o = o || {}; return !!o.desde && o.desde === o.hasta; };
     let turnos = Array.isArray((ctx || {}).turnos) ? ctx.turnos : [];
     for (const x of r) if (Array.isArray(x.turnos)) turnos = x.turnos;
-    const ultimo = (tool) => { for (let i = r.length - 1; i >= 0; i--) if (r[i].tool === tool && (r[i].texto || r[i].pregunta || r[i].error_tecnico || r[i].derivar)) return r[i]; return null; };
+    const ultimo = (tool) => { const es = tool === 'gestionar_turno' ? esGestion : (t) => t === tool; for (let i = r.length - 1; i >= 0; i--) if (es(r[i].tool) && (r[i].texto || r[i].pregunta || r[i].error_tecnico || r[i].derivar)) return r[i]; return null; };
     let g = ultimo('gestionar_turno');
     // (15/10, prueba en vivo) El agente armó la confirmación y en el MISMO mensaje intentó ejecutarla: el código lo frena ('ya_ejecutada', el paciente
     // todavía no vio la pregunta). Ese intento frenado no puede pisar el read-back: el paciente tiene que recibir "¿Procedo…?", no "ya quedó registrado".
-    if (g && g.ya_ejecutada) { const rb = r.filter((x) => x.tool === 'gestionar_turno' && x.readback).pop(); if (rb) g = rb; }
+    if (g && g.ya_ejecutada) { const rb = r.filter((x) => esGestion(x.tool) && x.readback).pop(); if (rb) g = rb; }
     const c = ultimo('confirmar_turno'), le = ultimo('lista_espera'), ef = ultimo('elegir_ficha');
     const bloques = r.filter((x) => x.tool === 'buscar_horarios' && x.texto);
     const partes = []; let pregunta = null, readback = null;
@@ -336,29 +355,42 @@ const OrquestadorCore = (() => {
       // (21/10, auditoría 320042) Si el agente ya entendió que ELIGIÓ (pide datos o para quién), no se le vuelven a listar horarios: con uno solo se lo nombra en la pregunta.
       const yaEligio = cod === 'PREGUNTA_DATOS_NUEVO' || cod === 'PREGUNTA_PARA_QUIEN';
       // (20/10) Con "menos de 48 h" no van horarios en el mismo mensaje: no se pueden reservar como cambio de ESE turno.
-      if (!(g && g.texto && (g.estado === 'escrito_ok' || g.estado === 'menos_48h'))) for (const b of bloques) {
+      if (!(g && g.texto && (g.estado === 'escrito_ok' || g.estado === 'menos_48h' || g.estado === 'ya_en_agenda'))) for (const b of bloques) {
         if (yaEligio && b.estado !== 'bloque_ofrecido') continue;
         if (!hayBloque || b.estado === 'bloque_ofrecido' || b.estado === 'ya_ofrecidos') partes.push(b.texto);
         else if (diaPuntual(b.input)) partes.push('Para ese día no hay turnos disponibles.');
       }
-      if (g && g.texto) partes.push(g.texto);
+      // (12/11, espejo con mensajes reales) "No veo turnos vigentes" no va junto a horarios libres: el que pidió turno no preguntó por los suyos.
+      const ofrecioHorarios = bloques.some((b) => b.estado === 'bloque_ofrecido');
+      if (g && g.texto && !(ofrecioHorarios && g.estado === 'sin_turnos')) partes.push(g.texto);
       if (g && g.pregunta) pregunta = pregunta || g.pregunta;
     }
     if (ef && ef.pregunta && !readback && !(g && g.texto)) pregunta = pregunta || ef.pregunta;
-    if (!readback && !pregunta && !confPregunto && !confSinTurno && cod && cod.startsWith('PREGUNTA_')) pregunta = cod.slice('PREGUNTA_'.length);
-    if (!readback && !confSinTurno && cod === 'MOSTRAR_TURNOS') partes.push(textoPregunta('MOSTRAR_TURNOS', turnos));
+    // (05/11, revisión B3) si la propuesta de la clínica ya se deriva, no se suma una pregunta del modelo ("¿Para quién…?" + "Le paso con la secretaria").
+    if (!readback && !pregunta && !confPregunto && !confSinTurno && cod && cod.startsWith('PREGUNTA_') && !r.some((x) => x.estado === 'staff_derivado')) pregunta = cod.slice('PREGUNTA_'.length);
+    // (12/11) "Quería saber si tiene turno para el viernes" (pregunta por horarios LIBRES) a veces sale como MOSTRAR_TURNOS: sin turnos propios y con
+    // horarios ofrecidos, no se agrega "No veo turnos vigentes con este número" (les llegaba a pacientes nuevos debajo de los horarios).
+    if (!readback && !confSinTurno && cod === 'MOSTRAR_TURNOS' && (turnos.length || !bloques.some((b) => b.estado === 'bloque_ofrecido'))) partes.push(textoPregunta('MOSTRAR_TURNOS', turnos));
     const elegidos = [...new Set(bloques.filter((b) => b.estado === 'ya_ofrecidos').flatMap((b) => b.ya_ofrecidos.map((x) => x.fecha + ' ' + x.hora)))];
     if (pregunta === 'DATOS_NUEVO' && !readback && elegidos.length === 1) partes.push(`Para reservar el ${diaCorto(elegidos[0].slice(0, 10))} a las ${hCorta(elegidos[0].slice(11))} necesito nombre, apellido y DNI del paciente, en un solo mensaje.`);
     else if (pregunta && !readback) partes.push(textoPregunta(pregunta, turnos));
     if (readback) partes.push(readback);
     const texto = unir(partes).join('\n\n');
-    const derivar = r.map((x) => x.derivar).find(Boolean) || confSinTurno || null;
+    // (05/11, revisión MEDIA 4) Quiso aceptar una propuesta de la clínica que el sistema ya no ve (p. ej. pasó otro mensaje en el medio) y no quedó NADA para
+    // decirle: nunca un "no le entendí" mudo; la secretaria recibe el aviso con lo que contestó.
+    const sinPropuesta = !texto && !readback && r.some((x) => x.estado === 'sin_propuesta_staff') && !r.some((x) => x.texto || x.derivar)
+      ? 'respondió a un mensaje de la clínica y Asiri no encontró la propuesta para aplicar' : null;
+    const derivar = r.map((x) => x.derivar).find(Boolean) || confSinTurno || sinPropuesta || null;
     const fuera = cod === 'FUERA_DE_ALCANCE' && !texto;
     const error_tecnico = !texto && !fuera && r.some((x) => x.error_tecnico);
     const estado = readback ? 'readback_pendiente' : (g && g.estado === 'escrito_ok') ? 'escrito_ok' : (g && g.estado === 'escrito_error') ? 'escrito_error'
+      : (g && g.estado === 'ya_en_agenda') ? 'ya_en_agenda'
       : (c && c.estado === 'confirmado') ? 'confirmado' : (bloques.length && !(pregunta && !bloques.some((b) => b.estado === 'bloque_ofrecido'))) ? 'bloque_ofrecido' : pregunta ? 'pregunta' : fuera ? 'fuera_de_alcance'
+      : derivar && !texto ? 'derivar'
       : cod === '[NO_REPLY]' && !texto ? 'no_reply' : texto ? 'respondido' : error_tecnico ? 'error' : 'nada';
-    return { ...base, texto, estado, readback: !!readback, fuera_de_alcance: fuera, urgencia: cod === 'URGENCIA', derivar, error_tecnico };
+    // (05/11) avisos que traen las herramientas (hoy: el FYI de "la agenda ya estaba como la propuso la clínica"); los manda la Salida del cerebro.
+    const avisos = r.map((x) => x.aviso).filter(Boolean);
+    return { ...base, texto, estado, readback: !!readback, fuera_de_alcance: fuera, urgencia: cod === 'URGENCIA', derivar, error_tecnico, ...(avisos.length ? { avisos } : {}), ...(sinPropuesta && derivar === sinPropuesta ? { sin_propuesta: true } : {}) };
   }
   function salidaPagos(ag) {
     const a = ag || {};
@@ -415,7 +447,8 @@ const OrquestadorCore = (() => {
     const c = ctx || {};
     const items = AGENTES.map((a) => res && res[a]).filter(Boolean);
     const fuera = items.filter((x) => x.fuera_de_alcance).map((x) => x.agente);
-    const porAgente = items.map((x) => x.derivar).filter(Boolean);
+    // (05/11, revisión M2) "quiso aceptar una propuesta que no hay" con el staff en el chat (< 6 h) no se deriva: la secretaria ya está ahí (decisión 31/10).
+    const porAgente = items.filter((x) => !(x.sin_propuesta === true && plan.staff_reciente === true)).map((x) => x.derivar).filter(Boolean);
     const humano = plan.fija === 'humano';
     const noEntendiInsiste = plan.contar_no_entendi === true && Number(c.noentendi_n || 0) >= 2;
     const derivar = !humano && (plan.fija === 'derivar' || fuera.length > 0 || porAgente.length > 0 || noEntendiInsiste);
@@ -458,6 +491,8 @@ const OrquestadorCore = (() => {
         bloque_ofertas: e.bloque || null, bloque_exec: (propEsta || hayOk) ? null : (e.bloque_exec || null) });
       if (c.accion === 'reemplazar') { tTexto = c.texto; motivo_chequeo = c.motivo; if (c.avisar && c.avisar.nivel === 'ACCION') avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] ' + c.avisar.texto }); }
     }
+    // (05/11) avisos de las herramientas de Turnos (FYI "la agenda ya estaba como la propuso la clínica"), solo si su texto sale tal cual (el chequeo no lo reemplazó).
+    if (T && Array.isArray(T.avisos) && T.texto && tTexto === T.texto) for (const a of T.avisos) if (a && a.texto) avisos.push({ nivel: a.nivel === 'ACCION' ? 'ACCION' : 'FYI', texto: lim(a.texto, 400) });
     // 3) INFORMACIÓN: sin la oferta fija si participó Turnos (no dos preguntas); una afirmación de "quedó hecho" sin escritura se reemplaza.
     let iTexto = I && I.texto ? sinPreguntas(I.texto.replace(ORACION_DISPONIBILIDAD, ' ')) : '';
     if (iTexto && (T || tTexto)) iTexto = iTexto.replace(TEXTOS.OFERTA_PRIMERA, '').trim();
@@ -496,7 +531,8 @@ const OrquestadorCore = (() => {
     let partes = unir(turnosDeriva ? [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', tTexto, dTexto] : [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', dTexto, tTexto]);
     const errores = agentes.filter((a) => res[a].error_tecnico);
     if (errores.length) {
-      avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no pudo completar (' + errores.join(', ') + '): «' + cita + '». Revisar y contestarle.' });
+      const detalle = errores.map((a) => res[a].error_detalle).filter(Boolean).map((d) => lim(d, 120)).join(' | ');
+      avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no pudo completar (' + errores.join(', ') + '): «' + cita + '». Revisar y contestarle.' + (detalle ? ' Detalle técnico: ' + detalle : '') });
       partes = partes.length ? partes.concat(hayOk ? [] : [TEXTOS.ERROR_PARCIAL]) : [TEXTOS.ERROR];
     }
     if (!partes.length && plan.fallo_orquestador) { partes = [TEXTOS.ERROR]; avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no pudo responder (falló el orquestador): revisar y contestar a mano. «' + cita + '»' }); }
@@ -516,9 +552,14 @@ const OrquestadorCore = (() => {
     }
     if (!partes.length) {
       const porCierre = plan.fija === 'no_reply';
-      const callar = porCierre || (agentes.length > 0 && agentes.every((a) => res[a].estado === 'no_reply' || res[a].codigo === '[NO_REPLY]'));
+      const callar = porCierre || (agentes.length > 0 && agentes.every((a) => res[a].estado === 'no_reply' || res[a].codigo === '[NO_REPLY]' || (res[a].sin_propuesta === true && plan.staff_reciente === true)));
       // (21/10, auditoría v6→v7, caso real …6023: 3 mensajes de un paciente nuevo sin ninguna respuesta) Red del v6 "Fallback Output": un sub-agente
       // que dice [NO_REPLY] a un mensaje que el ORQUESTADOR sí clasificó como pedido no es un cierre: se deriva a la secretaria con aviso, nunca silencio.
+      // (05/11, revisión con el modelo real: Bautista "no puedo, me quedo con el del 28", Santi "Hoy no llegamos") Le está contestando una PROPUESTA DE LA
+      // CLÍNICA y Turnos no tuvo nada que hacer (rechazo, duda, gracias): la secretaria está en esa charla → silencio, como "le contesta al STAFF" (28/10).
+      // (revisión M2) con el staff en el chat (< 6 h), lo mismo si el único agente fue Turnos y no tuvo nada que hacer ("ahí lo llevo" a "cambiarle el arco").
+      const soloTurnos = agentes.length === 1 && agentes[0] === 'turnos';
+      if (callar && !porCierre && (plan.propuesta_clinica === true || (plan.staff_reciente === true && soloTurnos))) return fin(null, { silencio: true, contesta_a_la_clinica: true });
       if (callar && !porCierre) {
         avisos.push({ nivel: 'ACCION', texto: '[ACCIÓN] Asiri no supo qué responder (el agente no hizo nada): «' + cita + '». Contestarle por este chat.' });
         return fin(TEXTOS.DERIVA, { sin_respuesta_del_agente: true });

@@ -18,7 +18,7 @@ Los ids de los workflows se resuelven al crearlos en n8n (marcadores @@ID:<clave
 import json
 
 from v7_lib import V7, Grafo
-from v7_workflow_cerebro import (CTX, E, GRUPO, JS_CONTEXTO, JS_DESPACHO, MODO, SQL_DATOS, SQL_HISTORIAL, SQL_PRIMERO, SQL_RECORDATORIOS, _code_con)
+from v7_workflow_cerebro import (CTX, E, GRUPO, JS_CONTEXTO, JS_DESPACHO, MODO, SQL_DATOS, SQL_ENTRANTES, SQL_HISTORIAL, SQL_PRIMERO, SQL_RECORDATORIOS, _code_con)
 
 NOMBRE = "v7 Cerebro Agente"
 PROMPT_AGENTE = (V7 / "prompt_orquestador_agente.md").read_text(encoding="utf-8").strip()
@@ -110,7 +110,7 @@ DEVOLVER = ("const s = $('Salida').first().json;\nreturn [{ json: { texto: s.tex
 
 # ------------------------------------------------------------------------------------------------ herramientas
 DESC = {
-    "turnos": "Agente de TURNOS, la ÚNICA fuente de horarios LIBRES: si quiere un turno o pregunta si hay para un día, llamala antes de responder (con el día o franja si los dijo; no le preguntes antes cuál prefiere). Sacar, cambiar o cancelar un turno, ver cuál tiene, elegir horario, para quién es, confirmar asistencia a un recordatorio, responder a la CONFIRMACIÓN PENDIENTE, lista de espera. Devuelve el texto armado por el sistema (bloque de horarios, '¿Procedo?', éxito) y un estado. Una vez por mensaje.",
+    "turnos": "Agente de TURNOS, la ÚNICA fuente de horarios LIBRES: si quiere un turno o pregunta si hay para un día, llamala antes de responder (con el día o franja si los dijo; no le preguntes antes cuál prefiere). Sacar, cambiar o cancelar un turno, ver cuál tiene, elegir horario, para quién es, confirmar asistencia a un recordatorio, responder a la CONFIRMACIÓN PENDIENTE, aceptar la PROPUESTA DE LA CLÍNICA (pedido: 'acepta la propuesta de la clínica'), lista de espera. Devuelve el texto armado por el sistema (bloque de horarios, '¿Procedo?', éxito) y un estado. Una vez por mensaje.",
     "pagos": "Agente de PAGOS: el paciente avisa que pagó, manda un comprobante o pide los datos para transferir (alias). Devuelve el texto de recepción; los datos bancarios los agrega el sistema (vos nunca los escribas). Una vez por mensaje.",
     "informacion": "Agente de INFORMACIÓN: precio de la primera consulta, horarios de atención, dirección, tratamientos, obra social, formas de pago, cómo se atiende. Responde solo con los datos del consultorio; si no corresponde dice FUERA_DE_ALCANCE. Una vez por mensaje.",
     "urgencias": "Agente de URGENCIAS: dolor, sangrado, hinchazón o golpe en la boca o los dientes; aparato, alambre o bracket roto, suelto o que pincha. Pasa el mensaje al protocolo de urgencias de la clínica, que le responde por su cuenta. Una vez.",
@@ -122,6 +122,7 @@ def _fijos_sub(clave):
     """Lo que NO decide el modelo: igual que _entradas_sub del cerebro actual, salvo `pedido` (lo escribe el agente)."""
     ent = {"tel": f"{E}.phone", "exec_id_actual": "$execution.id", "modo": MODO, "texto_paciente": f"{E}.texto", "ultimo_asiri": f"{CTX}.ultimo_asiri",
            "textos_paciente": f"{CTX}.textos_paciente", "turnos_json": f"{CTX}.turnos_json", "contexto": f"{CTX}.contexto",
+           "propuesta_staff": f"{CTX}.propuesta_staff_json || ''",   # (12/11) como el cerebro actual: aceptar_propuesta_clinica (Turnos)
            "datos": f"{CTX}.datos_info" if clave == "informacion" else "''"}
     return ent
 
@@ -142,6 +143,7 @@ def wf_cerebro_agente(esfuerzo=ESFUERZO):
     g.postgres("Historial", SQL_HISTORIAL, "$json.phone", 220, 300)
     g.postgres("Recordatorios", SQL_RECORDATORIOS, f"{E}.phone", 440, 300, una_vez=True)
     g.postgres("Primer mensaje", SQL_PRIMERO, f"{E}.phone", 550, 420, una_vez=True)
+    g.postgres("Entrantes", SQL_ENTRANTES, f"{E}.phone", 605, 540, una_vez=True)   # (12/11) como el cerebro actual desde el 05/11: propuesta de la clínica
     g.postgres("Datos del consultorio", SQL_DATOS, "''", 660, 300, una_vez=True)
     g.subworkflow("Identificar paciente", "@@ID:ver_turnos@@", {"tel": f"{E}.phone", "exec_id_actual": "$execution.id"}, 770, 300)
     g.redis_get("Redis GET propuesta (entrada)", f"'propuesta:' + {E}.phone", "prop_entrada_raw", 825, 420)
@@ -196,7 +198,7 @@ def wf_cerebro_agente(esfuerzo=ESFUERZO):
     g.postgres("Guardar en memoria", "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb), ($1, $3::jsonb)", "[$('Salida').first().json.phone, $('Salida').first().json.msg_human, $('Salida').first().json.msg_ai]", x + 880, 240)
     g.code("Devolver", DEVOLVER, x + 1100, 300)
 
-    for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Datos del consultorio", 0), ("Datos del consultorio", "Identificar paciente", 0),
+    for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Entrantes", 0), ("Entrantes", "Datos del consultorio", 0), ("Datos del consultorio", "Identificar paciente", 0),
                      ("Identificar paciente", "Redis GET propuesta (entrada)", 0), ("Redis GET propuesta (entrada)", "Armar contexto", 0), ("Armar contexto", "Pedidos por estado", 0),
                      ("Pedidos por estado", "¿Charla de la clínica?", 0), ("¿Charla de la clínica?", lecturas[0][0], 0), ("¿Charla de la clínica?", "¿Forzar Pagos?", 1),
                      ("¿Forzar Pagos?", "Pagos forzado", 0), ("¿Forzar Pagos?", "¿Forzar Turnos?", 1), ("Pagos forzado", "¿Forzar Turnos?", 0),

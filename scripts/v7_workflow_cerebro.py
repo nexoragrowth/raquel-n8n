@@ -36,6 +36,9 @@ SQL_DATOS = ("SELECT id::text AS id, contenido FROM knowledge_base WHERE id IN (
 # (20/10, D3 del plan del 13/10; escalaciones reales 380–386) ¿Quién escribió PRIMERO en este chat? Si fue la clínica y el contacto no tiene ficha,
 # es una charla de la clínica (plomero, proveedor, técnico): Asiri no se mete. Es estructura (fuente del mensaje), no lectura del texto del paciente.
 SQL_PRIMERO = "SELECT message->'additional_kwargs'->>'source' AS fuente, message->>'type' AS tipo FROM n8n_chat_histories WHERE session_id = $1 ORDER BY id ASC LIMIT 1"
+# (05/11, incidente José; revisión R6) horas de TODOS los mensajes del paciente (el v6 los guarda aunque Asiri calle o esté en modo humano): HistorialCore.ultimoStaff
+# las usa para saber si la propuesta de la clínica ya tuvo respuesta. (12/11: traído al repo desde lo desplegado el 05/11, que no estaba commiteado.)
+SQL_ENTRANTES = "SELECT created_at FROM mensajes_entrantes_live WHERE telefono = $1 AND from_me = false AND created_at > now() - interval '3 days' ORDER BY created_at DESC LIMIT 50"
 SUBAGENTES = [("turnos", "Agente Turnos"), ("pagos", "Agente Pagos"), ("informacion", "Agente Información"), ("urgencias", "Agente Urgencias")]
 
 E = "$('Entrada').first().json"
@@ -79,6 +82,13 @@ const recordatorio_pendiente = rec.length > 0 && !!(ultimoNoPaciente && (ultimoN
 let staff_reciente = false;
 for (const f of filas) { const m = msg(f); if (!m || m.type === 'human') continue; const src = String((m.additional_kwargs || {}).source || ''); const t = Date.parse(String(f.created_at || ''));
   staff_reciente = (src === 'wa_outbound' || String(m.content || '').startsWith('[ATENCION HUMANA')) && !isNaN(t) && ahoraMs - t < 6 * 3600 * 1000; break; }
+// (05/11, incidente José) ¿Lo último que no escribió el paciente es una PROPUESTA de la clínica escrita a mano (< 48 h)? Texto CRUDO del staff (no el recortado
+// del contexto) para que aceptar_propuesta_clinica saque fecha y hora por código. Estado + texto de la clínica, nunca el del paciente.
+// (05/11, revisión R6/R7) Con las horas de TODOS los mensajes del paciente (mensajes_entrantes_live: el v6 los guarda aunque Asiri calle o esté en modo humano):
+// si ya contestó después, no está sin responder. Y solo cuenta si de verdad propone MOVER un turno con hora (no "¿cómo sigue la nena?", ni "Listo, le quedó…").
+let entrantes = []; try { entrantes = $('Entrantes').all().map((i) => i.json).filter((r) => r && r.created_at).map((r) => Date.parse(String(r.created_at))).filter((x) => !isNaN(x)); } catch (x) { entrantes = []; }
+let propuesta_staff = HistorialCore.ultimoStaff(filas, ahoraMs, 48 * 3600 * 1000, entrantes);
+if (propuesta_staff && !AgendaCore.esPropuestaDeCambio(propuesta_staff.texto)) propuesta_staff = null;
 const kb = {}; for (const r of $('Datos del consultorio').all().map((i) => i.json)) if (r && r.id !== undefined) kb[String(r.id)] = String(r.contenido || '').trim();
 const j = new Date(ahoraMs - 3 * 3600 * 1000);
 const ahora = DIAS[j.getUTCDay()] + ' ' + j.toISOString().slice(0, 10) + ' ' + j.toISOString().slice(11, 16);
@@ -115,14 +125,16 @@ let ident = {}; try { ident = $('Identificar paciente').first().json || {}; } ca
 let primero = null; try { primero = $('Primer mensaje').first().json || null; } catch (x) { primero = null; }
 const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && ident.ok !== true && ident.motivo === 'sin_ficha';
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
-  { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null });
+  { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null,
+    propuesta_clinica: propuesta_staff ? { texto: propuesta_staff.texto, horas: (ahoraMs - propuesta_staff.ms) / 3600000 } : null });
 return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), comprobante_marcado, staff_reciente, charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
+  propuesta_staff_json: propuesta_staff ? JSON.stringify(propuesta_staff) : '', propuesta_clinica: !!propuesta_staff,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
 JS_DESPACHO = """const ctx = $('Armar contexto').first().json;
 let o = {}; try { o = $('Orquestador').first().json || {}; } catch (x) { o = { error: 'sin salida' }; }
-return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '', comprobante_marcado: ctx.comprobante_marcado === true, staff_reciente: ctx.staff_reciente === true }) }];"""
+return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '', comprobante_marcado: ctx.comprobante_marcado === true, staff_reciente: ctx.staff_reciente === true, propuesta_clinica: ctx.propuesta_clinica === true }) }];"""
 
 JS_RES = """const r = (n) => { try { const x = $(n); return x.isExecuted ? (x.first().json || null) : null; } catch (y) { return null; } };
 const res = { turnos: r('Agente Turnos'), pagos: r('Agente Pagos'), informacion: r('Agente Información'), urgencias: r('Agente Urgencias') };
@@ -184,6 +196,7 @@ def _code_con(g, nombre, js, x, y, modulos):
 def _entradas_sub(clave):
     ent = {"tel": f"{E}.phone", "exec_id_actual": "$execution.id", "modo": MODO, "texto_paciente": f"{E}.texto", "ultimo_asiri": f"{CTX}.ultimo_asiri",
            "textos_paciente": f"{CTX}.textos_paciente", "turnos_json": f"{CTX}.turnos_json", "contexto": f"{CTX}.contexto",
+           "propuesta_staff": f"{CTX}.propuesta_staff_json || ''",   # (05/11) para aceptar_propuesta_clinica (Turnos); los demás lo ignoran
            "datos": f"{CTX}.datos_info" if clave == "informacion" else "''",
            "pedido": "$('Ver urgencia').first().json.pedido" if clave == "urgencias" else f"$('Despacho').first().json.{clave}"}
     return ent
@@ -200,6 +213,7 @@ def wf_cerebro(esfuerzo=ESFUERZO_PRODUCCION):
     # (21/10, auditoría) una_vez: encadenados detrás de 'Historial' (hasta 30 filas) corrían una vez POR FILA: cada recordatorio aparecía 23–60 veces en el contexto.
     g.postgres("Recordatorios", SQL_RECORDATORIOS, f"{E}.phone", 440, 300, una_vez=True)
     g.postgres("Primer mensaje", SQL_PRIMERO, f"{E}.phone", 550, 420, una_vez=True)
+    g.postgres("Entrantes", SQL_ENTRANTES, f"{E}.phone", 605, 540, una_vez=True)
     g.postgres("Datos del consultorio", SQL_DATOS, "''", 660, 300, una_vez=True)
     g.subworkflow("Identificar paciente", "@@ID:ver_turnos@@", {"tel": f"{E}.phone", "exec_id_actual": "$execution.id"}, 770, 300)
     g.redis_get("Redis GET propuesta (entrada)", f"'propuesta:' + {E}.phone", "prop_entrada_raw", 825, 420)
@@ -248,7 +262,7 @@ def wf_cerebro(esfuerzo=ESFUERZO_PRODUCCION):
     g.postgres("Guardar en memoria", "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, $2::jsonb), ($1, $3::jsonb)", "[$('Salida').first().json.phone, $('Salida').first().json.msg_human, $('Salida').first().json.msg_ai]", x + 880, 240)
     g.code("Devolver", "const s = $('Salida').first().json;\nreturn [{ json: { texto: s.texto, enviar: s.enviar, silencio: s.silencio, derivar_triaje: s.derivar_triaje === true, triaje: s.triaje || null, texto_original: s.texto_original || null, modo: s.modo, motivo_chequeo: s.motivo_chequeo, motivo_banlist: s.motivo_banlist, fallo_agente: s.fallo_agente, modo_humano: s.modo_humano, descartar_propuesta: s.descartar_propuesta === true, tools: s.tools, agentes: s.agentes, plan: s.plan, avisos: s.avisos } }];", x + 1100, 300)
 
-    for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Datos del consultorio", 0), ("Datos del consultorio", "Identificar paciente", 0),
+    for a, b, s_ in [("Entrada", "Historial", 0), ("Historial", "Recordatorios", 0), ("Recordatorios", "Primer mensaje", 0), ("Primer mensaje", "Entrantes", 0), ("Entrantes", "Datos del consultorio", 0), ("Datos del consultorio", "Identificar paciente", 0),
                      ("Identificar paciente", "Redis GET propuesta (entrada)", 0), ("Redis GET propuesta (entrada)", "Armar contexto", 0), ("Armar contexto", "Orquestador", 0),
                      ("Orquestador", "Despacho", 0), ("Despacho", "¿No entendí?", 0), ("¿No entendí?", "Redis INCR noentendi", 0), ("¿No entendí?", "¿Turnos?", 1), ("Redis INCR noentendi", "¿Turnos?", 0)]:
         g.conectar(a, b, s_)

@@ -208,6 +208,23 @@ test('V41b turnos pidió derivar (turno a < 48 h) y el orquestador no derivó �
   const ok = ver(ag(T48, [paso('turnos', sub('turnos', T48, 'menos_48h', { derivar: 'turno en menos de 48 h' }), { pedido: 'no va' }), paso('derivar_secretaria', { ok: true, texto_para_el_paciente: DERIVA }, { cita_textual: 'No vamos a estar', motivo: '48 h' })]));
   assert.equal(ok.usado_respaldo, false); assert.ok(ok.texto.includes(DERIVA));
 });
+test('V41c (real 05/11) el agente copió la pregunta de Información "¿Para quién es?": se saca por código, como en el cerebro actual', () => {
+  const INFO = 'La Dra. Raquel atiende los jueves de 8:00 a 12:00 hs. ¿Para quién es (nombre o DNI)?';
+  const r = ver(ag(INFO, [paso('informacion', sub('informacion', INFO), { pedido: 'hasta qué hora está hoy' })]));
+  assert.equal(r.texto, 'La Dra. Raquel atiende los jueves de 8:00 a 12:00 hs.'); assert.equal(r.usado_respaldo, false);
+  // la oferta de turno de primera consulta de Información queda
+  const OF = PRECIO + ' ' + O.TEXTOS.OFERTA_PRIMERA;
+  assert.ok(ver(ag(OF, [paso('informacion', sub('informacion', OF), { pedido: 'precio' })])).texto.includes(O.TEXTOS.OFERTA_PRIMERA));
+  // si la misma pregunta la hizo Turnos, queda
+  const Q = '¿Para quién es (nombre o DNI)?';
+  const r2 = ver(ag('Atiende jueves de 8 a 12. ' + Q, [paso('informacion', sub('informacion', 'Atiende jueves. ' + Q), { pedido: 'x' }), paso('turnos', sub('turnos', BLOQUE + '\n\n' + Q), { pedido: 'y' })]));
+  assert.ok(r2.texto.includes(Q));
+});
+test('V41d (real 11/11) derivó pero escribió solo "le paso con la secretaria": el porqué de Turnos (48 h) va antes', () => {
+  const T48 = 'Su turno es en menos de 48 horas: no lo puedo cambiar ni cancelar por acá.';
+  const r = ver(ag(DERIVA, [paso('turnos', sub('turnos', T48, 'menos_48h', { derivar: 'turno en menos de 48 h' }), { pedido: 'reprogramar' }), paso('derivar_secretaria', { ok: true, texto_para_el_paciente: DERIVA }, { cita_textual: 'estoy enfermo', motivo: '48 h' })]));
+  assert.equal(r.texto, T48 + '\n\n' + DERIVA); assert.equal(r.usado_respaldo, false);
+});
 test('V42 una herramienta se cayó: respaldo con aviso', () => {
   const r = ver(ag('Ya le busco.', [paso('turnos', { error: 'boom' }, { pedido: 'x' })]));
   assert.equal(r.usado_respaldo, true); assert.equal(r.motivo_verificador, 'herramienta_con_error'); assert.ok(r.avisos.some((a) => a.nivel === 'ACCION'));

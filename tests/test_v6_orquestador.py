@@ -274,7 +274,7 @@ def main():
     a = R["A13 audio sin transcribir"]["reps"][0]
     chequear("A13 audio sin transcribir: el padre recibe la frase fija para pedir el texto", "NO se pudo transcribir" in SIS(a)["sistema"] and "no pude escuchar" in SIS(a)["sistema"])
     chequear("A14 en ningún caso el grafo principal llamó a Dentalink, Redis (escritura) ni sub-workflows v7 que escriban",
-             all(r["reps"][0]["error"] is None for r in R.values()) and all(set(p["nodo"] for p in r["reps"][0]["pedidos"]) <= {PADRE, "Historial", "Recordatorios", "Primer mensaje", "Datos del consultorio", "Identificar paciente", "Get KB Horarios y Precio"} for r in R.values()))
+             all(r["reps"][0]["error"] is None for r in R.values()) and all(set(p["nodo"] for p in r["reps"][0]["pedidos"]) <= {PADRE, "Historial", "Recordatorios", "Primer mensaje", "Entrantes", "Datos del consultorio", "Identificar paciente", "Get KB Horarios y Precio"} for r in R.values()))
     # ------------------------------------------------------------------------------------------------ (nov) los 4 arreglos de la prueba en sombra
     print("1) DATOS BANCARIOS POR CÓDIGO")
     ALIAS, CBU, CUIT, CUENTA = "dra.raquel.aurea", "1430001713001112680016", "27316870118", "1300111268001"

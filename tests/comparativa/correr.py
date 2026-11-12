@@ -20,6 +20,8 @@ if CON_CONTEXTO:   # (11/11) contexto armado a mano: fichas, turnos y recordator
     from casos_contexto import CASOS
 elif os.environ.get("COMPARATIVA_CASOS"):   # casos reales armados por extraer_reales.py (archivo fuera del repo)
     CASOS = json.loads(Path(os.environ["COMPARATIVA_CASOS"]).read_text(encoding="utf-8"))
+    # (12/11) Casos reales CON su contexto (extraer_reales.py --contexto): sus fichas y turnos van como escenario al celular SINTÉTICO.
+    CON_CONTEXTO = any("escenario" in x for x in CASOS)
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 TEL = "5490000000777" if CON_CONTEXTO else "5491161461034"   # con contexto: celular SINTÉTICO (sin fichas reales en Dentalink)

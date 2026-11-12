@@ -75,7 +75,7 @@ def esc(id_, orquestador, texto="Hola", redis=None, pg=None, modo="vivo", subwf=
     trig = {"phone": TEL, "texto": texto, "pushName": "CELE", "modo": modo, "historial_json": "", **(extra.pop("trigger", {}))}
     sw = {"Identificar paciente": IDENT, "Derivar a secretaria": {"ok": True, "derivado": True, "texto_para_el_paciente": DERIVA},
           "Pasar a humano": {"ok": True, "humano": True, "texto_para_el_paciente": DERIVA}, **(subwf or {})}
-    pg_ = {"Historial": [{}], "Recordatorios": [{}], "Primer mensaje": [{}], "Datos del consultorio": KB, "Guardar en memoria": {}, **(pg or {})}
+    pg_ = {"Historial": [{}], "Recordatorios": [{}], "Primer mensaje": [{}], "Entrantes": [{}], "Datos del consultorio": KB, "Guardar en memoria": {}, **(pg or {})}
     return {"id": id_, "trigger": trig, "ahora": AHORA, "exec_id": EXEC, "redis": redis or {}, "pg": pg_, "subwf": sw, "llm": {"Orquestador": orquestador}, **extra}
 
 
