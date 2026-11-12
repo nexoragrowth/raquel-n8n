@@ -198,6 +198,16 @@ test('V41 un agente devolvió FUERA_DE_ALCANCE y el orquestador no derivó → r
   const r = ver(ag('No tengo esa información.', [paso('informacion', sub('informacion', '', 'fuera_de_alcance', { fuera_de_alcance: true, codigo: 'FUERA_DE_ALCANCE' }), { pedido: 'presupuesto' })]));
   assert.equal(r.usado_respaldo, true); assert.equal(r.motivo_verificador, 'fuera_de_alcance_sin_derivar'); assert.ok(r.texto.includes(DERIVA));
 });
+test('V41b turnos pidió derivar (turno a < 48 h) y el orquestador no derivó → respaldo: el porqué, "le paso con la secretaria" y aviso al grupo', () => {
+  const T48 = 'Su turno es en menos de 48 horas: no lo puedo cambiar ni cancelar por acá.';
+  const r = ver(ag(T48, [paso('turnos', sub('turnos', T48, 'menos_48h', { derivar: 'turno en menos de 48 h' }), { pedido: 'no va al turno' })]), { texto_paciente: 'No vamos a estar' });
+  assert.equal(r.usado_respaldo, true); assert.equal(r.motivo_verificador, 'derivacion_sin_llamar');
+  assert.ok(r.texto.indexOf(T48) >= 0 && r.texto.indexOf(DERIVA) > r.texto.indexOf(T48), r.texto);
+  assert.ok(r.avisos.some((a) => a.nivel === 'ACCION' && a.texto.includes('No vamos a estar') && a.texto.includes('turno en menos de 48 h') && !a.texto.includes('no salió')), JSON.stringify(r.avisos));
+  // si el orquestador SÍ derivó, sale su texto (sin respaldo)
+  const ok = ver(ag(T48, [paso('turnos', sub('turnos', T48, 'menos_48h', { derivar: 'turno en menos de 48 h' }), { pedido: 'no va' }), paso('derivar_secretaria', { ok: true, texto_para_el_paciente: DERIVA }, { cita_textual: 'No vamos a estar', motivo: '48 h' })]));
+  assert.equal(ok.usado_respaldo, false); assert.ok(ok.texto.includes(DERIVA));
+});
 test('V42 una herramienta se cayó: respaldo con aviso', () => {
   const r = ver(ag('Ya le busco.', [paso('turnos', { error: 'boom' }, { pedido: 'x' })]));
   assert.equal(r.usado_respaldo, true); assert.equal(r.motivo_verificador, 'herramienta_con_error'); assert.ok(r.avisos.some((a) => a.nivel === 'ACCION'));

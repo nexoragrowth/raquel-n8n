@@ -60,6 +60,10 @@ ANA = ficha(1, "Ana", "Gómez", "40111222")
 C_ANA = cita(1, ANA["id"], D2, "10:40")
 E_ANA = esc([ANA], [C_ANA])
 R_ANA = [rec(C_ANA, "Ana Gómez")]
+# (12/11) Para "no va" sin la regla de 48 h, el turno tiene que estar a 3 días hábiles o más (D2 cae a menos de 48 h según el día de la semana).
+C_ANA_D3 = cita(6, ANA["id"], D3, "10:40")
+E_ANA_D3 = esc([ANA], [C_ANA_D3])
+R_ANA_D3 = [rec(C_ANA_D3, "Ana Gómez")]
 
 NICO, FLOR = ficha(2, "Nicolás Ignacio", "Pérez", "50111222"), ficha(3, "Florencia", "Pérez", "48111222")
 C_NICO, C_FLOR = cita(2, NICO["id"], D3, "17:40"), cita(3, FLOR["id"], D7, "18:20")
@@ -80,10 +84,12 @@ CASOS = [
     dict(id="ctx-conf-3", cat="confirmar", texto="Buenos días! Confirmo mi turno, gracias!", hist=[dict(quien="recordatorio", hace_min=20, texto=recordatorio("Ana", D2, "10:40"))],
          escenario=E_ANA, recordatorios=R_ANA, esperado="Confirma el turno; el gracias no lo vuelve silencio."),
     # --- no va / cancelar ---
-    dict(id="ctx-nova-1", cat="cancelar", texto="No vamos a estar", hist=[dict(quien="recordatorio", hace_min=60, texto=recordatorio("Ana", D2, "10:40"))],
-         escenario=E_ANA, recordatorios=R_ANA, esperado=f"Entiende que no va al turno del {corta(D2)}: ofrece cancelarlo o reprogramarlo (read-back con '¿Procedo?' si cancela). Nunca 'no le entendí'."),
+    dict(id="ctx-nova-1", cat="cancelar", texto="No vamos a estar", hist=[dict(quien="recordatorio", hace_min=60, texto=recordatorio("Ana", D3, "10:40"))],
+         escenario=E_ANA_D3, recordatorios=R_ANA_D3, esperado=f"Entiende que no va al turno del {corta(D3)}: ofrece cancelarlo o reprogramarlo (read-back con '¿Procedo?' si cancela). Nunca 'no le entendí'."),
+    dict(id="ctx-nova-48h", cat="cancelar", texto="No vamos a estar", hist=[dict(quien="recordatorio", hace_min=60, texto=recordatorio("Ana", D2, "10:40"))],
+         escenario=E_ANA, recordatorios=R_ANA, esperado="Regla de 48 h si el turno cae a menos de 48 h: no se cambia por acá Y le pasa a la secretaria (aviso al grupo). Si D2 queda a más de 48 h, como nova-1."),
     dict(id="ctx-nova-2", cat="cancelar", texto="Hoy no llegamos, disculpe", hist=[], escenario=E_FAMILIA_HOY, recordatorios=[],
-         esperado="Entiende que es el turno de HOY 19:10 de Nicolás Ignacio (el único de hoy): ofrece cancelar o reprogramar sin preguntar para quién."),
+         esperado="Es el turno de HOY 19:10 de Nicolás Ignacio (el único de hoy), sin preguntar para quién: regla de 48 h (no se cambia por acá) Y le pasa a la secretaria (aviso al grupo)."),
     # --- aviso sin pedido ---
     dict(id="ctx-aviso-1", cat="aviso", texto="Buen día! Me lo cambiaron para el " + str(D7.day),
          hist=[dict(quien="staff", hace_min=600, texto=f"Hola! Te pasamos el turno de Florencia al {corta(D7)} a las 18:20 🙂")],

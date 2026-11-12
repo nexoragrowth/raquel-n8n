@@ -137,7 +137,11 @@ const VerificadorCore = (() => {
         derivar_res: derivar ? derivar.res : null, humano_res: humano ? humano.res : null, libros, hechos: st.hechos || [], prop: st.prop || null, ofertas: st.ofertas || [], vistos: st.vistos || [],
         bloque: st.bloque || '', bloque_exec: st.bloque_exec || '', triaje: st.triaje || null, ultimo_asiri: st.ultimo_asiri || '', repeticiones: repite ? Math.max(1, st.repeticiones || 0) : (st.repeticiones || 0),
         menu: st.menu, mensajes: st.mensajes || {}, anuncio: st.anuncio || '', consulta: st.consulta || '', datosPago: st.datosPago || '', conversacion_nueva: st.conversacion_nueva === true, prop_pendiente: st.prop_pendiente === true });
-      return hecho({ ...c, avisos: avisosPre.concat(c.avisos || []), motivo_verificador: motivo, usado_respaldo: true, fallo_agente: fallaAgente, agentes: agentesDe(rr), plan: { ...plan, fija: pl.fija } });
+      // Derivación que pidió un agente y el orquestador no hizo: el grupo recibe el porqué (no "el aviso no salió", que confundía a la secretaria).
+      const avC = motivo === 'derivacion_sin_llamar'
+        ? (c.avisos || []).map((a) => /quiso derivar a la secretaria y el aviso no salió/.test(a.texto) ? { nivel: 'ACCION', texto: '[ACCIÓN] Asiri le dijo al paciente que le pasa con la secretaria (' + (reunion.motivo || 'derivación') + '): «' + cita + '». Contestarle por este chat.' } : a)
+        : (c.avisos || []);
+      return hecho({ ...c, avisos: avisosPre.concat(avC), motivo_verificador: motivo, usado_respaldo: true, fallo_agente: fallaAgente, agentes: agentesDe(rr), plan: { ...plan, fija: pl.fija } });
     };
 
     // 3) El agente falló / tardó / devolvió vacío
@@ -161,6 +165,9 @@ const VerificadorCore = (() => {
     if (AGENTES.some((a) => res[a] && res[a].error_tecnico)) return respaldo('herramienta_con_error');
     if ((res.urgencias && res.urgencias.estado === 'derivar_fallo') || (AGENTES.filter((a) => a !== 'urgencias').some((a) => res[a] && res[a].urgencia === true) && !(res.urgencias && res.urgencias.estado === 'derivado'))) return respaldo('urgencia_sin_derivar');
     if (AGENTES.some((a) => res[a] && res[a].fuera_de_alcance) && !derivar && !humano) return respaldo('fuera_de_alcance_sin_derivar');
+    // (12/11) Un agente pidió derivar (turno a menos de 48 h, más horarios de los que se ofrecen...) y el orquestador no lo hizo: deriva el código, como el cerebro actual.
+    // Sin esto el paciente leía "no lo puedo cancelar por acá" y la clínica no se enteraba de que no viene.
+    if (AGENTES.some((a) => res[a] && res[a].derivar) && !derivar && !humano) return respaldo('derivacion_sin_llamar');
     // 8) Datos de pago (d): los pega el código; si el agente los escribió, respaldo
     const campos = String(st.datosPago || '').split('\n').map((l) => l.replace(/^[^:]+:\s*/, '').trim()).filter((v) => v.length >= 4);
     if (campos.some((v) => norm(crudo).includes(norm(v))) || (/\d(?:[\s.-]?\d){10,}/.test(crudo) && /\b(?:cbu|cvu|cuenta|cuit|cuil)\b/i.test(crudo)) || /\b(?:alias|cbu|cvu)\s*[:\-]\s*\S+/i.test(crudo)) return respaldo('datos_pago_escritos_por_el_agente');
