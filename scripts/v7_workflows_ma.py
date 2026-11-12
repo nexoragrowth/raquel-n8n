@@ -72,7 +72,8 @@ MAX_ITER = {"turnos": 6, "pagos": 4, "urgencias": 3}
 SALIDA_JS = {
     "turnos": "let t = []; try { t = JSON.parse($('Entrada').first().json.turnos_json || '[]'); } catch (x) { t = []; }\nreturn [{ json: OrquestadorCore.salidaTurnos($('Agente').first().json || {}, { turnos: Array.isArray(t) ? t : [] }) }];",
     "pagos": "return [{ json: OrquestadorCore.salidaPagos($('Agente').first().json || {}) }];",
-    "informacion": "return [{ json: OrquestadorCore.salidaInformacion($('Agente').first().json || {}) }];",
+    # (12/11, r007) control por código: horas y montos que no están en los DATOS no salen (v7/info_core.js).
+    "informacion": "const s = OrquestadorCore.salidaInformacion($('Agente').first().json || {});\nreturn [{ json: InfoCore.verificar(s, $('Entrada').first().json.datos || '') }];",
     "urgencias": "return [{ json: OrquestadorCore.salidaUrgencias($('Agente').first().json || {}) }];",
 }
 
@@ -94,7 +95,7 @@ def wf_subagente(clave):
         g.herramienta(n, desc, f"@@ID:{wf_clave}@@", fijos, del_modelo, 640, y)
         g.conectar_ai(n, "Agente", "ai_tool")
         y += 90
-    g.code("Armar salida", SALIDA_JS[clave], 620, 300, usar=("orquestador_core",))
+    g.code("Armar salida", SALIDA_JS[clave], 620, 300, usar=("orquestador_core", "info_core") if clave == "informacion" else ("orquestador_core",))
     g.conectar("Entrada", "Agente", 0)
     g.conectar("Agente", "Armar salida", 0)
     return g.json()
