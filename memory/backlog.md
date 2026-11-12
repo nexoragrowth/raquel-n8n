@@ -4,8 +4,11 @@
 - [x] 12/11: desplegado `apply_arreglos_espejo.py` (5 workflows) y freno `guarda_vivo.py` + `diff_vivo.py`. Lo del 05/11 vino de la otra compu (merge 5ac9ae3, con sus tests).
 - [x] Rama subida 12/11 (2895946; scan sin secretos ni datos reales). La otra compu: `git pull` antes de trabajar. Sigue abierto SEG-02: pasar el repo a privado. Ojo: en esta compu gh tiene activa la cuenta `propmatchar` (sin permiso); se sube con `LucasEzequielSilva`.
 - [P3] Filas viejas de celulares sintéticos (5490000000xxx, ago–oct) en n8n_chat_histories / conversaciones / mensajes_entrantes_live: limpiar con OK.
-- [P1] Desplegar `apply_lista_espera_e_info.py --apply` (falta "desplegá"): lista de espera sin turno (r017) + Información aclara cuándo no se atiende (r007). Después, sombra r017/r007 + caso legítimo.
-- [P1] Panel: que la clínica ajuste esto desde el panel (pedido 12/11). Opciones propuestas a Lucas; construir recién con su elección.
+- [x] 12/11: desplegados `apply_lista_espera_e_info.py` + `apply_info_franja.py`; sombra r017/r007 + caso legítimo de lista de espera OK.
+- [P1] Desplegar `apply_info_datos.py --apply` (falta "desplegá"): Información no dice horas ni montos que no estén en los DATOS (prompt + `v7/info_core.js`). Caso real: el orquestador inventó "hasta las 18:00" en el pedido. Después: sombra r007 ×3 y `diff_vivo.py` limpio.
+- [P2] El orquestador del cerebro actual a veces escribe la RESPUESTA en el pedido a Información (ej. 18:00 inventado). Con info_core queda frenado; mirar si conviene una línea en `prompt_orquestador.md` (toca el cerebro: medir antes con el modelo real).
+- [P3] `orquestador_core.salidaInformacion`: si el texto trae "¿Para quién es? nombre o DNI", al sacar la pregunta queda "nombre o DNI." suelto. Toca 5 workflows: juntar con el próximo cambio de ese módulo.
+- [P1] Panel, opción A (Lucas 12/11): textos de lista de espera (ESPERA, ESPERA_SIN_TURNO) en Mensajes fijos + sección "Cómo responde Asiri" (Información) con probador en sombra. En construcción.
 - [P2] Espejo diario: correr `extraer_reales.py --contexto` + `correr.py cerebro,cerebro_agente` con los mensajes del día y revisar diferencias, hasta pasar el agente al número de Lucas.
 
 ## ⇢ 2026-11-01 — SPRINT post-capacitación (detalle completo en `docs/sprint-2026-11-01.md`)

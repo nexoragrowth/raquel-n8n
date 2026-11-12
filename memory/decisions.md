@@ -1005,3 +1005,10 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Descartado:** comparar con el último backup de `workflows/history` (está en .gitignore: cada compu tiene los suyos, y el PRE recién escrito tapaba el cambio). Usar `versionId` de n8n (cambia también con cosas que no son el código).
 - **Escape:** `N8N_ACEPTAR_VIVO=<id>` solo después de traer lo vivo al repo y revisar el diff.
 - **Revisable:** no (es una guarda).
+
+## 2026-11-12 — Información solo puede decir horas y montos que estén escritos en los DATOS (control por código)
+- **Qué:** `v7/info_core.js` en el nodo "Armar salida" de "v7 Agente Informacion": si la respuesta trae una hora (8:00, 19 hs, "hasta las 18") o un monto ($50.000, 50 mil) que no figura en los DATOS del consultorio, no sale; queda fuera de alcance y el cerebro deriva a la secretaria. Más una línea en el prompt: "Los horarios y los precios salen solo de los DATOS, nunca del PEDIDO ni del CONTEXTO."
+- **Por qué:** repitiendo r007 en sombra, el orquestador del cerebro actual escribió en el pedido "por la tarde la Dra atiende hasta las 18:00" e Información lo copió. Un jueves a la tarde no se atiende: es el mismo tipo de daño que el incidente del 9/5 (mandar a alguien a la clínica cerrada). Regla 5: prompt + código.
+- **Compatible con la decisión del 08/10:** compara DATOS (texto del agente contra el Conocimiento), no la intención del paciente.
+- **Descartado:** reintentar el modelo (más lento y puede repetir); meterlo en `orquestador_core` (está copiado en 5 workflows, obligaba a redesplegar el cerebro).
+- **Revisable:** sí. Si el Conocimiento escribe horarios en otro formato ("15 a 19 hs"), revisar `horas()`; un falso positivo deriva (falla del lado seguro).
