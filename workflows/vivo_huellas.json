@@ -14,11 +14,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "1vMZN7MMPicq0h0v": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:41-03:00",
-  "huella": "d8920d0ad37e81018e1f",
+  "commit": "a3d0315",
+  "fecha": "2026-11-12T12:56:11-03:00",
+  "huella": "90e583804e7c0fba29d3",
   "nombre": "v7 Tool - clinica",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_lista_espera_e_info.py"
  },
  "2jbYXjYaLrcKlPEr": {
   "commit": "5ac9ae3",
@@ -105,11 +105,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "DhuxFBF6vrzDrkBK": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:45:32-03:00",
-  "huella": "2230db2aad014c3e5faa",
+  "commit": "a3d0315",
+  "fecha": "2026-11-12T13:09:11-03:00",
+  "huella": "7ddaab2fa541bdc8dc11",
   "nombre": "v7 Agente Informacion",
-  "script": "apply_arreglos_espejo.py"
+  "script": "apply_info_franja.py"
  },
  "E4GMd7K1It0iPHVD": {
   "commit": "5ac9ae3",
@@ -259,11 +259,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "S3DgPOyHg77M6SHQ": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:45:28-03:00",
-  "huella": "66f03a1361398de844b1",
+  "commit": "a3d0315",
+  "fecha": "2026-11-12T12:56:13-03:00",
+  "huella": "face8883c33d3f64b0c1",
   "nombre": "v7 Agente Turnos",
-  "script": "apply_arreglos_espejo.py"
+  "script": "apply_lista_espera_e_info.py"
  },
  "S5U6tSipzlgFHCkf": {
   "commit": "5ac9ae3",
@@ -518,8 +518,8 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "u4IZcQtdnfcQPCs8": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:47:46-03:00",
+  "commit": "a3d0315",
+  "fecha": "2026-11-12T13:26:05-03:00",
   "huella": "a5b9f07e99003c6eea9d",
   "nombre": "v7 Test (sombra)",
   "script": "correr.py"
@@ -574,11 +574,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "y8wIF1rR87bAAvYU": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:45:03-03:00",
+  "commit": "a3d0315",
+  "fecha": "2026-11-12T13:25:30-03:00",
   "huella": "ddb0d4f0cff2164abf40",
   "nombre": "v7 Cerebro Agente",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "correr.py"
  },
  "yjMpDQ3UH1tsZdDe": {
   "commit": "5ac9ae3",
