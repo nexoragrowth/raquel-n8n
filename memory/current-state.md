@@ -1,6 +1,11 @@
 # Estado actual — raquel-n8n
 
-## 2026-11-12 (tarde) — DESPLEGADO lista de espera + Información; control de horas/montos de Información LISTO sin desplegar
+## 2026-11-12 (tarde, 14:10 Jujuy) — DESPLEGADO todo el bot: control de horas/montos de Información + opción A del panel (falta publicar el panel)
+- **Lucas: "desplegá".** `apply_panel_probar_y_espera.py --apply`: los 6 workflows con orquestador_core (backups `*_1794503425.json`) + creado y activo "v7 Panel - probar Información" (**mPISHj9allybzwoV**, en v7/ids.json). `diff_vivo`: los 15 del v7 y el probador = repo (solo difiere v6 Orquestador sombra, inactivo).
+- **Probado después:** humo del probador 200 ("Los sábados no se atiende…", 6,5 s) y 401 con secreto malo; precio con y sin notas de borrador 200 en 4–6 s; vacío 400. Sombra: r007 ×4 → "Esta tarde no se atiende; los jueves…" (4/4); lista de espera: vio horarios → anotado (2/2); sin horarios → le ofrece horarios (2/2). Sin restos (memoria de sombra 0, celulares sintéticos 0, notas reales de la clínica intactas: "Sin emojis").
+- **Falta:** publicar el panel (commit 1048c95, `bash deploy/redeploy.sh` DESDE ESTA COMPU) y probar el botón en el panel de punta a punta (regla 8).
+
+## 2026-11-12 (tarde) — lista de espera + Información (detalle)
 - **Desplegado (Lucas: "si" a "¿Desplegás?", ~12:55 Jujuy):** `apply_lista_espera_e_info.py --apply` (clinica, agente_turnos, agente_informacion; backups `*_1794498970.json`) y `apply_info_franja.py --apply` (solo Información, `*_1794499750.json`). `diff_vivo.py` después: los 15 workflows del v7 = repo.
 - **r017 re-jugado en sombra:** ninguno de los dos cerebros anota ni avisa; el actual ofrece horarios. Caso legítimo (sin turno, vio horarios, "¿me avisan si se libera algo antes?"): los dos responden "Le dejo anotado a la clínica que busca un turno, por si se libera uno." Ojo al armar casos para `correr.py`: `hist` va de lo MÁS NUEVO a lo más viejo (lo hice al revés y el cerebro no veía la oferta).
 - **r007:** la línea del mediodía (16/16 en laboratorio) en la repetición real aclaraba la tarde 3 de 12: el pedido del orquestador vino con otras palabras y a las 12:58. Nueva línea "empezá diciendo que ese día o esa franja no se atiende…": 52/54 vs 45/54; con la entrada real 10/12. Desplegada. Repeticiones: 3 de 4 "Esta tarde no se atiende; los jueves…".

@@ -1012,3 +1012,9 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Compatible con la decisión del 08/10:** compara DATOS (texto del agente contra el Conocimiento), no la intención del paciente.
 - **Descartado:** reintentar el modelo (más lento y puede repetir); meterlo en `orquestador_core` (está copiado en 5 workflows, obligaba a redesplegar el cerebro).
 - **Revisable:** sí. Si el Conocimiento escribe horarios en otro formato ("15 a 19 hs"), revisar `horas()`; un falso positivo deriva (falla del lado seguro).
+
+## 2026-11-12 — "Cómo responde Asiri" = las notas que ya existían + un probador (no un editor de prompts nuevo)
+- **Qué:** la opción A que eligió Lucas se resolvió con el bloque "Tono y estilo de las respuestas" (`notas_para_asiri`, que ya le llegaba a Información como NOTAS DE LA CLÍNICA) + botón "Probar" que corre el agente de Información real en sombra con el borrador (workflow "v7 Panel - probar Información", webhook con el secreto del panel). Y los dos textos de lista de espera en Mensajes fijos.
+- **Por qué:** la clínica ya podía cambiar la forma de las respuestas de Información; lo que faltaba era ver el efecto antes de guardar. Slots `prm_*` nuevos (Épica D) hubieran cambiado el cerebro y abierto otra superficie de riesgo sin ganar nada para este pedido.
+- **Límites del probador:** simula a un paciente nuevo sin turnos y no pasa por el orquestador (el pedido es el mensaje tal cual): muestra cómo contesta Información, no la ruta completa.
+- **Revisable:** sí; la Épica D (editor por agente) sigue en el backlog para cuando el Cerebro Agente atienda.
