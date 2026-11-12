@@ -109,6 +109,8 @@ def api(path, method="GET", payload=None):
     with urllib.request.urlopen(req, timeout=60) as r: return json.loads(r.read().decode())
 
 # ---------------- construcción del workflow ----------------
+import guarda_vivo  # noqa: E402  (12/11) freno: no pisar en n8n cambios que este repo no conoce (scripts/guarda_vivo.py)
+api = guarda_vivo.envolver(api)
 def pg_query(nid, name, pos, query, replacement=None):
     opts = {"queryReplacement": replacement} if replacement else {}
     return {"id": nid, "name": name, "type": "n8n-nodes-base.postgres", "typeVersion": 2.5, "position": pos,

@@ -14,6 +14,8 @@ def api(method, path, body=None):
     with urllib.request.urlopen(req, timeout=120) as r:
         raw = r.read()
         return json.loads(raw) if raw else None
+import guarda_vivo  # noqa: E402  (12/11) freno: no pisar en n8n cambios que este repo no conoce (scripts/guarda_vivo.py)
+api = guarda_vivo.envolver(api)
 
 def run_sql(query, tag):
     ts = int(time.time() * 1000) % 10**9

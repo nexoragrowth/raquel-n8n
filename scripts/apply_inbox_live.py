@@ -57,6 +57,8 @@ def api(path, method="GET", payload=None):
     req = urllib.request.Request(f"{base}/api/v1{path}", data=json.dumps(payload).encode() if payload is not None else None,
                                  method=method, headers={"X-N8N-API-KEY": require("N8N_API_KEY"), "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=120) as r: return json.loads(r.read().decode())
+import guarda_vivo  # noqa: E402  (12/11) freno: no pisar en n8n cambios que este repo no conoce (scripts/guarda_vivo.py)
+api = guarda_vivo.envolver(api)
 
 def crear_tabla():
     import psycopg2

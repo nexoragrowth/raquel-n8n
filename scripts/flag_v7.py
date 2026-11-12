@@ -38,6 +38,8 @@ def api(path, method="GET", payload=None):
             return json.loads(r.read().decode() or "{}")
     except urllib.error.HTTPError as e:
         raise SystemExit(f"n8n respondió {e.code} a {method} {path}: {e.read().decode()[:600]}")
+import guarda_vivo  # noqa: E402  (12/11) freno: no pisar en n8n cambios que este repo no conoce (scripts/guarda_vivo.py)
+api = guarda_vivo.envolver(api)
 
 
 def llamar(ruta):

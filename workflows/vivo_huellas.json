@@ -1,0 +1,618 @@
+{
+ "1UbmAtUMtTBN9Bn3": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:40-03:00",
+  "huella": "ce0280ae3989b026b5a2",
+  "nombre": "Áurea — Vigía (triaje + v6 + entrada)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "1lFMb5C8OljC0hv9": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:41-03:00",
+  "huella": "bdcf5a4db99c2e7de33e",
+  "nombre": "TEST - Reset RL Lucas",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "1vMZN7MMPicq0h0v": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:41-03:00",
+  "huella": "d8920d0ad37e81018e1f",
+  "nombre": "v7 Tool - clinica",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "2jbYXjYaLrcKlPEr": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:41-03:00",
+  "huella": "22f0a52fc738fbf8b1fc",
+  "nombre": "TEST - Select Chat History",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "4Pum74HeOhk0kQco": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:41-03:00",
+  "huella": "36d06e4558faabbea106",
+  "nombre": "TEST - Sub-WF Writeback Memory Fix",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "4dFlp6TEfV8A5e6y": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:42-03:00",
+  "huella": "44fbf405bab1f0114140",
+  "nombre": "v7 Tool - buscar_horarios",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "5cAWJxiWJ50hxEq3": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:42-03:00",
+  "huella": "ffd097578e7e672d12de",
+  "nombre": "Sub-WF - CancelarReprogramar",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "5jETDAXpn4GedZkh": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:42-03:00",
+  "huella": "66c12355482e91297865",
+  "nombre": "TrendSpot - Agente WhatsApp v1",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "7RqTApkvVavRmq3R": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:42-03:00",
+  "huella": "a760e1be8be9d2a2ed9f",
+  "nombre": "Recordatorio de Turno 48HS - Dra. Raquel",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "9E5Lse6TDJ74wpsM": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:43-03:00",
+  "huella": "9d4ef863e79c647186b2",
+  "nombre": "v7 Tool - ejecutar_propuesta",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "9oON3JeYBwqJaD2v": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:43-03:00",
+  "huella": "460af47bb2329bf53fc6",
+  "nombre": "TrendSpot — Generar Ideas AI",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "AzDNfhfB8bGMALEJ": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:43-03:00",
+  "huella": "a079e419c0be7d23ed8b",
+  "nombre": "TEST - Check Memory 5493878641044",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "B7IS4EVvxUAnGDXi": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:44-03:00",
+  "huella": "66133b748600f486319c",
+  "nombre": "Weekly Learning & Analytics - Clínica Áurea",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "BO1cdE8xmqln4IeO": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:44-03:00",
+  "huella": "c9b1b25faafd6f2dd9b4",
+  "nombre": "Cron - Resumen Clinico Pacientes",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "DT408ysLhDgeqJyK": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:44-03:00",
+  "huella": "27f0b80f14f9f2fd0d61",
+  "nombre": "v7 Cerebro (orquestador)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "DhuxFBF6vrzDrkBK": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:32-03:00",
+  "huella": "2230db2aad014c3e5faa",
+  "nombre": "v7 Agente Informacion",
+  "script": "apply_arreglos_espejo.py"
+ },
+ "E4GMd7K1It0iPHVD": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:45-03:00",
+  "huella": "bcd24228542e1a918441",
+  "nombre": "TEST View Mem Now",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "E71n1KTrQFj8DNR2": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:45-03:00",
+  "huella": "c10c07b122365d18885f",
+  "nombre": "v7 Tool - gestionar_turno",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "En0A5lXd3Whb5yFy": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:45-03:00",
+  "huella": "e1c150b42e881def5726",
+  "nombre": "[ADMIN] Cron Cleanup Memoria Basura",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "Foi7czTvMXoNWZwh": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:46-03:00",
+  "huella": "f983b8ad34f1efdb895b",
+  "nombre": "Nexora — Content Ideas Agent Pipeline v3",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "Gm7ofyGohOJ2bI44": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:46-03:00",
+  "huella": "c027852e0a0adfed23fa",
+  "nombre": "Áurea — Triaje Urgencias (sombra)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "GuDQ9VmKWZvQnerV": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:46-03:00",
+  "huella": "48c336c173fa3ee98b8e",
+  "nombre": "Sub-WF - Buscar Horarios Validado",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "GusX02ojOdlNI1lq": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:47-03:00",
+  "huella": "caf8fb566fdcdaf91f36",
+  "nombre": "correos_custom",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "HBZOj5EfActgrPrY": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:47-03:00",
+  "huella": "e173af6f05e6d3340213",
+  "nombre": "Agente IA v6 — Multi-agent (Dra. Raquel) backup",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "JgFfQT38VWSfIUQv": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:47-03:00",
+  "huella": "1743a9d9121073ff82b5",
+  "nombre": "tmp-test-seed-memory",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "K38guG9gF9TlGHES": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:47-03:00",
+  "huella": "d0e28c946d3c983e5213",
+  "nombre": "TrendSpot — Auto-Scrape Diario",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "L1EdJ3K0fRnnkH5K": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:48-03:00",
+  "huella": "c89580b31cfd5c9a3aac",
+  "nombre": "TEST - Update Template Embed",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "LQYZ0mByKB04oqiL": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:48-03:00",
+  "huella": "514070e07a4b9124d0bb",
+  "nombre": "Oso · Cargar venta por Telegram",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "MBQ1lczhrzp6K188": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:48-03:00",
+  "huella": "36510ba732472436703d",
+  "nombre": "TEST View Memory Fase4a",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "MGcnxZ677SXJSoJf": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:48-03:00",
+  "huella": "a5cb3e0fa260bef48d45",
+  "nombre": "Nexora - Generador de Propuestas v2",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "MJ38kSTRZDPgPCCy": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:49-03:00",
+  "huella": "b8c23e97e0fbd1530998",
+  "nombre": "Áurea — Reportero Semanal",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "MvwET1EiyOinNgw0": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:49-03:00",
+  "huella": "b477f955c413fd18b794",
+  "nombre": "EXPLORE - Dentalink Citas",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "NBHzj8ar2XuSvyIY": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:35-03:00",
+  "huella": "eb8c248d7faefdd03556",
+  "nombre": "v7 Cerebro",
+  "script": "apply_arreglos_espejo.py"
+ },
+ "NDwKeIgcZtFt736Q": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:50-03:00",
+  "huella": "afba19848a9b55b348bd",
+  "nombre": "TEST - Mock Recordatorio Lucas",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "O155MqHgOSaNZ9ye": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:50-03:00",
+  "huella": "a0ca1dd974b08e3f8a60",
+  "nombre": "Agente IA v6 — Multi-agent (Dra. Raquel)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "QsGBGkZdGu5gTdBf": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:50-03:00",
+  "huella": "03755c7ae657d3f3c562",
+  "nombre": "Áurea — Daily Summary Recordatorios",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "RBbTTcvBzDm7gmN7": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:51-03:00",
+  "huella": "7dcd04713d4cef83ff37",
+  "nombre": "TEST - Update Literal",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "S3DgPOyHg77M6SHQ": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:28-03:00",
+  "huella": "66f03a1361398de844b1",
+  "nombre": "v7 Agente Turnos",
+  "script": "apply_arreglos_espejo.py"
+ },
+ "S5U6tSipzlgFHCkf": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:51-03:00",
+  "huella": "733450e5cffed753bc14",
+  "nombre": "Helper - Notify Grupo",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "S5XfpxHbm5cMx3Hq": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:51-03:00",
+  "huella": "8b82f7ab150bc614fe0e",
+  "nombre": "TEST - Cron Iter",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "SSROJTB8gsmgchQr": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:52-03:00",
+  "huella": "1c4bc7be490af74db9bb",
+  "nombre": "TEST - Reconcile Memory Post-Banlist",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "TKByjzVE8rGKTioT": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:52-03:00",
+  "huella": "daa11177fd4eab9c9ddc",
+  "nombre": "Áurea — Retención (archivos y bandeja)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "TZMNmdzLLE9aBMeA": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:52-03:00",
+  "huella": "a03112d462e27037d4fb",
+  "nombre": "Oso · Dólar Blue",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "UMjT5Fb8BGun0cVj": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:52-03:00",
+  "huella": "fc29cfd811cb88677cb9",
+  "nombre": "v7 Tool - confirmar_una",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "UxdAuycDHMejecSr": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:53-03:00",
+  "huella": "5144cdfb920b5f719d78",
+  "nombre": "v7 Cerebro (orquestador mixto)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "WZ0TCOJJ1LNHhwIP": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:53-03:00",
+  "huella": "3b13937b1ee26112297f",
+  "nombre": "v7 Tool - proponer",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "YClcWNk36KuCGRuj": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:53-03:00",
+  "huella": "d3e81e37519d6006daa7",
+  "nombre": "TrendSpot — Instagram Content Autopilot",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "Yjl6kyLnALhIfbFX": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:54-03:00",
+  "huella": "4fb96f18302a2faff570",
+  "nombre": "Áurea — Health Check (Dentalink + Evolution)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "ZFaLdoT5Bw4anbzE": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:54-03:00",
+  "huella": "2b3c9f4585cdefc12058",
+  "nombre": "TrendSpot — Scrape Instagram",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "ZHGzacebRHAFQ7wn": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:54-03:00",
+  "huella": "243d0f8de647335ad631",
+  "nombre": "v7 Tool - ver_turnos",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "ZUJmfoKzIC7bpCoJ": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:54-03:00",
+  "huella": "3bc621f8b739bf9f00f4",
+  "nombre": "evitar baneos",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "ZzoPkAmUQrLysL3Z": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:55-03:00",
+  "huella": "2a3030686bda70a5562b",
+  "nombre": "Tomi Agent",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "ahJzS48esjdmD4GH": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:55-03:00",
+  "huella": "93a40d2af0e25cfe5cc5",
+  "nombre": "Áurea — TEST Triaje (webhook aislado)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "cdiBTgcABItdgQ9y": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:55-03:00",
+  "huella": "ee4174e90da8b8be329e",
+  "nombre": "v7 Tool - confirmar_turno",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "cip3czHqhLdaDgPd": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:55-03:00",
+  "huella": "a372b8652a0085f3fd7c",
+  "nombre": "TEST View Lucas Memory",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "eCSg5umgUijLgMNU": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:56-03:00",
+  "huella": "05db212dec98a5ccc39e",
+  "nombre": "Chatwoot ? WhatsApp (Mensajes Salientes)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "f8jQnxPHUJnGj6b0": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:56-03:00",
+  "huella": "f31dbd89c93d954bc280",
+  "nombre": "TrendSpot — Content Engine Semanal",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "fnrO0eoflJfePX7S": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:56-03:00",
+  "huella": "d265996c4090ca5ae246",
+  "nombre": "TEST - Repoblar Reminders 03-06",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "fosfga62zNaN0qrx": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:56-03:00",
+  "huella": "3d59d84d4e135619fe78",
+  "nombre": "Auto Reactivar Bot (1h sin humano)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "h7HzwrQipcwMgL8G": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:57-03:00",
+  "huella": "09254d12dd6bd8e3904e",
+  "nombre": "[ADMIN] Reset Memory (Lucas + Valentino)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "iarl7CSBk4fzdgm4": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:57-03:00",
+  "huella": "bc023f82ea086a8d108e",
+  "nombre": "tmp-test-cleanup-v6",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "ieSI67wQVJh57Kkg": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:57-03:00",
+  "huella": "15fd1d4b8dd4760fc6b5",
+  "nombre": "TEST - Recordatorio Jana (hardcodeado)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "jaO9zQb6l5HM07gg": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:57-03:00",
+  "huella": "c09c192f2141afcec921",
+  "nombre": "Agente IA v4 — Multimedia Unificada (Dra. Raquel)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "jzxb5zUKCaJcvCgp": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:58-03:00",
+  "huella": "c0e18c82915060a65055",
+  "nombre": "Panel — acciones staff (send-human / toggle-bot)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "kXgqUFfXJAvdnZAu": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:58-03:00",
+  "huella": "271b804e852d7e2f9ef1",
+  "nombre": "TEST - Check Memory 5493876538686",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "lskP0Cfwb1RajUDa": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:58-03:00",
+  "huella": "e2053f7561828566713c",
+  "nombre": "TEST - SELECT Reminder 5498",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "moIPDqrnY0SPIve9": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:58-03:00",
+  "huella": "d2710e8bdff550ea7ea5",
+  "nombre": "v7 Cerebro (minimal)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "oTsmB6IfCtelz6KL": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:59-03:00",
+  "huella": "7f5a5b026f7d6c0e53e5",
+  "nombre": "v6 Orquestador (sombra)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "pCYZUmIxZjqbOG1L": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:59-03:00",
+  "huella": "8377149dc854654912dc",
+  "nombre": "v7 Tool - elegir_ficha",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "pP8Qzu2mR7g0pDzf": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:59-03:00",
+  "huella": "64752ee4380f0a9f9f23",
+  "nombre": "My Sub-workflow",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "qWqDvbdlfsuBiWLJ": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:44:59-03:00",
+  "huella": "74c9cb89213098cb8136",
+  "nombre": "TrendSpot — Scrape TikTok",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "qhKWqPtiq4IxqpwZ": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:00-03:00",
+  "huella": "ac93d40ea016f3c1b1e9",
+  "nombre": "Oso · Resumen diario Telegram",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "s76M7cgmbXDZgqAN": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:00-03:00",
+  "huella": "18b83687f726f1281d76",
+  "nombre": "[NEXORA-DEMO] Guía Nutri",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "swWXEoTqq3etT2sr": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:00-03:00",
+  "huella": "86d2883dac3886c38f44",
+  "nombre": "Nexora - Generador de Propuestas Comerciales",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "u4IZcQtdnfcQPCs8": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:47:46-03:00",
+  "huella": "a5b9f07e99003c6eea9d",
+  "nombre": "v7 Test (sombra)",
+  "script": "correr.py"
+ },
+ "v6y5It2T4AwPUwQp": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:01-03:00",
+  "huella": "4f9f6505077836159c85",
+  "nombre": "Waves — Meta Lead Ads → CRM",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "v8G9Cp98gioXObtu": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:01-03:00",
+  "huella": "edaf3e1b9ed24b15edbd",
+  "nombre": "Reactivación de Pacientes Inactivos",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "vZj2fWMS1EM2VS8y": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:01-03:00",
+  "huella": "a3aa141f97ec6e7a42a0",
+  "nombre": "TEST - Cron Memory Save Fix (Lucas)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "vmku7s93ksPNcQ5g": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:02-03:00",
+  "huella": "64bea9ccff17b0e8f728",
+  "nombre": "AUDIT - basura n8n_chat_histories",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "w7BBpZeEwZnpCX1q": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:02-03:00",
+  "huella": "373f7bb2b66ee3c601a6",
+  "nombre": "Human Takeover - Chatwoot",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "xsXeHp7WLXnFQc3o": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:02-03:00",
+  "huella": "a1ee37813f87c183a4fb",
+  "nombre": "Logger Conversaciones (Supabase)",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "xsXr4gV9QXJYRaML": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:03-03:00",
+  "huella": "6cab381962e82336ec55",
+  "nombre": "TEST - Where Debug",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "y8wIF1rR87bAAvYU": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:03-03:00",
+  "huella": "ddb0d4f0cff2164abf40",
+  "nombre": "v7 Cerebro Agente",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "yjMpDQ3UH1tsZdDe": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:30-03:00",
+  "huella": "980c34d4f0e0b64e0bd1",
+  "nombre": "v7 Agente Pagos",
+  "script": "apply_arreglos_espejo.py"
+ },
+ "yop6TIVoKiWUxfEn": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:04-03:00",
+  "huella": "eed3a6146450d5d92842",
+  "nombre": "Error Handler - Notify Grupo",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "yrCuq7hj04ox3sad": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:33-03:00",
+  "huella": "2d6f1fe76dd425b9df2a",
+  "nombre": "v7 Agente Urgencias",
+  "script": "apply_arreglos_espejo.py"
+ },
+ "zFtNDRUlN8n2Na71": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:05-03:00",
+  "huella": "adbc2c22c6a1172db266",
+  "nombre": "TEST Cleanup Basura Historica",
+  "script": "guarda_vivo.py --aceptar"
+ },
+ "zwAznFcbqANDAULn": {
+  "commit": "df6c3f7",
+  "fecha": "2026-11-12T08:45:05-03:00",
+  "huella": "eef7e010745899cf8b84",
+  "nombre": "v7 Agente Clinica",
+  "script": "guarda_vivo.py --aceptar"
+ }
+}

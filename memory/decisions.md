@@ -999,3 +999,9 @@ Sí, si la Dra. Raquel incorpora nuevas marcas de ortodoncia o define una ventan
 - **Descartado:** nodo en O155 que llame al agente con `modo: sombra` (necesitaba claves aparte en todos los workflows).
 - **Revisable:** sí, si algún día se separan las claves de sombra.
 
+## 2026-11-12 — Freno por código: no se despliega encima de cambios que el repo no conoce
+- **Qué:** `scripts/guarda_vivo.py` envuelve todos los `api()` de scripts/: antes de cada PUT compara la huella de lo vivo (nodos + conexiones) con la última registrada en `workflows/vivo_huellas.json`; si no coincide, frena y dice qué nodos cambiaron. Después del PUT registra la nueva. `scripts/diff_vivo.py` compara repo vs vivo parámetro por parámetro (antes los apply_* miraban solo jsCode y no veían prompts ni descripciones de herramientas).
+- **Por qué:** despliegan dos compus. El 05/11 se desplegó desde la otra sin subir; desplegar desde acá lo borraba sin aviso. Una regla en memoria no alcanza (la otra compu no la ve hasta hacer pull); el freno sí actúa.
+- **Descartado:** comparar con el último backup de `workflows/history` (está en .gitignore: cada compu tiene los suyos, y el PRE recién escrito tapaba el cambio). Usar `versionId` de n8n (cambia también con cosas que no son el código).
+- **Escape:** `N8N_ACEPTAR_VIVO=<id>` solo después de traer lo vivo al repo y revisar el diff.
+- **Revisable:** no (es una guarda).

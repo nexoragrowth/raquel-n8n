@@ -43,6 +43,8 @@ def api(path, method="GET", payload=None):
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:   # (08/10) mostrar QUÉ rechazó n8n (antes solo "400 Bad Request")
         raise SystemExit(f"n8n respondió {e.code} a {method} {path}: {e.read().decode()[:1500]}")
+import guarda_vivo  # noqa: E402  (12/11) freno: no pisar en n8n cambios que este repo no conoce (scripts/guarda_vivo.py)
+api = guarda_vivo.envolver(api)
 
 
 def wf_test(ids, ruta):

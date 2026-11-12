@@ -259,6 +259,8 @@ def api(method, path, body=None):
         headers={"X-N8N-API-KEY": KEY, "Content-Type": "application/json", "accept": "application/json"}, method=method)
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode())
+import guarda_vivo  # noqa: E402  (12/11) freno: no pisar en n8n cambios que este repo no conoce (scripts/guarda_vivo.py)
+api = guarda_vivo.envolver(api)
 
 
 def get_apikey_and_base():

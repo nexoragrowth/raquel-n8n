@@ -78,6 +78,8 @@ def api(path, method="GET", payload=None):
                                  headers={"X-N8N-API-KEY": key, "Content-Type": "application/json", "accept": "application/json"})
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.loads(r.read().decode())
+import guarda_vivo  # noqa: E402  (12/11) freno: no pisar en n8n cambios que este repo no conoce (scripts/guarda_vivo.py)
+api = guarda_vivo.envolver(api)
 
 def clean_settings(wf):
     return {k: v for k, v in (wf.get("settings") or {}).items() if k in SETTINGS_OK}
