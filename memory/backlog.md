@@ -8,7 +8,7 @@
 - [x] 12/11: desplegado el control de horas/montos de Información (dentro de `apply_panel_probar_y_espera.py`); r007 ×4 en sombra OK.
 - [P2] El orquestador del cerebro actual a veces escribe la RESPUESTA en el pedido a Información (ej. 18:00 inventado). Con info_core queda frenado; mirar si conviene una línea en `prompt_orquestador.md` (toca el cerebro: medir antes con el modelo real).
 - [P3] `orquestador_core.salidaInformacion`: si el texto trae "¿Para quién es? nombre o DNI", al sacar la pregunta queda "nombre o DNI." suelto. Toca 5 workflows: juntar con el próximo cambio de ese módulo.
-- [P1] Panel, opción A: bot DESPLEGADO 12/11 (probador mPISHj9allybzwoV). Falta: Lucas corre `bash deploy/redeploy.sh` desde esta compu (panel 1048c95) y después probar el botón en el panel de punta a punta (regla 8).
+- [P1] Panel, opción A: bot y panel DESPLEGADOS 12/11 (probador mPISHj9allybzwoV, panel 1048c95). Falta: tocar Probar una vez en el panel y ver la ejecución con user-agent `node` (regla 8).
 - [P2] Espejo diario: correr `extraer_reales.py --contexto` + `correr.py cerebro,cerebro_agente` con los mensajes del día y revisar diferencias, hasta pasar el agente al número de Lucas.
 
 ## ⇢ 2026-11-01 — SPRINT post-capacitación (detalle completo en `docs/sprint-2026-11-01.md`)
