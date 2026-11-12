@@ -36,9 +36,10 @@ SQL_DATOS = ("SELECT id::text AS id, contenido FROM knowledge_base WHERE id IN (
 # (20/10, D3 del plan del 13/10; escalaciones reales 380–386) ¿Quién escribió PRIMERO en este chat? Si fue la clínica y el contacto no tiene ficha,
 # es una charla de la clínica (plomero, proveedor, técnico): Asiri no se mete. Es estructura (fuente del mensaje), no lectura del texto del paciente.
 SQL_PRIMERO = "SELECT message->'additional_kwargs'->>'source' AS fuente, message->>'type' AS tipo FROM n8n_chat_histories WHERE session_id = $1 ORDER BY id ASC LIMIT 1"
-# (05/11, incidente José; revisión R6) horas de TODOS los mensajes del paciente (el v6 los guarda aunque Asiri calle o esté en modo humano): HistorialCore.ultimoStaff
-# las usa para saber si la propuesta de la clínica ya tuvo respuesta. (12/11: traído al repo desde lo desplegado el 05/11, que no estaba commiteado.)
-SQL_ENTRANTES = "SELECT created_at FROM mensajes_entrantes_live WHERE telefono = $1 AND from_me = false AND created_at > now() - interval '3 days' ORDER BY created_at DESC LIMIT 50"
+# (05/11, revisión R6) Horas de los mensajes del PACIENTE de los últimos 3 días: la tabla la llena el v6 ("Inbox Live") con TODO lo que entra, antes del modo
+# humano y aunque Asiri calle (n8n_chat_histories no guarda esos). Solo se usa para saber si ya contestó una propuesta de la clínica.
+SQL_ENTRANTES = ("SELECT created_at FROM mensajes_entrantes_live WHERE telefono = $1 AND from_me = false AND created_at > now() - interval '3 days' "
+                 "ORDER BY created_at DESC LIMIT 50")
 SUBAGENTES = [("turnos", "Agente Turnos"), ("pagos", "Agente Pagos"), ("informacion", "Agente Información"), ("urgencias", "Agente Urgencias")]
 
 E = "$('Entrada').first().json"
@@ -196,7 +197,7 @@ def _code_con(g, nombre, js, x, y, modulos):
 def _entradas_sub(clave):
     ent = {"tel": f"{E}.phone", "exec_id_actual": "$execution.id", "modo": MODO, "texto_paciente": f"{E}.texto", "ultimo_asiri": f"{CTX}.ultimo_asiri",
            "textos_paciente": f"{CTX}.textos_paciente", "turnos_json": f"{CTX}.turnos_json", "contexto": f"{CTX}.contexto",
-           "propuesta_staff": f"{CTX}.propuesta_staff_json || ''",   # (05/11) para aceptar_propuesta_clinica (Turnos); los demás lo ignoran
+           "propuesta_staff": f"{CTX}.propuesta_staff_json || ''",
            "datos": f"{CTX}.datos_info" if clave == "informacion" else "''",
            "pedido": "$('Ver urgencia').first().json.pedido" if clave == "urgencias" else f"$('Despacho').first().json.{clave}"}
     return ent

@@ -466,5 +466,92 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const todos = Object.keys(O.MENSAJES_EDITABLES);
   t('MF21 los 12 editables existen en TEXTOS y su estándar es válido', todos.length === 12 && todos.every((k) => typeof O.TEXTOS[k] === 'string' && O.mensajeInvalido(k, O.TEXTOS[k]) === null), todos.filter((k) => O.mensajeInvalido(k, O.TEXTOS[k]) !== null).map((k) => k + ':' + O.mensajeInvalido(k, O.TEXTOS[k]))); }
 
+console.log('\nPROPUESTA DE LA CLÍNICA (05/11, incidente José 331590/331596)');
+{ const H = require('../v7/historial_core.js');
+  const PRE = '[ATENCION HUMANA - mensaje enviado por la doctora o la secretaria desde el WhatsApp del consultorio. Mensaje del staff, no es output tuyo.]: ';
+  const JOSE = 'Buenas noches sr. José, disculpe el día Martes 17 de Noviembre (día de su turno), la Dra. tiene médico, por lo tanto, se tiene que retirar temprano. Podríamos reagendar su turno para las 8:40 hs de ese mismo día?';
+  const staff = (c, at, kw = {}) => ({ message: { type: 'ai', content: PRE + c, additional_kwargs: { source: 'wa_outbound', was_multimedia: false, from_iri_or_dra: true, ...kw } }, created_at: at });
+  const AHORA_MS = Date.parse('2026-11-05T01:50:00Z');
+  // filas reales del exec 331590 (más nueva primero): la propuesta, y antes un recordatorio automático de Dentalink que también entra como staff
+  const FILAS = [staff(JOSE, '2026-11-04T17:06:40.599Z'), staff('Buenos días sr. José, la Dra. me dijo que si va a atender normal esos dos días…', '2026-11-02T13:30:00Z'),
+    staff('Estimado José Pugliese, Le recordamos que el día Martes, 17 de Noviembre de 2026, a las 11:20 tiene programada una cita con la Dra. Rodríguez Raquel', '2026-10-30T12:00:00Z')];
+  const u = H.ultimoStaff(FILAS, AHORA_MS, 48 * 3600000);
+  t('PS1 José: lo último que no escribió el paciente es la propuesta del staff → texto CRUDO y completo (sin el prefijo ni el corte de 220) + hora', u && u.texto === JOSE && u.ms === Date.parse('2026-11-04T17:06:40.599Z'), u);
+  t('PS2 si después escribió el PACIENTE (y quedó en memoria) no hay propuesta sin responder', H.ultimoStaff([{ message: { type: 'human', content: 'dale' }, created_at: '2026-11-04T18:00:00Z' }, ...FILAS], AHORA_MS, 48 * 3600000) === null);
+  t('PS3 si después habló ASIRI, la propuesta del staff ya no es lo último → null', H.ultimoStaff([{ message: { type: 'ai', content: 'Le paso con la secretaria.', additional_kwargs: { source: 'asiri_v7' } }, created_at: '2026-11-04T18:00:00Z' }, ...FILAS], AHORA_MS, 48 * 3600000) === null);
+  t('PS4 el más nuevo es multimedia del staff (no se puede leer) → null', H.ultimoStaff([staff('[mensaje multimedia enviado por la doctora/secretaria - sin texto adjunto] [MEDIA:abc]', '2026-11-04T17:10:00Z', { was_multimedia: true }), ...FILAS], AHORA_MS, 48 * 3600000) === null);
+  t('PS5 el más nuevo es el recordatorio AUTOMÁTICO de Dentalink ("Estimado…, Le recordamos…") → null', H.ultimoStaff(FILAS.slice(2), Date.parse('2026-10-30T14:00:00Z'), 48 * 3600000) === null);
+  t('PS6 el staff solo pidió CONFIRMAR asistencia (sin cambio) → null: sigue por confirmar_turno como hoy (Agustín 324637)',
+    H.ultimoStaff([staff('Buen día, necesitamos confirmarnos si Agustín va a asistir a su turno del miércoles a las 15:40', '2026-11-04T17:00:00Z')], AHORA_MS, 48 * 3600000) === null);
+  const rafaga = H.ultimoStaff([staff('Por favor me confirma y le cambio el turno', '2026-11-04T17:08:00Z'), staff('¿Podemos pasar su turno al jueves 19/11 a las 9:00?', '2026-11-04T17:05:00Z'), staff('Hola!', '2026-11-03T10:00:00Z')], AHORA_MS, 48 * 3600000);
+  t('PS7 ráfaga del staff (mensajes seguidos, < 10 min) → se leen juntos, en orden; uno de otro día no entra', rafaga && rafaga.texto === '¿Podemos pasar su turno al jueves 19/11 a las 9:00?\nPor favor me confirma y le cambio el turno' && rafaga.ms === Date.parse('2026-11-04T17:08:00Z'), rafaga);
+  t('PS8 propuesta de hace más de 48 h → null', H.ultimoStaff(FILAS, Date.parse('2026-11-07T18:00:00Z'), 48 * 3600000) === null);
+  t('PS9 mensaje del sub-WF Cancelar del v6 (wa_outbound SIN prefijo, sin from_iri_or_dra) no es staff humano → null',
+    H.ultimoStaff([{ message: { type: 'ai', content: 'Su turno del martes 17/11 a las 8:40 quedó cancelado', additional_kwargs: { source: 'wa_outbound' } }, created_at: '2026-11-04T17:00:00Z' }], AHORA_MS, 48 * 3600000) === null);
+  const ctx = H.mensajeAgente([], 'Dale hagamos el cambio', 'miércoles 2026-11-04 22:50', [], '', undefined, { propuesta_clinica: { texto: JOSE, horas: 8.7 } });
+  t('PS10 el contexto muestra la PROPUESTA DE LA CLÍNICA con el texto completo y hace cuántas horas', ctx.includes('PROPUESTA DE LA CLÍNICA SIN RESPONDER (la escribió el staff hace 9 h') && ctx.includes('8:40 hs de ese mismo día'), ctx);
+
+  // (revisión R6) mensajes del paciente que NO quedaron en memoria (Asiri calló o modo humano) vienen de mensajes_entrantes_live
+  const AH5 = Date.parse('2026-11-05T01:50:00Z');
+  t('PS11 el paciente ya contestó después de la propuesta (aunque no quedó en memoria) → ya no está sin responder',
+    H.ultimoStaff(FILAS, AH5, 48 * 3600000, [Date.parse('2026-11-04T18:00:00Z')]) === null);
+  t('PS12 el mensaje ACTUAL (lote de los últimos 90 s) no cuenta como respuesta previa', !!H.ultimoStaff(FILAS, AH5, 48 * 3600000, [AH5 - 30000]));
+  t('PS12b (revisión M1) un "Hola buenos días" de hace 2 min (que Asiri calló) tampoco: la propuesta sigue sin responder', !!H.ultimoStaff(FILAS, AH5, 48 * 3600000, [AH5 - 2 * 60000]));
+  const z = H.ultimoStaff([staff('Perfecto, queda como estaba entonces', '2026-11-04T13:07:00Z'), staff('¿Podemos pasar su turno al jueves 19/11 a las 9:00?', '2026-11-04T13:00:00Z')], AH5, 48 * 3600000, [Date.parse('2026-11-04T13:03:00Z')]);
+  t('PS13 (caso Z) el paciente contestó ENTRE dos mensajes del staff → la ráfaga se corta: queda solo "queda como estaba" (que no es una propuesta)', z && z.texto === 'Perfecto, queda como estaba entonces', z);
+  // (revisión ALTA 2 / MEDIA 4) despacho y composición con una PROPUESTA DE LA CLÍNICA sin responder
+  const pm = O.despachar(orq([{ a: 'menu_bienvenida' }]), { propuesta_clinica: true });
+  t('PS14 saludo solo con una propuesta de la clínica sin responder → no_reply (sin menú: le contesta al staff)', pm.fija === 'no_reply' && pm.propuesta_clinica === true, pm);
+  t('PS14b sin propuesta de la clínica el saludo sigue llevando el menú', O.despachar(orq([{ a: 'menu_bienvenida' }]), {}).fija === 'menu');
+  const pr = O.despachar(orq([{ a: 'turnos', pedido: 'acepta la propuesta de la clínica' }]), { propuesta_clinica: true });
+  const rechazo = O.salidaTurnos({ output: '[NO_REPLY]', intermediateSteps: [] }, {});
+  const cr = O.componer(base({ plan: pr, res: { turnos: rechazo }, reunion: O.reunir(pr, { turnos: rechazo }, {}), texto_paciente: 'no puedo, me quedo con el del 28' }));
+  t('PS15 (Bautista) rechaza la propuesta de la clínica y Turnos no hace nada → SILENCIO y sin aviso (antes: "Le paso con la secretaria" + [ACCIÓN] falso)', cr.silencio === true && !cr.texto && !cr.avisos.length, cr);
+  const pn = O.despachar(orq([{ a: 'turnos', pedido: 'x' }]), {});
+  const cn = O.componer(base({ plan: pn, res: { turnos: rechazo }, reunion: O.reunir(pn, { turnos: rechazo }, {}), texto_paciente: 'quiero un turno' }));
+  t('PS16 SIN propuesta de la clínica, la red de siempre sigue: Turnos [NO_REPLY] a un pedido → deriva con aviso', cn.texto && cn.avisos.some((a) => /no supo qué responder/.test(a.texto)), cn);
+  // (revisión M2) "dale, ahí lo llevo" a "cambiarle el arco" con el staff en el chat: el agente intenta aceptar, no hay propuesta → silencio (no deriva)
+  const sinP = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('aceptar_propuesta_clinica', { etapa: 'error', ok: false, motivo: 'sin_propuesta_staff' })] }, {});
+  const ps1 = O.despachar(orq([{ a: 'turnos', pedido: 'acepta la propuesta de la clínica' }]), { staff_reciente: true });
+  const rs1 = O.reunir(ps1, { turnos: sinP }, { texto_paciente: 'dale, ahí lo llevo' });
+  const cs1 = O.componer(base({ plan: ps1, res: { turnos: sinP }, reunion: rs1, texto_paciente: 'dale, ahí lo llevo' }));
+  t('PS17 (M2) staff en el chat (< 6 h) y no había propuesta que aplicar → silencio, sin derivar ni avisar', !rs1.derivar && cs1.silencio === true && !cs1.avisos.length, [rs1, cs1]);
+  const ps2 = O.despachar(orq([{ a: 'turnos', pedido: 'acepta la propuesta de la clínica' }]), {});
+  const rs2 = O.reunir(ps2, { turnos: sinP }, { texto_paciente: 'Dale hagamos el cambio' });
+  t('PS18 (M2) SIN staff reciente (José, 9 h) sigue derivando con motivo', rs2.derivar === true && /no encontró la propuesta/.test(rs2.motivo), rs2);
+  const ps3 = O.despachar(orq([{ a: 'turnos', pedido: 'x' }, { a: 'pagos', pedido: 'y' }]), { staff_reciente: true });
+  const cs3 = O.componer(base({ plan: ps3, res: { turnos: rechazo, pagos: { agente: 'pagos', estado: 'no_reply', codigo: '[NO_REPLY]', texto: '' } }, reunion: {}, texto_paciente: 'x' }));
+  t('PS19 (M2 acotado) con el staff en el chat pero DOS agentes sin nada que hacer, la red de siempre no cambia (deriva con aviso)', cs3.texto && cs3.avisos.some((a) => /no supo qué responder/.test(a.texto)), cs3);
+  const s3b = O.salidaTurnos({ output: 'PREGUNTA_PARA_QUIEN', intermediateSteps: [paso('aceptar_propuesta_clinica', { etapa: 'error', ok: false, motivo: 'staff_para_quien', derivar_staff: 'varias fichas y el mensaje no dice de quién es el turno' })] }, {});
+  t('PS20b (B3) si la propuesta se deriva, no se suma "¿Para quién es el turno?"', !s3b.texto && s3b.derivar && !/Para quién/.test(s3b.texto), s3b);
+
+  // salida de Turnos con aceptar_propuesta_clinica (mismo workflow que gestionar_turno)
+  const YA = 'Perfecto, el turno de José queda el martes 17/11 a las 08:40 con la Dra. Raquel.';
+  const s1 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('aceptar_propuesta_clinica', { etapa: 'ya_en_agenda', ok: true, texto_para_el_paciente: YA, aviso: '[FYI] José aceptó la propuesta de la clínica; el turno ya figura en la agenda (martes 17/11 a las 08:40) y Asiri se lo confirmó.' })] }, {});
+  t('PS20 ya_en_agenda: el texto del código sale tal cual, estado ya_en_agenda y un aviso FYI para la secretaria', s1.texto === YA && s1.estado === 'ya_en_agenda' && s1.avisos && s1.avisos[0].nivel === 'FYI' && !s1.error_tecnico, s1);
+  const RBS = 'Le confirmo el cambio que le propuso la clínica para José: Martes 17 de noviembre a las 08:40 hs con la Dra. Raquel, en lugar de su turno del martes 17/11 a las 11:20. ¿Procedo con el cambio?';
+  const s2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('aceptar_propuesta_clinica', { etapa: 'confirmacion', ok: true, origen: 'staff', texto_para_el_paciente: RBS })] }, {});
+  t('PS21 la agenda no lo refleja: sale el read-back del cambio (va solo y al final, como cualquier read-back)', s2.texto === RBS && s2.readback === true && s2.estado === 'readback_pendiente', s2);
+  const s3 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('aceptar_propuesta_clinica', { etapa: 'error', ok: false, motivo: 'staff_fecha_inconsistente', derivar_staff: 'la fecha no coincide con el día de la semana' })] }, {});
+  t('PS22 no se pudo aplicar: sin texto propio, deriva con el motivo EXACTO (no "error técnico")', !s3.texto && s3.estado === 'derivar' && /no coincide con el día de la semana/.test(s3.derivar) && !s3.error_tecnico, s3);
+  const s4 = O.salidaTurnos({ output: '[NO_REPLY]', intermediateSteps: [paso('aceptar_propuesta_clinica', { etapa: 'error', ok: false, motivo: 'sin_propuesta_staff', para_asiri: 'x' })] }, {});
+  t('PS23 (revisión MEDIA 4) quiso aceptar y el sistema ya no ve la propuesta, sin nada más que decir: deriva con motivo (nunca un "no le entendí" mudo)', !s4.error_tecnico && /no encontró la propuesta/.test(s4.derivar || '') && !s4.texto, s4);
+  const s4b = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('aceptar_propuesta_clinica', { etapa: 'error', ok: false, motivo: 'sin_propuesta_staff' }), paso('confirmar_turno', { ok: true, readback_text: 'Perfecto, su turno del martes 17/11 a las 08:40 está confirmado.' })] }, {});
+  t('PS23b si después resolvió con otra herramienta (confirmar_turno), no deriva', !s4b.derivar && /confirmado/.test(s4b.texto), s4b);
+  // composición
+  const planT = O.despachar(orq([{ a: 'turnos', pedido: 'responde a la propuesta de la clínica' }]), {});
+  const c1 = O.componer(base({ plan: planT, res: { turnos: s1 }, reunion: {}, vistos: [{ fecha: '2026-11-17', hora_inicio: '08:40' }] }));
+  t('PS24 componer: "Perfecto, el turno de José queda…" pasa el chequeo (el turno está en la agenda) y el FYI va al grupo', c1.texto === YA && c1.avisos.some((a) => a.nivel === 'FYI' && /aceptó la propuesta de la clínica/.test(a.texto)), c1);
+  const c1b = O.componer(base({ plan: planT, res: { turnos: s1 }, reunion: {}, vistos: [] }));
+  t('PS25 si el chequeo de salida reemplaza el texto (el turno no figura), el FYI NO sale (no se avisa algo que no se le dijo)', c1b.texto !== YA && !c1b.avisos.some((a) => a.nivel === 'FYI'), c1b);
+  const reun = O.reunir(planT, { turnos: s3 }, { texto_paciente: 'Dale hagamos el cambio' });
+  t('PS26 reunir: la derivación de Turnos va a la secretaria con el motivo exacto y COMPLETO (entra en los 120 caracteres del aviso)', reun.derivar === true && /aceptó el cambio que propuso la clínica; no aplicado: la fecha no coincide con el día de la semana$/.test(reun.motivo) && reun.motivo.length <= 120, reun);
+  const c3 = O.componer(base({ plan: planT, res: { turnos: s3 }, reunion: reun, derivar_res: { ok: true, texto_para_el_paciente: Clin.TEXTOS.DERIVA }, texto_paciente: 'Dale hagamos el cambio' }));
+  t('PS27 componer: el paciente recibe la derivación (no "tuve un inconveniente") y no hay aviso de error', c3.texto === Clin.TEXTOS.DERIVA && !c3.avisos.some((a) => /no pudo completar/.test(a.texto)), c3);
+  // (331596) un error de esquema de una herramienta tumba al agente: el aviso dice el porqué
+  const se = O.salidaTurnos({ error: 'Received tool input did not match expected schema\n\n✖ Expected string, received boolean\n  → at confirma' }, {});
+  const c4 = O.componer(base({ plan: planT, res: { turnos: se }, reunion: {}, texto_paciente: 'Dale hagamos el cambio' }));
+  t('PS28 error de esquema: el [ACCIÓN] trae el detalle técnico (antes solo "no pudo completar")', se.error_detalle && c4.avisos.some((a) => /no pudo completar \(turnos\).*Detalle técnico: Received tool input did not match/.test(a.texto.replace(/\n/g, ' '))), c4.avisos); }
+
 console.log(`\n${total - fallas}/${total} ${fallas ? 'FALLAS: ' + fallas : 'TODO OK'}`);
 process.exit(fallas ? 1 : 0);

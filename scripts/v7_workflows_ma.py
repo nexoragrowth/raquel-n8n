@@ -37,14 +37,13 @@ HERRAMIENTAS = [
                       "nuevo_nombre": "Solo paciente nuevo (sin ficha): su nombre, tal como lo escribió. Si no, vacío.", "nuevo_apellido": "Solo paciente nuevo: su apellido, tal como lo escribió. Si no, vacío.",
                       "nuevo_dni": "Solo paciente nuevo: su DNI, tal como lo escribió. Si no, vacío.",
                       "confirma": "si | vacío. Escribí si SOLO cuando el MENSAJE ACTUAL del paciente acepta la CONFIRMACIÓN PENDIENTE; en cualquier otro caso dejalo vacío."}),
-    # (05/11, incidente José) El staff le propuso a mano mover su turno y el paciente acepta: el código saca fecha y hora del mensaje CRUDO de la clínica
-    # (propuesta_staff, lo arma el cerebro) y lo verifica contra la agenda; si ya está cargado se lo confirma, si no muestra el read-back del cambio.
+    # (05/11, incidente José 331596) El paciente acepta un CAMBIO que le propuso la clínica a mano. El modelo COPIA del mensaje de la clínica (entiende "8 y 40",
+    # "6 de la tarde", "este jueves"); el código verifica cada dato contra el mensaje crudo del staff (propuesta_staff, lo pone el cerebro) y contra la agenda.
+    # Todo texto (nada booleano): el esquema string no tiene cómo romperse.
     ("aceptar_propuesta_clinica", "gestionar_turno", "El paciente ACEPTA la PROPUESTA DE LA CLÍNICA (mover su turno a otro día u horario que le ofreció el staff). Copiá los datos del mensaje de la clínica; el código los verifica contra ese mensaje y la agenda: si ya está cargado se lo confirma, si no le muestra la confirmación del cambio. Una vez.",
      {**F, "accion": "'propuesta_staff'", "propuesta_staff": f"{ENT}.propuesta_staff"},
-     {"fecha": "Fecha YYYY-MM-DD del turno NUEVO que propone la clínica (\"ese mismo día\" = la del turno que se mueve).",
-      "hora": "Hora HH:MM del turno NUEVO, en 24 h (\"8 y 40\" = 08:40; \"6 de la tarde\" = 18:00).",
-      "fecha_turno_viejo": "Fecha YYYY-MM-DD del turno que tiene y se mueve (de los turnos vigentes del contexto).",
-      "para": "Nombre del paciente si el mensaje de la clínica lo nombra; si no, vacío."}),
+     {"fecha": "Fecha YYYY-MM-DD del turno NUEVO que propone la clínica (\"ese mismo día\" = la del turno que se mueve).", "hora": "Hora HH:MM del turno NUEVO, en 24 h (\"8 y 40\" = 08:40; \"6 de la tarde\" = 18:00).",
+      "fecha_turno_viejo": "Fecha YYYY-MM-DD del turno que tiene y se mueve (de los turnos vigentes del contexto).", "para": "Nombre del paciente si el mensaje de la clínica lo nombra; si no, vacío."}),
     # (21/10, incidente familia con dos turnos el mismo día) UNA llamada confirma todos los que correspondan: sin datos = todos los recordatorios
     # pendientes (lo que hacía el v6 con "Confirmo"); con fecha / hora / nombre = solo los que coinciden.
     # (21/10, Lucas) Cualquier forma de "sí" a un recordatorio confirma TODO: "Confirmo", "hola siii vamos a ir con martin", "ahí estaremos", "dale 👍".

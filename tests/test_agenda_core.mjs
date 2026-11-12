@@ -270,5 +270,103 @@ console.log('\nTEXTOS ARMADOS POR CÓDIGO en los momentos clave (07/10: el orque
   const r = prop({ ...CAMBIO, fecha_turno_viejo: '2026-16-10' });
   t('R03 fecha del turno viejo con día y mes invertidos → encuentra su turno del 16/10', r.ok && r.propuesta.cita_vieja.id === 9104, r); }
 
+console.log('\nPROPUESTA DE LA CLÍNICA (05/11, incidente José 331590: el paciente acepta un cambio que le propuso el staff a mano)');
+{ // --- verificación por código de lo que COPIÓ el modelo, contra el texto del STAFF (nunca el del paciente); ante la duda, falla del lado seguro
+  const ms = (s) => Date.parse(s);
+  const JOSE = 'Buenas noches sr. José, disculpe el día Martes 17 de Noviembre (día de su turno), la Dra. tiene médico, por lo tanto, se tiene que retirar temprano. Podríamos reagendar su turno para las 8:40 hs de ese mismo día?';
+  const H = (h, txt) => Core.horaEnTexto(h, txt);
+  t('PC01 hora escrita de muchas formas: "8:40", "08.40", "8 y 40", "8 40", "8,40", "9 y media", "a las 9", "17 hs", "6 de la tarde" ("a las 9. 10 minutos" es ambiguo: no se verifica y deriva)',
+    H('08:40', JOSE) && H('08:40', 'a las 08.40') && H('08:40', 'a las 8 y 40') && H('08:40', 'a las 8 40') && H('08:40', 'a las 08,40') && H('09:30', 'a las 9 y media')
+    && H('09:00', '¿podemos pasarlo a las 9?') && H('17:00', 'a las 17 hs') && H('18:00', 'a las 6 de la tarde'));
+  t('PC02 hora que NO está escrita → false ("8 y 40" no respalda 08:00; "a las 6" sin "tarde" no respalda 18:00; un monto "$50.000" no es hora)',
+    !H('08:00', 'a las 8 y 40') && !H('18:00', 'a las 6') && !H('10:00', 'La consulta sale $50.000') && !H('08:40', 'el turno es el 8/11 a las 10:40'));
+  const F = (f, txt, s = '2026-11-04T17:06:40Z', viejo) => Core.fechaEnTexto(f, txt, ms(s), viejo);
+  t('PC03 José: "Martes 17 de Noviembre" respalda 2026-11-17; "ese mismo día" respalda el día del turno que se mueve', F('2026-11-17', JOSE) === 'ok' && F('2026-11-17', 'reagendar su turno para las 8:40 de ese mismo día', undefined, '2026-11-17') === 'ok');
+  t('PC04 Hernán: "este jueves" respalda el jueves siguiente al MENSAJE DEL STAFF (29/10), no el de la semana que viene', F('2026-10-29', 'adelantar tu turno para este jueves a las 10:50', '2026-10-27T13:49:00Z') === 'ok');
+  t('PC05 "al 19 a las 9" / "día 19" respaldan el 19 (sin mes = el mes que copió el modelo); "19/11" respalda noviembre y no diciembre', F('2026-11-19', '¿podemos pasarlo al 19 a las 9?') === 'ok' && F('2026-11-19', 'el día 19 a las 9:00') === 'ok' && F('2026-11-19', 'el 19/11 a las 9') === 'ok' && F('2026-12-19', 'el 19/11 a las 9') !== 'ok');
+  t('PC06 Natalia: "Lunes 19 de Noviembre" (el 19 es jueves) → inconsistente', F('2026-11-19', 'Nati, ¿podemos pasarlo al Lunes 19 de Noviembre a las 18:50?', '2026-11-02T20:00:00Z') === 'inconsistente');
+  t('PC07 "mañana" respalda el día siguiente al mensaje del staff; "por la mañana" no', F('2026-11-05', 'mañana la Dra no puede, ¿podemos pasarlo a las 9?') === 'ok' && F('2026-11-05', '¿le sirve por la mañana a las 9?') !== 'ok');
+  t('PC08 fecha que no aparece en el mensaje → false (el modelo no puede inventar el día)', F('2026-11-20', JOSE) === false && F('2026-11-17', '¿podemos pasarlo a las 9?') === false);
+  t('PC09 la hora "a las 9" no cuenta como el día 9', F('2026-11-09', '¿podemos pasarlo al martes 17/11 a las 9?') === false);
+  t('PC10 esPropuestaDeCambio: mover con hora sí; turno NUEVO ("agendar el próximo turno", "lo habíamos adelantado") no; sin hora no; "¿cómo sigue la nena?" no',
+    Core.esPropuestaDeCambio(JOSE) && Core.esPropuestaDeCambio('adelantar tu turno para este jueves a las 10:50')
+    && !Core.esPropuestaDeCambio('Sr. José podemos agendar el próximo turno de Delfi para el día Lunes 2 de Noviembre a las 17:40 hs? era el que ya tenía pero lo habíamos adelantado para hoy.')
+    && !Core.esPropuestaDeCambio('¿Podemos pasar su turno a otro día?') && !Core.esPropuestaDeCambio('¿cómo sigue la nena con el aparato?'));
+  t('PC10b (revisión con el modelo real) una cita EXTRA no es mover su turno: "cambiarle el arco", "pasar a retirar los estudios", "viene atrasada" → no; "el control de Delfi" sí',
+    !Core.esPropuestaDeCambio('Buenas, mañana a las 10:00 la Dra. puede cambiarle el arco a Santi, ¿lo puede traer?') && !Core.esPropuestaDeCambio('¿Puede pasar mañana a las 10 a retirar los estudios?')
+    && !Core.esPropuestaDeCambio('La Dra viene atrasada, la atiende a las 17:30') && Core.esPropuestaDeCambio('¿Podemos pasar el control de Delfi al jueves 19/11 a las 9:00?'));
+
+  // --- decidir: aceptar_propuesta_clinica (accion 'propuesta_staff' + lo que copió el modelo)
+  const AH = '2026-11-05T01:50:00Z';   // 22:50 de Jujuy, cuando contestó José
+  const FICHAS = { fichas: [{ id: 507, nombre: 'Delfina' }, { id: 14, nombre: 'Joaquín' }, { id: 5, nombre: 'José' }], elegida: null };
+  const C9412 = { id: 9412, id_paciente: 5, fecha: '2026-11-17', hora_inicio: '08:40', id_estado: 7, estado_anulacion: 0 };
+  const C9286 = { id: 9286, id_paciente: 5, fecha: '2026-11-17', hora_inicio: '11:20', id_estado: 7, estado_anulacion: 0 };
+  const PS = { texto: JOSE, ms: ms('2026-11-04T17:06:40.599Z') };
+  const est = (o = {}) => ({ tel: '5493884880536', exec_id: '331590', ficha: FICHAS, turnos_vistos: [C9412], ofertas: [], ultimo_asiri: '', propuesta_staff: PS, ...o });
+  const A = (o = {}) => ({ accion: 'propuesta_staff', fecha: '2026-11-17', hora: '08:40', fecha_turno_viejo: '2026-11-17', para: 'José', ...o });
+  const d1 = Core.decidir(A(), est(), AH);
+  t('PC20 José REAL (la secretaria ya lo había movido): ya_en_agenda, sin propuesta ni escritura, texto del código y FYI con lo que se le dijo', d1.etapa === 'ya_en_agenda' && !d1.propuesta && d1.resultado.ok === true
+    && d1.resultado.texto_para_el_paciente === 'Perfecto, el turno de José queda el martes 17/11 a las 08:40 con la Dra. Raquel.' && /aceptó la propuesta de la clínica/.test(d1.resultado.aviso) && /Asiri le confirmó: martes 17\/11 a las 08:40/.test(d1.resultado.aviso), d1);
+  const d2 = Core.decidir(A(), est({ turnos_vistos: [C9286] }), AH);
+  t('PC21 la agenda NO lo refleja: read-back del CAMBIO con la fecha y la hora PRIMERO (11:20 → 08:40), origen staff; no escribe', d2.etapa === 'confirmacion' && d2.propuesta.tipo === 'cambio' && d2.propuesta.origen === 'staff'
+    && d2.propuesta.cita_vieja.id === 9286 && d2.propuesta.slot.fecha === '2026-11-17' && d2.propuesta.slot.hora === '08:40' && d2.propuesta.paciente_id === 5 && d2.propuesta.exec_id === '331590' && d2.propuesta.enviada === undefined
+    && d2.resultado.texto_para_el_paciente === 'Le confirmo para José: Martes 17 de noviembre a las 08:40 hs con la Dra. Raquel, en lugar de su turno del martes 17/11 a las 11:20 (el cambio que le propuso la clínica). ¿Procedo con el cambio?', d2);
+  // el "sí" a ESE read-back sigue el camino de siempre (decidir con confirma) y se ejecuta con candado y re-verificación; el aviso sabe que vino de la clínica
+  const G = { ...d2.propuesta, enviada: true };
+  const d3 = Core.decidir({ confirma: 'si' }, { ...est({ exec_id: '331700', turnos_vistos: [C9286] }), propuesta_guardada: G, ultimo_asiri: G.readback_text }, '2026-11-05T02:10:00Z');
+  t('PC22 "si" al read-back (otra ejecución): ejecuta la GUARDADA, conserva origen staff', d3.etapa === 'ejecutar' && d3.propuesta.origen === 'staff' && d3.propuesta.cita_vieja.id === 9286, d3);
+  { const io = { log: [], consumir: async () => true, getCita: async () => ({ data: { ...C9286, duracion: 20 } }), postCita: async (b) => { io.body = b; return { data: { id: 99100, id_estado: 7, ...b } }; }, putCita: async (id) => ({ data: { id, id_estado: 1 } }) };
+    const r = await Core.ejecutar({ propuesta: d3.propuesta, exec_id_actual: '331700', enviada: true, modo: 'vivo' }, io, '2026-11-05T02:10:00Z');
+    t('PC23 la ejecución reserva 08:40 con la DURACIÓN de la cita original (20 min), anula 11:20 y el libro dice origen staff', r.ok === true && r.nueva_cita === 99100 && r.vieja_anulada === 9286 && r.ledger.origen === 'staff' && io.body.duracion === 20 && /a pedido de la clínica/.test(io.body.comentario), [r, io.body]); }
+  { const io = { consumir: async () => true, getCita: async () => ({ data: C9286 }), postCita: async () => { throw new Error('no debería escribir'); }, putCita: async () => { throw new Error('no debería escribir'); } };
+    const r = await Core.ejecutar({ propuesta: { ...d3.propuesta, slot: { fecha: '2026-11-05', hora: '08:00' } }, exec_id_actual: 'x', enviada: true, modo: 'vivo' }, io, '2026-11-05T12:00:00Z');
+    t('PC24 (revisión R5) el "sí" llega cuando el horario nuevo ya pasó → no escribe nada (horario_pasado)', r.ok === false && r.motivo === 'horario_pasado', r); }
+  { const d = Core.decidir(A({ fecha: '2026-11-06', hora: '08:40', fecha_turno_viejo: '2026-11-06', para: '' }), est({ ficha: { fichas: [{ id: 5, nombre: 'José' }], elegida: null }, turnos_vistos: [{ ...C9286, fecha: '2026-11-06', hora_inicio: '10:00' }], propuesta_staff: { texto: 'Mañana la Dra. no puede, ¿podemos pasar su turno a las 8:40?', ms: ms('2026-11-05T12:00:00Z') } }), '2026-11-05T13:00:00Z');
+    t('PC25 los 48 h NO frenan un cambio que propuso la clínica: turno de mañana 10:00 → 08:40', d.etapa === 'confirmacion' && d.propuesta.cita_vieja.fecha === '2026-11-06' && d.propuesta.slot.hora === '08:40', d); }
+  const der = (d, motivo) => d.etapa === 'error' && d.resultado.motivo === motivo && !!d.resultado.derivar_staff && !d.propuesta;
+  t('PC26 la hora que copió el modelo no está escrita (leyó 08:00 de "8 y 40") → deriva', der(Core.decidir(A({ hora: '08:00' }), est({ propuesta_staff: { texto: 'Podríamos pasar su turno del martes 17/11 a las 8 y 40?', ms: PS.ms }, turnos_vistos: [C9286] }), AH), 'staff_hora_no_escrita'));
+  t('PC27 la fecha que copió el modelo no está escrita → deriva', der(Core.decidir(A({ fecha: '2026-11-20' }), est({ turnos_vistos: [C9286] }), AH), 'staff_fecha_no_escrita'));
+  t('PC28 fecha incoherente (Natalia) → deriva', der(Core.decidir(A({ fecha: '2026-11-19', hora: '18:50' }), est({ turnos_vistos: [C9286], propuesta_staff: { texto: '¿Podemos pasar su turno al Lunes 19 de Noviembre a las 18:50, José?', ms: PS.ms } }), AH), 'staff_fecha_inconsistente'));
+  t('PC29 propuesta de hace más de 48 h → deriva', der(Core.decidir(A(), est({ propuesta_staff: { ...PS, ms: ms('2026-11-02T00:00:00Z') } }), AH), 'staff_vencida'));
+  const d7 = Core.decidir(A(), est({ propuesta_staff: null }), AH);
+  t('PC30 sin propuesta de la clínica → sin_propuesta_staff, SIN derivar; la nota NO manda a confirmar_turno (revisión P1)', d7.etapa === 'error' && d7.resultado.motivo === 'sin_propuesta_staff' && !d7.resultado.derivar_staff && !/confirmar_turno/.test(d7.resultado.para_asiri), d7);
+  // (revisión R1/R2) familias: nunca se adivina de quién es el turno
+  const JOA = { id: 9600, id_paciente: 14, fecha: '2026-11-21', hora_inicio: '10:00', id_estado: 7, estado_anulacion: 0 };
+  const DEL19 = { id: 9500, id_paciente: 507, fecha: '2026-11-19', hora_inicio: '10:00', id_estado: 7, estado_anulacion: 0 };
+  t('PC31 varias fichas y el mensaje no nombra a nadie → deriva (antes movía el único turno futuro, que era de otro)',
+    der(Core.decidir(A({ fecha: '2026-11-19', hora: '09:00', fecha_turno_viejo: '', para: '' }), est({ turnos_vistos: [JOA], propuesta_staff: { texto: '¿Podemos pasar el turno al jueves 19/11 a las 9:00?', ms: PS.ms } }), AH), 'staff_para_quien'));
+  t('PC32 nombra a Delfi (sin turno) aunque Joaquín tenga uno → no toca el de Joaquín: staff_sin_turno',
+    der(Core.decidir(A({ fecha: '2026-11-19', hora: '09:00', fecha_turno_viejo: '', para: 'Delfi' }), est({ turnos_vistos: [JOA], propuesta_staff: { texto: '¿Le queda bien pasar el control de Delfi al jueves 19/11 a las 9:00?', ms: PS.ms } }), AH), 'staff_sin_turno'));
+  { const d = Core.decidir(A({ fecha: '2026-11-19', hora: '09:00', fecha_turno_viejo: '2026-11-21', para: 'Joaquín' }), est({ turnos_vistos: [JOA, DEL19], propuesta_staff: { texto: '¿Podemos pasar el turno de Joaquín al jueves 19/11 a las 9:00?', ms: PS.ms } }), AH);
+    t('PC33 "el turno de Joaquín al 19/11 9:00" con Delfina el 19 a las 10:00 → mueve el de JOAQUÍN (no el de Delfina)', d.etapa === 'confirmacion' && d.propuesta.cita_vieja.id === 9600 && d.propuesta.paciente_id === 14 && / para Joaquín:/.test(d.resultado.texto_para_el_paciente), d); }
+  t('PC34 "Delfi" (forma corta) identifica a Delfina', Core.decidir(A({ fecha: '2026-11-19', hora: '09:00', fecha_turno_viejo: '', para: 'Delfi' }), est({ turnos_vistos: [{ ...DEL19, fecha: '2026-11-24' }], propuesta_staff: { texto: '¿Podemos pasar el turno de Delfi al jueves 19/11 a las 9:00?', ms: PS.ms } }), AH).propuesta.paciente_id === 507);
+  { const UNA = { fichas: [{ id: 5, nombre: 'José' }], elegida: null };
+    t('PC35 un paciente con dos turnos y el mensaje no nombra el viejo → deriva (antes movía el del 19 por la fecha nueva)',
+      der(Core.decidir(A({ fecha: '2026-11-19', hora: '09:00', fecha_turno_viejo: '2026-11-17', para: '' }), est({ ficha: UNA, turnos_vistos: [C9286, { ...C9286, id: 9700, fecha: '2026-11-19', hora_inicio: '10:00' }], propuesta_staff: { texto: '¿Podemos pasar su turno al 19/11 a las 9:00?', ms: PS.ms } }), AH), 'staff_turno_ambiguo'));
+    const d = Core.decidir(A({ fecha: '2026-11-19', hora: '09:00', fecha_turno_viejo: '2026-11-17', para: '' }), est({ ficha: UNA, turnos_vistos: [C9286, { ...C9286, id: 9700, fecha: '2026-11-24', hora_inicio: '10:00' }], propuesta_staff: { texto: 'Su turno del martes 17/11 lo podemos pasar al jueves 19/11 a las 9:00?', ms: PS.ms } }), AH);
+    t('PC36 con dos turnos y el mensaje SÍ nombra el viejo (17/11) → ese', d.etapa === 'confirmacion' && d.propuesta.cita_vieja.id === 9286, d);
+    // (revisión R4) caso A: no se afirma "queda así" si puede haber un duplicado
+    t('PC37 la secretaria creó el 08:40 sin anular el 11:20 → NO afirma: deriva "posible duplicado"',
+      der(Core.decidir(A({ para: '' }), est({ ficha: UNA, turnos_vistos: [C9412, C9286] }), AH), 'staff_posible_duplicado'));
+    t('PC38 una sola ficha y ya está en la agenda: "Perfecto, su turno queda el …"', Core.decidir(A({ para: '' }), est({ ficha: UNA }), AH).resultado.texto_para_el_paciente === 'Perfecto, su turno queda el martes 17/11 a las 08:40 con la Dra. Raquel.');
+    t('PC39 un turno de OTRA ficha en ese horario no cuenta como "ya está"', Core.decidir(A(), est({ turnos_vistos: [C9286, { ...C9412, id_paciente: 507 }] }), AH).etapa === 'confirmacion'); }
+  { // (revisión con el modelo real B2/B3) el mensaje nombra el horario viejo y el nuevo; familia sin nombre pero con la fecha del turno escrita
+    const JOA12 = { id: 9601, id_paciente: 14, fecha: '2026-11-12', hora_inicio: '17:00', id_estado: 7, estado_anulacion: 0 };
+    const TXT = 'Su turno del jueves 12/11 a las 17:00 lo podemos pasar al viernes 13/11 a las 17:40?';
+    const E2 = (o) => est({ turnos_vistos: [JOA12], propuesta_staff: { texto: TXT, ms: PS.ms }, ...o });
+    const ok = Core.decidir(A({ fecha: '2026-11-13', hora: '17:40', fecha_turno_viejo: '2026-11-12', para: '' }), E2(), AH);
+    t('PC43 (B3) familia, el mensaje no nombra a nadie pero escribe la fecha del turno (12/11, único turno ese día) → esa ficha (Joaquín)', ok.etapa === 'confirmacion' && ok.propuesta.paciente_id === 14 && ok.propuesta.cita_vieja.id === 9601, ok);
+    t('PC44 (B2) copió la HORA vieja (13/11 17:00) → deriva staff_hora_ambigua', der(Core.decidir(A({ fecha: '2026-11-13', hora: '17:00', fecha_turno_viejo: '2026-11-12', para: '' }), E2(), AH), 'staff_hora_ambigua'));
+    t('PC45 (B2) copió la FECHA vieja (12/11 17:40) → deriva staff_fecha_ambigua', der(Core.decidir(A({ fecha: '2026-11-12', hora: '17:40', fecha_turno_viejo: '2026-11-12', para: '' }), E2(), AH), 'staff_fecha_ambigua'));
+    t('PC46 (B2) copió el turno viejo ENTERO (12/11 17:00): nunca "ya está en la agenda" → deriva', der(Core.decidir(A({ fecha: '2026-11-12', hora: '17:00', fecha_turno_viejo: '2026-11-12', para: '' }), E2(), AH), 'staff_hora_ambigua')); }
+  t('PC40 hora fuera del horario de la clínica (06:00) → deriva', der(Core.decidir(A({ hora: '06:00' }), est({ turnos_vistos: [C9286], propuesta_staff: { texto: '¿Podemos reagendar su turno del martes 17/11 a las 6:00, José?', ms: PS.ms } }), AH), 'staff_hora_rara'));
+  t('PC41 turno NUEVO para un familiar ("agendar el próximo turno de Delfi") → no es un cambio: deriva', der(Core.decidir(A({ fecha: '2026-11-09', hora: '17:40', para: 'Delfi' }), est({ propuesta_staff: { texto: 'Sr. José podemos agendar el próximo turno de Delfi para el día Lunes 9 de Noviembre a las 17:40 hs?', ms: PS.ms } }), AH), 'staff_no_es_cambio'));
+  t('PC42 horario propuesto que ya pasó → deriva', der(Core.decidir(A({ fecha: '2026-11-04', hora: '20:00', fecha_turno_viejo: '' }), est({ turnos_vistos: [C9286], propuesta_staff: { texto: '¿Podemos pasar su turno a hoy a las 20:00, José?', ms: ms('2026-11-04T12:00:00Z') } }), AH), 'staff_horario_pasado')); }
+{ // (05/11, 331596) confirma se pide como la palabra "si": el modelo había mandado un booleano y el esquema tumbó al agente. El código acepta las dos formas.
+  const RB = prop().readback_text; const G = { ...prop().propuesta, enviada: true, exec_id: 'ex-1' };
+  const conf = (v) => Core.decidir({ ...CAMBIO, confirma: v }, { ...estado({ exec_id: 'ex-9' }), propuesta_guardada: G, ultimo_asiri: RB, texto_paciente: 'dale' }, AHORA).etapa;
+  t('PC40 confirma "si" / "Sí" / "SI" / "si, dale" / true / "true" → ejecuta', ['si', 'Sí', 'SI', 'si, dale', true, 'true'].every((v) => conf(v) === 'ejecutar'), ['si', 'Sí', 'SI', 'si, dale', true, 'true'].map(conf));
+  t('PC41 confirma "" / "no" / "false" / false / undefined / "sino" → NO ejecuta', ['', 'no', 'false', false, undefined, 'sino'].every((v) => conf(v) !== 'ejecutar'), ['', 'no', 'false', false, undefined, 'sino'].map(conf)); }
+
 console.log(`\n${total - fallas}/${total} ${fallas ? 'FALLAS: ' + fallas : 'TODO OK'}`);
 process.exit(fallas ? 1 : 0);

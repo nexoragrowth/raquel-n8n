@@ -411,6 +411,38 @@ def main():
     a = r["GT10 DNI con espacios en el mensaje"]["reps"][0]
     chequear("GT10 (I3) '40 123 456' en el mensaje y '40.123.456' en la copia del modelo: vale (solo dígitos de los dos lados)", a["salida"].get("texto_para_el_paciente") == RBN, a["salida"])
 
+    # ------------------------------------------------------------------ aceptar_propuesta_clinica (05/11, incidente José 331590): gestionar_turno con accion fija
+    JOSE = ("Buenas noches sr. José, disculpe el día Martes 17 de Noviembre (día de su turno), la Dra. tiene médico, por lo tanto, se tiene que retirar temprano. "
+            "Podríamos reagendar su turno para las 8:40 hs de ese mismo día?")
+    PS = json.dumps({"texto": JOSE, "ms": 1793812000599})   # 2026-11-04T17:06:40.599Z
+    FICHAS_J = json.dumps({"fichas": [{"id": 507, "nombre": "Delfina"}, {"id": 14, "nombre": "Joaquín"}, {"id": 5, "nombre": "José"}], "elegida": None})
+    C9412 = {"id": 9412, "id_paciente": 5, "fecha": "2026-11-17", "hora_inicio": "08:40", "id_estado": 7, "estado_anulacion": 0}
+    C9286 = {"id": 9286, "id_paciente": 5, "fecha": "2026-11-17", "hora_inicio": "11:20", "id_estado": 7, "estado_anulacion": 0}
+    AH_J = "2026-11-05T01:50:00Z"
+    base_j = {f"ficha:{TEL}": FICHAS_J, f"ofertas:{TEL}": "[]"}
+    ACEPTA = {"accion": "propuesta_staff", "propuesta_staff": PS, "fecha": "2026-11-17", "hora": "08:40", "fecha_turno_viejo": "2026-11-17", "para": "José", "ultimo_asiri": "", "texto_paciente": "Hola buenos dias\nDale hagamos el cambio\nNo hay problema"}
+    r = correr(B.wf_gestionar_turno(), [
+        esc("GP1 José real: la agenda ya está así", ACEPTA, {**base_j, f"turnos_vistos:{TEL}": json.dumps([C9412, {**C9286, "id_estado": 14, "estado_anulacion": 1}])}, subwf={"Ejecutar": EJEC}, ahora=AH_J),
+        esc("GP2 la agenda no lo refleja", ACEPTA, {**base_j, f"turnos_vistos:{TEL}": json.dumps([C9286])}, subwf={"Ejecutar": EJEC}, ahora=AH_J),
+        esc("GP3 fecha incoherente", {**ACEPTA, "fecha": "2026-11-19", "hora": "18:50", "propuesta_staff": json.dumps({"texto": "José, ¿podemos pasar su turno al Lunes 19 de Noviembre a las 18:50?", "ms": 1793811600000})},
+            {**base_j, f"turnos_vistos:{TEL}": json.dumps([C9286])}, subwf={"Ejecutar": EJEC}, ahora=AH_J),
+        esc("GP4 accion vacía (gestionar_turno de siempre) ignora la propuesta del staff", {**PEDIDO, "propuesta_staff": PS, "ultimo_asiri": "…", "texto_paciente": "x"}, base),
+    ])
+    print("\naceptar_propuesta_clinica (gestionar_turno con accion 'propuesta_staff')")
+    x = r["GP1 José real: la agenda ya está así"]; a = x["reps"][0]
+    chequear("GP1 José real: ya_en_agenda con el texto del código, SIN guardar propuesta y SIN ejecutar nada",
+             a["error"] is None and a["salida"].get("etapa") == "ya_en_agenda" and a["salida"].get("texto_para_el_paciente") == "Perfecto, el turno de José queda el martes 17/11 a las 08:40 con la Dra. Raquel."
+             and f"propuesta:{TEL}" not in x["redis_final"] and not any(p["nodo"] == "Ejecutar" for p in a["pedidos"]), (a["error"], a["salida"]))
+    x = r["GP2 la agenda no lo refleja"]; a = x["reps"][0]; prop = json.loads(x["redis_final"].get(f"propuesta:{TEL}", "null") or "null")
+    chequear("GP2 la agenda no lo refleja: read-back del cambio, propuesta GUARDADA (origen staff, ejecución actual, sin 'enviada') y NO ejecuta",
+             a["salida"].get("etapa") == "confirmacion" and prop and prop["origen"] == "staff" and prop["exec_id"] == "ex-2" and "enviada" not in prop and prop["cita_vieja"]["id"] == 9286
+             and prop["slot"] == {"fecha": "2026-11-17", "hora": "08:40"} and not any(p["nodo"] == "Ejecutar" for p in a["pedidos"]), (a["salida"], prop))
+    x = r["GP3 fecha incoherente"]; a = x["reps"][0]
+    chequear("GP3 fecha incoherente: error con derivar_staff, sin propuesta ni ejecución", a["salida"].get("motivo") == "staff_fecha_inconsistente" and a["salida"].get("derivar_staff")
+             and f"propuesta:{TEL}" not in x["redis_final"] and not any(p["nodo"] == "Ejecutar" for p in a["pedidos"]), a["salida"])
+    a = r["GP4 accion vacía (gestionar_turno de siempre) ignora la propuesta del staff"]["reps"][0]
+    chequear("GP4 gestionar_turno sin accion sigue igual que siempre (read-back de buscar_horarios), aunque llegue propuesta_staff", a["salida"].get("etapa") == "confirmacion" and a["salida"].get("texto_para_el_paciente") == RB, a["salida"])
+
     print(f"\n{total - fallas}/{total} {'TODO OK' if not fallas else str(fallas) + ' FALLAS'}")
     sys.exit(1 if fallas else 0)
 

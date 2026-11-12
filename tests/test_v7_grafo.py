@@ -85,6 +85,7 @@ def main():
     wf = B.wf_ejecutar()
     escenarios = [
         esc("G01 cambio feliz", P, {"GET cita vieja": CITA_OK, "POST reserva": POST_OK, "PUT anular": PUT_OK}),
+        esc("G30 cambio que propuso la clínica", {**P, "origen": "staff"}, {"GET cita vieja": CITA_OK, "POST reserva": POST_OK, "PUT anular": PUT_OK}),
         esc("G02 doble ejecución (mismo Redis): la segunda no escribe", P, {"GET cita vieja": CITA_OK, "POST reserva": POST_OK, "PUT anular": PUT_OK}, rep=2),
         esc("G03 propuesta de la MISMA ejecución", P, trigger={**TRIG, "exec_id_actual": "ex-1"}),
         esc("G04 el read-back no salió (enviada falta)", {k: v for k, v in P.items() if k != "enviada"}),
@@ -130,6 +131,11 @@ def main():
     chequear("G01 deja el libro de escrituras (lista) en Redis: ok, tipo cambio, mensaje", isinstance(libro, list) and len(libro) == 1 and libro[0]["ok"] is True and libro[0]["tipo"] == "cambio" and libro[0]["readback_text"] == s["readback_text"], libro)
     chequear("G01 avisa al grupo como FYI (una vez)", len(r["avisos"]) == 1 and r["avisos"][0]["qs"]["resumen"].startswith("[FYI]") and r["avisos"][0]["qs"]["phone"] == TEL, r["avisos"])
     chequear("G01 consumió la propuesta (INCR = 1)", R["G01 cambio feliz"]["redis_final"][f"ejecutando:{P['id']}"] == 1)
+    # (05/11) aceptar_propuesta_clinica: la propuesta lleva origen 'staff' y el FYI lo dice (la secretaria estaba esperando esa respuesta).
+    r30 = R["G30 cambio que propuso la clínica"]["reps"][0]
+    chequear("G30 cambio propuesto por la clínica: mismas escrituras que G01 y el FYI dice que aplicó el cambio que propuso la clínica",
+             metodos(r30) == ["GET /citas/9104", "POST /citas/", "PUT /citas/9104"] and len(r30["avisos"]) == 1 and r30["avisos"][0]["qs"]["resumen"].startswith("[FYI] Asiri aplicó el cambio que propuso la clínica"), r30["avisos"])
+    chequear("G30b una propuesta de Asiri (sin origen) conserva el FYI de siempre", r["avisos"][0]["qs"]["resumen"].startswith("[FYI] Asiri hizo un cambio en la agenda (el paciente lo confirmó"), r["avisos"])
     prop_final = json.loads(R["G01 cambio feliz"]["redis_final"][f"propuesta:{TEL}"])
     chequear("G01 la propuesta queda marcada 'ejecutada' en Redis (un segundo 'sí' cuando venza el candado NO vuelve a escribir)", prop_final["estado"] == "ejecutada" and prop_final.get("consumida_exec") == "ex-2", prop_final)
 

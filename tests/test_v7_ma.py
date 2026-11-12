@@ -66,7 +66,6 @@ def main():
     cerebro = B.wf_cerebro()
 
     print("A. Estructura de los sub-agentes")
-    # (05/11) turnos suma aceptar_propuesta_clinica (incidente José: el paciente acepta un cambio que le propuso la clínica a mano)
     esperado = {"turnos": {"ver_turnos", "elegir_ficha", "buscar_horarios", "gestionar_turno", "aceptar_propuesta_clinica", "confirmar_turno", "lista_espera"}, "pagos": {"registrar_pago", "datos_pago"},
                 "informacion": set(), "urgencias": {"derivar_triaje"}}
     for k, wf in subs.items():
@@ -88,6 +87,14 @@ def main():
     chequear("A6 gestionar_turno: el modelo aporta confirma (y tipo/fecha/hora/turno viejo/datos del nuevo); el código pone mensaje, último Asiri y mensajes del paciente",
              {c for c, v in gt.items() if "$fromAI" in v} == {"tipo", "fecha", "hora", "fecha_turno_viejo", "nuevo_nombre", "nuevo_apellido", "nuevo_dni", "confirma"} and all("$fromAI" not in gt[c] for c in ("texto_paciente", "ultimo_asiri", "textos_paciente")), gt)
     chequear("A6b la descripción de confirma dice MENSAJE ACTUAL (B3)", "MENSAJE ACTUAL" in gt["confirma"], gt["confirma"])
+    # (05/11, 331596) "true SOLO si…" llevó al modelo a mandar un booleano y el esquema (string) tumbó al agente: confirma se pide como la palabra "si".
+    chequear("A6e confirma se pide como la palabra si (ni la descripción ni el prompt de Turnos dicen confirma=true)", "'si |" in gt["confirma"].replace('"si |', "'si |") and "true" not in gt["confirma"].split("$fromAI")[1]
+             and "confirma=true" not in M.PROMPTS["turnos"] and "confirma=true" not in json.dumps(tools_de(subs["turnos"])["gestionar_turno"]["parameters"]["description"]), gt["confirma"])
+    ap = valores(tools_de(subs["turnos"])["aceptar_propuesta_clinica"])
+    chequear("A6f aceptar_propuesta_clinica: el modelo solo COPIA fecha/hora/turno viejo/para, como texto (el código los verifica); accion fija y la propuesta del staff la pone el cerebro",
+             {c for c, v in ap.items() if "$fromAI" in v} == {"fecha", "hora", "fecha_turno_viejo", "para"} and all("'string'" in ap[c] for c in ("fecha", "hora", "fecha_turno_viejo", "para"))
+             and "'propuesta_staff'" in ap["accion"] and "$('Entrada').first().json.propuesta_staff" in ap["propuesta_staff"]
+             and tools_de(subs["turnos"])["aceptar_propuesta_clinica"]["parameters"]["workflowId"]["value"] == "@@ID:gestionar_turno@@", ap)
     dp = valores(tools_de(subs["pagos"])["datos_pago"])
     chequear("A6c datos_pago: el modelo decide la moneda (reemplaza el veto por regex de 'dólar')", "$fromAI('moneda'" in dp["moneda"] and "'datos_pago'" in dp["accion"], dp)
     dt = valores(tools_de(subs["urgencias"])["derivar_triaje"])
@@ -102,7 +109,7 @@ def main():
              and all(".datos" not in next(n for n in subs[k]["nodes"] if n["name"] == "Agente")["parameters"]["options"]["systemMessage"] for k in ("turnos", "pagos", "urgencias")))
     prompts = {"orquestador": C.PROMPT_ORQ, **M.PROMPTS}
     for k, p in prompts.items():
-        tope = 3600 if k == "orquestador" else 2800   # (12/11) 3300/2500 -> 3600/2800: lo desplegado el 05/11 (propuesta de la clínica, incidente José) ya medía 3533/2777; (28/10) 2900 -> 3300 (audios transcriptos, comprobantes, mensajes mixtos; probado con el modelo real): la regla de audios transcriptos (+158) está probada con el modelo real; (08/10) +derivar cuando INFORMA algo y no_reply tras derivar (REAL-05/08); (20/10) +lo que NUNCA se deriva (vivo 318965); sigue ~8× más chico que los 22 k del v6
+        tope = 3550 if k == "orquestador" else (2800 if k == "turnos" else 2500)   # (05/11) 3300 -> 3550 y turnos 2500 -> 2800: PROPUESTA DE LA CLÍNICA (incidente José 331590: aceptar un cambio que propuso el staff; excepción al no_reply de "le contesta al STAFF"). (28/10) 2900 -> 3300 (audios transcriptos, comprobantes, mensajes mixtos; probado con el modelo real): la regla de audios transcriptos (+158) está probada con el modelo real; (08/10) +derivar cuando INFORMA algo y no_reply tras derivar (REAL-05/08); (20/10) +lo que NUNCA se deriva (vivo 318965); sigue ~8× más chico que los 22 k del v6
         chequear(f"A10 prompt {k}: < {tope} caracteres ({len(p)})", len(p) < tope, len(p))
         chequear(f"A11 prompt {k}: sin 'Te esperamos', 'venite', 'ahora mismo' ni pedir que confirme la asistencia (control de texto NUESTRO)",
                  not re.search(r"te esperamos|los esperamos|lo esperamos|venite|ahora mismo|confirme su asistencia|pida confirmaci", p, re.I), p[:200])
