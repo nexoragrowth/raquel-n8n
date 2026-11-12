@@ -164,7 +164,10 @@ WORKFLOWS = {"ejecutar_propuesta": wf_ejecutar, "ver_turnos": wf_ver_turnos, "el
              "cerebro_agente": wf_cerebro_agente,
              # (02/11) "v6 Orquestador": agente padre con los 5 especialistas del v6 (copiados) como Agent Tool. Variante sombra = herramientas que escriben, simuladas. Solo se genera.
              "v6_orquestador": lambda: wf_v6_orquestador(False),
-             "v6_orquestador_sombra": lambda: wf_v6_orquestador(True)}
+             "v6_orquestador_sombra": lambda: wf_v6_orquestador(True),
+             # (12/11) "v7 Panel - probar Información": el panel prueba las notas de la clínica con el agente de Información real, en sombra.
+             # El secreto se inyecta al desplegar (scripts/apply_panel_probar_y_espera.py); en el repo va el marcador.
+             "panel_probar": lambda: __import__("v7_workflow_panel_probar").wf_panel_probar()}
 
 
 def main():

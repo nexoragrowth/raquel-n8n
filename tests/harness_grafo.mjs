@@ -1,5 +1,5 @@
 // harness_grafo.mjs — ejecuta un workflow de n8n (JSON generado en v7/workflows/) nodo por nodo, SIN red, siguiendo sus conexiones reales.
-// Soporta los tipos que usa el v7: executeWorkflowTrigger, code, if (v2.2, boolean), redis (get/set/incr/delete/push/lrange en memoria), httpRequest (simulado por nombre),
+// Soporta los tipos que usa el v7: executeWorkflowTrigger, webhook y respondToWebhook (12/11), code, if (v2.2, boolean), redis (get/set/incr/delete/push/lrange en memoria), httpRequest (simulado por nombre),
 // executeWorkflow (simulado por nombre), postgres (simulado por nombre), set, noOp. Reloj fijo. Registra pedidos HTTP, avisos al grupo, Redis final y el recorrido.
 // uso: node harness_grafo.mjs <workflow.json> <escenarios.json>   → JSON con el resultado de cada escenario.
 //   escenario = { id, trigger:{...}, ahora?, redis?:{clave:valor}, http?:{nodo: resp | [resp,...]}, subwf?:{nodo: resp}, pg?:{nodo: resp}, repeticiones?:n, redis_falla?:true,
@@ -18,6 +18,7 @@ async function correrUna(esc, estadoCompartido, nRep) {
   const FakeDate = relojFijo(esc.ahora || '2026-10-05T12:36:00Z');
   const redis = estadoCompartido.redis;
   const salidas = {}; const orden = []; const pedidos = []; const avisos = [];
+  let respuesta = null;
   const contHttp = estadoCompartido.contHttp;
   const evalExpr = (str, ctx) => {
     if (typeof str !== 'string' || !str.startsWith('=')) return str;
@@ -39,7 +40,13 @@ async function correrUna(esc, estadoCompartido, nRep) {
     const ctx = { $json: entrada[0]?.json ?? {}, $ };
     const t = n.type.split('.').pop();
     let salida;
-    if (t === 'executeWorkflowTrigger') salida = [{ json: esc.trigger }];
+    if (t === 'executeWorkflowTrigger' || t === 'webhook') salida = [{ json: esc.trigger }];   // (12/11) webhook: trigger = { headers, body, webhookUrl }
+    else if (t === 'respondToWebhook') {   // (12/11) registra la respuesta HTTP (código + cuerpo) y sigue como pasarela
+      const o = n.parameters.options || {};
+      const cuerpo = evalExpr(n.parameters.responseBody, ctx);
+      respuesta = { nodo: nombre, codigo: Number(evalExpr(o.responseCode, ctx) || 200), cuerpo: typeof cuerpo === 'string' ? (() => { try { return JSON.parse(cuerpo); } catch (x) { return cuerpo; } })() : cuerpo };
+      salida = entrada;
+    }
     else if (t === 'code') {
       const fn = new AsyncFunction('$input', '$', '$json', '$execution', 'console', 'Date', n.parameters.jsCode);
       const $input = { first: () => entrada[0], all: () => entrada, item: entrada[0] };
@@ -108,9 +115,9 @@ async function correrUna(esc, estadoCompartido, nRep) {
     for (let i = 0; i < con.length; i++) { const items = ramas[i] ?? []; if (!items.length) continue; for (const d of con[i]) await ejecutar(d.node, items); }
   }
   let error = null;
-  try { await ejecutar(Object.keys(byName).find((k) => byName[k].type.endsWith('executeWorkflowTrigger')), [{ json: esc.trigger }]); } catch (e) { error = String(e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e); }
+  try { await ejecutar(Object.keys(byName).find((k) => byName[k].type.endsWith('executeWorkflowTrigger') || byName[k].type.endsWith('.webhook')), [{ json: esc.trigger }]); } catch (e) { error = String(e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e); }
   const ultimo = orden[orden.length - 1];
-  return { rep: nRep, error, recorrido: orden, salida: salidas[ultimo]?.[0]?.json ?? null, pedidos, avisos };
+  return { rep: nRep, error, recorrido: orden, salida: salidas[ultimo]?.[0]?.json ?? null, pedidos, avisos, respuesta };
 }
 const res = [];
 for (const e of escenarios) {

@@ -29,6 +29,10 @@ const OrquestadorCore = (() => {
     DATOS_NUEVO: 'Para reservarlo necesito nombre, apellido y DNI del paciente, en un solo mensaje.',
     CUAL_TURNO: '¿Cuál de estos turnos?',
     SIN_TURNOS: 'No veo turnos vigentes con este número de celular.',
+    // (12/11) Lista de espera: los textos los arma clinica_core.js (TEXTOS.ESPERA / ESPERA_SIN_TURNO); acá están para que el panel los pueda cambiar
+    // (aplicarMensajes reemplaza el estándar exacto). Tienen que ser IGUALES a los de clinica_core (tests/test_mensajes_panel_sync.mjs).
+    ESPERA: 'Le dejo anotado a la clínica que quiere adelantar su turno si se libera uno.',
+    ESPERA_SIN_TURNO: 'Le dejo anotado a la clínica que busca un turno, por si se libera uno.',
     OFERTA_PRIMERA: '¿Quiere que le busque un turno para la primera consulta?',
     HOLA_ANUNCIO: 'Hola! Soy Asiri, la secretaria virtual de la Dra. Raquel Rodríguez, especialista en ortodoncia 🤗',
     RESERVA_PAGO: 'Para confirmarlo definitivamente necesitamos el pago de la consulta hasta 72 hs antes (transferencia o efectivo). Le paso los datos por si le resulta cómodo transferir; en ese caso nos envía el comprobante por este medio, por favor:',
@@ -52,7 +56,7 @@ const OrquestadorCore = (() => {
   // en silencio y sale el estándar. NO entran los de urgencia (URG_FALLO) ni los de pago (RESERVA_PAGO*): llevan una regla de negocio o de seguridad.
   // `pregunta`: tiene que seguir siendo una pregunta (el paciente tiene que saber que le piden algo). `requiere`: lo que el agente de Turnos necesita que se pida.
   const MENSAJES_EDITABLES = {
-    DERIVA: {}, NO_ENTENDI: {}, PEDIR_TEXTO: {}, PRESENTACION: {}, ERROR: {}, ERROR_PARCIAL: {}, SIN_TURNOS: {}, HOLA_ANUNCIO: {},
+    DERIVA: {}, NO_ENTENDI: {}, PEDIR_TEXTO: {}, PRESENTACION: {}, ERROR: {}, ERROR_PARCIAL: {}, SIN_TURNOS: {}, HOLA_ANUNCIO: {}, ESPERA: {}, ESPERA_SIN_TURNO: {},
     PARA_QUIEN: { pregunta: true }, CUAL_TURNO: { pregunta: true }, OFERTA_PRIMERA: { pregunta: true },
     DATOS_NUEVO: { requiere: [/nombre/i, /apellido/i, /dni/i] },
   };

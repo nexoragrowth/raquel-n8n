@@ -15,6 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 IGNORAR_NODO = {"id", "position", "webhookId"}
+# (12/11) Los webhooks del panel validan un secreto que vive SOLO en n8n (el repo tiene el marcador): no cuenta como cambio y nunca se imprime.
+SECRETO = re.compile(r'const SECRET = "[^"]*";')
 
 
 def _sin_ruido(x):
@@ -22,6 +24,8 @@ def _sin_ruido(x):
         return {k: _sin_ruido(v) for k, v in x.items() if not (k == "id" and isinstance(v, str) and UUID.fullmatch(v))}
     if isinstance(x, list):
         return [_sin_ruido(v) for v in x]
+    if isinstance(x, str) and 'const SECRET = "' in x:
+        return SECRETO.sub('const SECRET = "__PANEL_SECRET__";', x)
     return x
 
 

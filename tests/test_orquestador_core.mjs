@@ -464,7 +464,7 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   t('MF20 el "¿Procedo?" de la agenda sale intacto con mensajes editados', rb.texto === RB, rb.texto);
   // Los 12 editables existen en TEXTOS y sus estándares pasan su propia validación (si no, el panel mostraría un estándar "inválido")
   const todos = Object.keys(O.MENSAJES_EDITABLES);
-  t('MF21 los 12 editables existen en TEXTOS y su estándar es válido', todos.length === 12 && todos.every((k) => typeof O.TEXTOS[k] === 'string' && O.mensajeInvalido(k, O.TEXTOS[k]) === null), todos.filter((k) => O.mensajeInvalido(k, O.TEXTOS[k]) !== null).map((k) => k + ':' + O.mensajeInvalido(k, O.TEXTOS[k]))); }
+  t('MF21 los 14 editables existen en TEXTOS y su estándar es válido', todos.length === 14 && todos.every((k) => typeof O.TEXTOS[k] === 'string' && O.mensajeInvalido(k, O.TEXTOS[k]) === null), todos.filter((k) => O.mensajeInvalido(k, O.TEXTOS[k]) !== null).map((k) => k + ':' + O.mensajeInvalido(k, O.TEXTOS[k]))); }
 
 console.log('\nPROPUESTA DE LA CLÍNICA (05/11, incidente José 331590/331596)');
 { const H = require('../v7/historial_core.js');
