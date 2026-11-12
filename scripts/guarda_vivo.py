@@ -3,7 +3,7 @@
 guarda_vivo.py — (12/11/2026) freno para no pisar en n8n cambios que este repo no conoce.
 
 Por qué: el 05/11 se desplegó desde OTRA compu código que nunca llegó a este repo (propuesta de la clínica, incidente José).
-El 12/11 la simulación mostró que desplegar desde acá lo borraba sin aviso; se recuperó desde n8n (commit 5bb6b9e).
+El 12/11 la simulación mostró que desplegar desde acá lo borraba sin aviso; se recuperó desde n8n (commit 7d48bc0).
 Despliegan dos compus: esto lo frena por código, no por memoria.
 
 Cómo: todos los `api()` de scripts/ pasan por `envolver()`. En cada PUT/PATCH a /workflows/<id>:

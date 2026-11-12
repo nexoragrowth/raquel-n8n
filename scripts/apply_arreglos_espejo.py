@@ -4,7 +4,7 @@ apply_arreglos_espejo.py — 2026-11-12 · lleva al bot VIVO dos arreglos encont
   1. "No veo turnos vigentes con este número de celular." salía DEBAJO de los horarios libres a pacientes que pedían turno ("Quería saber si tiene
      turno para el viernes"): el sub-agente Turnos a veces lo entiende como "¿tengo turno?". Con horarios ofrecidos y sin turnos propios, ya no va.
      (v7/orquestador_core.js · salidaTurnos; test T6b–T6d en tests/test_orquestador_core.mjs)
-  2. (11/11, commit 8da9c9d) chequeo de salida: "jueves 8:00" es horario de atención, no "el jueves 8" (frenaba respuestas correctas de Información).
+  2. (11/11, commit 3e88e90) chequeo de salida: "jueves 8:00" es horario de atención, no "el jueves 8" (frenaba respuestas correctas de Información).
 
 Workflows que toca (VIVOS): "v7 Cerebro" y los 4 agentes (Turnos, Pagos, Informacion, Urgencias): todos llevan una copia de orquestador_core.js
 (los 3 últimos no usan salidaTurnos, pero sin desplegarlos quedaban distintos del repo). No toca la entrada, las herramientas, Recordatorios ni el v6.
