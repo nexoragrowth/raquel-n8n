@@ -1,5 +1,12 @@
 # Estado actual — raquel-n8n
 
+## 2026-11-11 (noche) — Cerebro Agente: ahora busca turnos libres en vez de recitar los días de atención
+- **Causa:** el agente tenía en el Conocimiento la línea "atiende martes y jueves…" y contestaba con eso + "¿qué día prefiere?" sin llamar a turnos. Además el contexto le nombraba `gestionar_turno`, que no es herramienta suya.
+- **Arreglo (solo en el agente inactivo y8wIF1rR87bAAvYU):** la línea de horarios de atención no va en el Conocimiento del agente (la da la herramienta informacion, que lee el mismo Conocimiento); `gestionar_turno` → `turnos` en su contexto; descripción de turnos = "única fuente de horarios libres"; prompt: reclamo por turno no dado → derivar_secretaria.
+- **Resultado:** 7 casos con contexto armado (nuevo, anuncio, día pedido, info de hoy, link, reclamo) × 2 corridas = 14/14 bien, 5–19 s. Modelo: queda gpt-5-mini.
+- **Trampa encontrada:** `apply_cerebro_agente.py` subía el JSON ya generado; si no se corría el build, se probaba la versión vieja. Ahora regenera solo.
+- **Falta:** los casos con fichas/turnos (confirmar, familia, cambio) necesitan `apply_escenario_prueba.py --apply` (toca ver_turnos y confirmar_una vivas; requiere "desplegá" de Lucas). Después: espejo en sombra con mensajes reales → su número → todos.
+
 ## 2026-11-11 — Cerebro Agente (orquestador multiagente) probado con 60 mensajes reales en sombra
 
 - Lucas confirmó: quiere orquestador multiagente. Elegido el **Cerebro Agente** (`y8wIF1rR87bAAvYU`, inactivo): agente padre sobre los MISMOS 4 workflows del v7, lee lo que devuelven y redacta.

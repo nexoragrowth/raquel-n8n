@@ -29,7 +29,9 @@ def main():
     ap.add_argument("--apply", action="store_true")
     apply = ap.parse_args().apply
     ids = json.loads(D.IDS.read_text(encoding="utf-8"))
-    B_wf = json.loads((ROOT / "v7" / "workflows" / "cerebro_agente.json").read_text(encoding="utf-8"))
+    # (11/11) Se regenera acá: antes subía el JSON viejo si uno se olvidaba de correr build_v7_workflows.py (pasó: una tarde de pruebas contra la versión anterior).
+    B_wf = B.WORKFLOWS["cerebro_agente"]()
+    (ROOT / "v7" / "workflows" / "cerebro_agente.json").write_text(json.dumps(B_wf, ensure_ascii=False, indent=1), encoding="utf-8")
     txt = json.dumps(B_wf, ensure_ascii=False)
     for k, v in ids.items():
         txt = txt.replace(f"@@ID:{k}@@", v)

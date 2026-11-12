@@ -47,11 +47,15 @@ for (const [nodo, clave] of [['Pagos forzado', 'pagos'], ['Turnos forzado', 'tur
 if (String($('Entrada').first().json.texto || '').toUpperCase().indexOf('[AUDIO]') >= 0 && ctx.audio_transcripto !== true) extra.push('El paciente mandó un audio que NO se pudo transcribir: pedile que lo escriba, con esta frase: ' + OrquestadorCore.TEXTOS.PEDIR_TEXTO);
 if (ctx.staff_reciente === true) extra.push('El último mensaje que NO es del paciente lo escribió la clínica (STAFF) hace menos de 6 h: si solo corresponde derivar, llamá no_responder.');
 // (11/11, Lucas) Conocimiento es la fuente: lo que el prompt no dice, el agente lo responde con lo que cargó la clínica, formulado por él.
-extra.push('CONOCIMIENTO DE LA CLÍNICA (cargado por la clínica en el panel; respondé con esto, con tus palabras, sin agregar datos que no estén):\\n'
-  + String(ctx.datos_info || '').replace(/^DATOS DEL CONSULTORIO[^\\n]*\\n/, '')
+// La línea de horarios de atención NO va acá: con ella a mano el modelo contestaba "atiende martes y jueves... ¿qué día prefiere?" en vez de pedir turnos libres
+// (11/11: 5 de 8 corridas con mini, 7 de 8 con gpt-5). Si preguntan cuándo atiende, la da la herramienta informacion, que lee el mismo Conocimiento.
+extra.push('CONOCIMIENTO DE LA CLÍNICA (cargado por la clínica en el panel; respondé con esto, con tus palabras, sin agregar datos que no estén). Días y horas de atención: herramienta informacion. Turnos libres: herramienta turnos (con el día o franja si los dijo). Reclamo por un turno que no le dieron = derivar_secretaria:\\n'
+  + String(ctx.datos_info || '').replace(/^DATOS DEL CONSULTORIO[^\\n]*\\n/, '').replace(/^- Horarios de atención:[^\\n]*\\n?/m, '')
   + (ctx.anuncio ? '\\n- Presentación para quien llega por un anuncio ("quiero más información"): ' + ctx.anuncio : ''));
 extra.push('MENÚ (si saluda solo, sin pedir nada, pegalo tal cual):\\n' + (ctx.menu || ''));
-return [{ json: { texto_agente: ctx.contexto + '\\n\\n' + extra.join('\\n\\n') } }];"""
+// (11/11) El contexto compartido nombra gestionar_turno (herramienta del sub-agente, no de este agente): acá se habla de la herramienta «turnos».
+const contexto = String(ctx.contexto || '').replace(/ofrecé horarios y, cuando elija uno, pedile nombre, apellido y DNI y pasalos a gestionar_turno\\./g, 'llamá a la herramienta turnos: ella busca los horarios LIBRES (no son los días de atención) y pide los datos cuando elija.').replace(/gestionar_turno/g, 'turnos');
+return [{ json: { texto_agente: contexto + '\\n\\n' + extra.join('\\n\\n') } }];"""
 
 JS_VERIFICAR = JS_RES1 + """const e = $('Entrada').first().json;
 const ctx = $('Armar contexto').first().json;
@@ -102,7 +106,7 @@ DEVOLVER = ("const s = $('Salida').first().json;\nreturn [{ json: { texto: s.tex
 
 # ------------------------------------------------------------------------------------------------ herramientas
 DESC = {
-    "turnos": "Agente de TURNOS: sacar, cambiar o cancelar un turno, ver cuál tiene, elegir horario, para quién es, confirmar asistencia a un recordatorio, responder a la CONFIRMACIÓN PENDIENTE, lista de espera. Devuelve el texto armado por el sistema (bloque de horarios, '¿Procedo?', éxito) y un estado. Una vez por mensaje.",
+    "turnos": "Agente de TURNOS, la ÚNICA fuente de horarios LIBRES: si quiere un turno o pregunta si hay para un día, llamala antes de responder (con el día o franja si los dijo; no le preguntes antes cuál prefiere). Sacar, cambiar o cancelar un turno, ver cuál tiene, elegir horario, para quién es, confirmar asistencia a un recordatorio, responder a la CONFIRMACIÓN PENDIENTE, lista de espera. Devuelve el texto armado por el sistema (bloque de horarios, '¿Procedo?', éxito) y un estado. Una vez por mensaje.",
     "pagos": "Agente de PAGOS: el paciente avisa que pagó, manda un comprobante o pide los datos para transferir (alias). Devuelve el texto de recepción; los datos bancarios los agrega el sistema (vos nunca los escribas). Una vez por mensaje.",
     "informacion": "Agente de INFORMACIÓN: precio de la primera consulta, horarios de atención, dirección, tratamientos, obra social, formas de pago, cómo se atiende. Responde solo con los datos del consultorio; si no corresponde dice FUERA_DE_ALCANCE. Una vez por mensaje.",
     "urgencias": "Agente de URGENCIAS: dolor, sangrado, hinchazón o golpe en la boca o los dientes; aparato, alambre o bracket roto, suelto o que pincha. Pasa el mensaje al protocolo de urgencias de la clínica, que le responde por su cuenta. Una vez.",
