@@ -2,7 +2,8 @@
 """v7_workflow_clinica.py — workflow "v7 Tool - clinica": derivar (a la secretaria), humano (pidió una persona), pago, datos_pago, espera, triaje (deja la marca
 `triaje_v7:{tel}:{exec}` que lee el cerebro) y aviso. La decisión la toma v7/clinica_core.js (probada offline); el texto para el paciente también lo arma el código.
 (08/10, orquestador) Contadores PROPIOS por acción, separados por modo (en sombra todo va a claves `v7s:`): `deriva:` (insistencia fuera de alcance → modo humano),
-`avisos:` (avisos técnicos), `pago:` (pago ya anotado). En sombra no se llama al webhook del grupo: nunca silencia ni avisa por el chat real."""
+`avisos:` (avisos técnicos), `pago:` (pago ya anotado). En sombra no se llama al webhook del grupo: nunca silencia ni avisa por el chat real.
+(12/11) `espera` recibe turnos_json y ultimo_asiri (solo los manda lista_espera de Turnos): sin turno y sin horarios vistos no anota nada."""
 from v7_lib import Grafo
 
 GRUPO = "https://n8n.raquelrodriguez.com.ar/webhook/notify-grupo"
@@ -17,12 +18,12 @@ def clave(c):
 
 def wf_clinica():
     g = Grafo("v7 Tool - clinica")
-    g.trigger({"tel": "5490000000651", "exec_id_actual": "1234", "modo": "vivo", "accion": "aviso", "nivel": "FYI", "texto": "", "motivo": "", "cita_textual": "", "texto_paciente": "", "moneda": ""}, 0, 260)
+    g.trigger({"tel": "5490000000651", "exec_id_actual": "1234", "modo": "vivo", "accion": "aviso", "nivel": "FYI", "texto": "", "motivo": "", "cita_textual": "", "texto_paciente": "", "moneda": "", "turnos_json": "", "ultimo_asiri": ""}, 0, 260)
     g.redis_get("Redis GET pago", clave("pago"), "pago_raw", 220, 260)
     g.redis_get("Redis GET avisos", clave("avisos"), "avisos_raw", 330, 380)
     g.redis_get("Redis GET deriva", clave("deriva"), "deriva_raw", 385, 260)
     g.code("Decidir", """const e = $('Entrada').first().json;
-const r = ClinicaCore.decidir({ accion: e.accion, nivel: e.nivel, texto: e.texto, motivo: e.motivo, cita_textual: e.cita_textual, texto_paciente: e.texto_paciente, moneda: e.moneda, modo: e.modo, tel: e.tel,
+const r = ClinicaCore.decidir({ accion: e.accion, nivel: e.nivel, texto: e.texto, motivo: e.motivo, cita_textual: e.cita_textual, texto_paciente: e.texto_paciente, moneda: e.moneda, modo: e.modo, tel: e.tel, turnos_json: e.turnos_json, ultimo_asiri: e.ultimo_asiri,
   pago_reciente: !!$('Redis GET pago').first().json.pago_raw, avisos_recientes: Number($('Redis GET avisos').first().json.avisos_raw || 0), deriva_recientes: Number($('Redis GET deriva').first().json.deriva_raw || 0) });
 return [{ json: { avisar: r.avisar, marcar_pago: r.marcar_pago, limpiar: r.limpiar, contar_deriva: r.contar_deriva === true, triaje: r.triaje, resultado: r.resultado } }];""", 440, 260, usar=("clinica_core",))
     g.si("¿Derivar a triaje?", "!!$json.triaje", 550, 260)

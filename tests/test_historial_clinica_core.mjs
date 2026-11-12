@@ -36,6 +36,20 @@ t('C2 nivel en minúscula vale; sale como ACCIÓN', r.avisar.resumen.startsWith(
 t('C3 aviso sin nivel o con texto vacío se rechaza', !C.decidir({ accion: 'aviso', nivel: 'urgente', texto: 'x' }).resultado.ok && !C.decidir({ accion: 'aviso', nivel: 'FYI', texto: '' }).resultado.ok);
 r = C.decidir({ accion: 'espera', texto: 'Quiere antes del 22/10' });
 t('C4 lista de espera: aviso FYI y texto fijo que NO promete avisar', r.avisar.resumen.startsWith('[FYI] Lista de espera') && r.resultado.texto_para_el_paciente === C0.TEXTOS.ESPERA && !/le (vamos a|van a) avisar/i.test(r.resultado.texto_para_el_paciente) && r.avisar.tomar === false, r);
+// (12/11, espejo real r017) "no se olviden de mí, si hace falta agendo una consulta" SIN turno: no se anota ni se avisa al grupo; el agente busca horarios.
+{ const BLOQUE = 'Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Jueves 19 de noviembre 9:20\n\nLe sirve alguno?';
+  let q = C.decidir({ accion: 'espera', turnos_json: '[]', ultimo_asiri: '', texto_paciente: 'hola no se olviden de mi je\n\nsi hace falta agendo una consulta' });
+  t('C4b sin turno y sin horarios vistos: no anota, no avisa al grupo, pide buscar_horarios', q.resultado.ok === false && q.resultado.motivo === 'sin_turno_sin_horarios' && q.avisar === null && !q.resultado.texto_para_el_paciente && /buscar_horarios/.test(q.resultado.para_asiri), q);
+  q = C.decidir({ accion: 'espera', turnos_json: '[]', ultimo_asiri: BLOQUE });
+  t('C4c sin turno pero ya vio horarios (ninguno le sirve): se anota, con texto y FYI que NO hablan de "su turno"', q.resultado.ok && q.resultado.texto_para_el_paciente === C0.TEXTOS.ESPERA_SIN_TURNO && /todavía no tiene turno/.test(q.avisar.resumen) && !/adelantar su turno/.test(q.avisar.resumen + q.resultado.texto_para_el_paciente), q);
+  q = C.decidir({ accion: 'espera', turnos_json: '[]', ultimo_asiri: 'Para lo que pidió no hay turnos disponibles. ¿Quiere que le busque otra fecha, o prefiere que le deje anotado por si se libera uno?' });
+  t('C4d sin turno y Asiri le ofreció anotarlo (no había lugar): se anota', q.resultado.ok && q.avisar && q.resultado.texto_para_el_paciente === C0.TEXTOS.ESPERA_SIN_TURNO, q);
+  q = C.decidir({ accion: 'espera', turnos_json: '["lunes 16/11 a las 10:40"]', ultimo_asiri: '' });
+  t('C4e con turno vigente: como siempre (adelantar su turno)', q.resultado.ok && q.resultado.texto_para_el_paciente === C0.TEXTOS.ESPERA && q.avisar.resumen.startsWith('[FYI] Lista de espera: la paciente quiere adelantar'), q);
+  q = C.decidir({ accion: 'espera', turnos_json: 'no-es-json', ultimo_asiri: '' });
+  t('C4f turnos ilegibles: no bloquea (como antes)', q.resultado.ok && q.resultado.texto_para_el_paciente === C0.TEXTOS.ESPERA, q);
+  q = C0.decidir({ accion: 'espera', modo: 'sombra', turnos_json: '[]', ultimo_asiri: '' });
+  t('C4g en sombra igual frena (y nunca avisa)', q.resultado.ok === false && q.avisar === null, q); }
 r = C.decidir({ accion: 'pago', pago_reciente: false });
 t('C5 comprobante de pago: aviso ACCIÓN, NO silencia, marca para evitar duplicados, texto fijo que NO dice que el pago ingresó', r.avisar.resumen.startsWith('[ACCIÓN]') && r.avisar.tomar === false && r.marcar_pago === true && r.resultado.texto_para_el_paciente === C0.TEXTOS.PAGO && !/ingres|acredit|recibimos el pago/i.test(r.resultado.texto_para_el_paciente), r);
 r = C.decidir({ accion: 'pago', pago_reciente: true });

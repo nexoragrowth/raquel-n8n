@@ -19,7 +19,17 @@ const ClinicaCore = (() => {
     PAGO_YA: 'Recibido, gracias.',
     DATOS_PAGO: 'Le paso los datos para transferir:',
     ESPERA: 'Le dejo anotado a la clínica que quiere adelantar su turno si se libera uno.',
+    ESPERA_SIN_TURNO: 'Le dejo anotado a la clínica que busca un turno, por si se libera uno.',
   };
+  // (12/11, espejo con mensajes reales, r017) "No se olviden de mí, si hace falta agendo una consulta", SIN turno: el agente lo anotó en lista de espera
+  // ("quiere adelantar su turno") y al grupo le iba un FYI falso. La lista de espera es para adelantar un turno o para cuando ninguno de los horarios
+  // que Asiri mostró le sirve. Solo se miran DATOS (no la intención del paciente, decisión del 08/10): la lista de turnos que armó el cerebro y el último
+  // mensaje de Asiri. Sin `turnos_json` (otros llamadores) todo sigue como antes.
+  const sinTurnos = (j) => {
+    if (typeof j !== 'string' || !j.trim()) return false;
+    try { const t = JSON.parse(j); return Array.isArray(t) && t.length === 0; } catch (x) { return false; }
+  };
+  const vioHorarios = (u) => /turnos disponibles|siguen libres|tengo a las|por si se libera/i.test(String(u || ''));
   // ¿La cita está en lo que escribió el paciente? Mayoría (≥ 50 %) de sus palabras presentes en el texto crudo normalizado. Dato, no intención.
   function citaEnTexto(cita, texto) {
     const tc = tokens(cita), tp = new Set(tokens(texto));
@@ -70,8 +80,14 @@ const ClinicaCore = (() => {
     }
     if (e.accion === 'espera') {
       const texto = lim(e.texto, 300);
-      return res({ ok: true, simulado: sombra || undefined, texto_para_el_paciente: TEXTOS.ESPERA },
-        sombra ? {} : { avisar: { resumen: `[FYI] Lista de espera: la paciente quiere adelantar su turno si se libera uno.${texto ? ' ' + texto : ''}`, tomar: false } });
+      const sinTurno = sinTurnos(e.turnos_json);
+      if (sinTurno && !vioHorarios(e.ultimo_asiri)) {
+        return res({ ok: false, motivo: 'sin_turno_sin_horarios',
+          para_asiri: 'No tiene turnos vigentes y todavía no vio horarios: no se anotó nada. Llamá a buscar_horarios y ofrecéselos; la lista de espera es para cuando ninguno le sirve.' });
+      }
+      const fyi = sinTurno ? '[FYI] Lista de espera: todavía no tiene turno; busca uno si se libera un lugar.' : '[FYI] Lista de espera: la paciente quiere adelantar su turno si se libera uno.';
+      return res({ ok: true, simulado: sombra || undefined, texto_para_el_paciente: sinTurno ? TEXTOS.ESPERA_SIN_TURNO : TEXTOS.ESPERA },
+        sombra ? {} : { avisar: { resumen: `${fyi}${texto ? ' ' + texto : ''}`, tomar: false } });
     }
     if (e.accion === 'pago') {
       // Qué es un pago lo decide el modelo (Pagos). El aviso NO afirma "transfirió": muestra las palabras textuales y la secretaria juzga (REAL-05).

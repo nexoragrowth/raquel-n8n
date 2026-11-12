@@ -51,8 +51,9 @@ HERRAMIENTAS = [
     ("confirmar_turno", "confirmar_turno", "Confirma la asistencia cuando el paciente responde a un recordatorio con cualquier forma de sí (\"Confirmo\", \"hola siii vamos a ir con martin\", \"ahí estaremos\", \"dale 👍\", \"Pedro 9:50 e Hilario 10:30\"). UNA sola llamada y VACÍA: confirma TODOS sus recordatorios pendientes. Pasá fecha/hora/nombre SOLO si dice explícitamente que confirma uno solo o que otro no va (\"solo el de Pedro\", \"Hilario no puede\"); nombrar con quién va NO limita.",
      ESCRIBE, {"fecha": "Vacío casi siempre. Solo si el paciente dice que confirma UNO solo: su fecha YYYY-MM-DD.", "hora": "Vacío casi siempre. Solo si confirma UNO solo de dos el mismo día: su hora HH:MM.",
                "nombre": "Vacío casi siempre. Solo si dice que confirma el turno de UNO solo (\"solo el de Pedro\"): ese nombre. Nombrar con quién va NO cuenta."}),
-    ("lista_espera", "clinica", "Anota para la clínica que el paciente quiere adelantar su turno si se libera uno. Una vez por pedido.",
-     {**CLINICA, "accion": "'espera'"}, {"texto": "Opcional: hasta qué fecha o qué horarios le sirven."}),
+    # (12/11, espejo real r017) sin turno vigente y sin haber visto horarios, el código no anota nada y pide buscar_horarios (v7/clinica_core.js).
+    ("lista_espera", "clinica", "Anota para la clínica que el paciente quiere un turno antes si se libera uno: para adelantar el suyo, o cuando ninguno de los horarios que vio le sirve. Si no tiene turno vigente y todavía no vio horarios, primero buscar_horarios. Una vez por pedido.",
+     {**CLINICA, "accion": "'espera'", "turnos_json": f"{ENT}.turnos_json", "ultimo_asiri": F["ultimo_asiri"]}, {"texto": "Opcional: hasta qué fecha o qué horarios le sirven."}),
     ("registrar_pago", "clinica", "Registra que el paciente avisó un pago o mandó un comprobante (la secretaria lo verifica). No valida montos.", {**CLINICA, "accion": "'pago'"}, {}),
     ("datos_pago", "clinica", "El paciente pide los datos para pagar o transferir (alias, CBU, la cuenta). El sistema pega los datos exactos.",
      {**CLINICA, "accion": "'datos_pago'"}, {"moneda": "pesos | otra (otra = dólares u otra moneda)"}),
