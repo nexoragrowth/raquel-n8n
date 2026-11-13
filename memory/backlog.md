@@ -3,7 +3,7 @@
 ## ⇢ 2026-11-13 — conversación real (turno 18/11, "una hora antes")
 - [x] 13/11: desplegado `apply_cual_turno_y_horarios.py` (8 workflows) y re-jugada la conversación en sombra: OK, sin restos.
 - [x] 13/11: Lucas aprobó y quedó desplegado el mensaje mixto (`apply_mensaje_mixto.py`): horarios primero, "Lo demás se lo paso a la secretaria, que le responde por acá." al final.
-- [P1] Subir a origin los commits del 13/11 (push 403 con la cuenta de esta compu; lo hace Lucas o se sube con `LucasEzequielSilva`). Hasta entonces la otra compu no despliega.
+- [x] 13/11: commits del día subidos a origin (6c3e94b). En esta compu: `gh auth switch -h github.com -u LucasEzequielSilva` → `git push` → volver a `propmatchar`.
 - [P3] DERIVA_RESTO no es editable en el panel: si la clínica cambia DERIVA en Mensajes fijos, el mensaje mixto igual dice "Lo demás…". Sumarlo al panel (clave + `test_mensajes_panel_sync`) si lo piden.
 - [P3] Lista de espera: si la misma paciente queda anotada dos veces en pocos minutos, al grupo llegan dos FYI iguales (13/11). Juntar con el próximo cambio de `clinica_core`.
 
