@@ -35,11 +35,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "4dFlp6TEfV8A5e6y": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:42-03:00",
-  "huella": "44fbf405bab1f0114140",
+  "commit": "e8c1313",
+  "fecha": "2026-11-13T09:17:15-03:00",
+  "huella": "49b668c30bf25a90640f",
   "nombre": "v7 Tool - buscar_horarios",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_cual_turno_y_horarios.py"
  },
  "5cAWJxiWJ50hxEq3": {
   "commit": "5ac9ae3",
@@ -105,11 +105,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "DhuxFBF6vrzDrkBK": {
-  "commit": "2888a54",
-  "fecha": "2026-11-12T14:10:30-03:00",
-  "huella": "b3d35671d15d8f1a9d69",
+  "commit": "e8c1313",
+  "fecha": "2026-11-13T09:17:03-03:00",
+  "huella": "3344fa5ca0dc4ddc0032",
   "nombre": "v7 Agente Informacion",
-  "script": "apply_panel_probar_y_espera.py"
+  "script": "apply_cual_turno_y_horarios.py"
  },
  "E4GMd7K1It0iPHVD": {
   "commit": "5ac9ae3",
@@ -224,11 +224,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "NBHzj8ar2XuSvyIY": {
-  "commit": "2888a54",
-  "fecha": "2026-11-12T14:10:34-03:00",
-  "huella": "0894dec4ec1d1651f385",
+  "commit": "e8c1313",
+  "fecha": "2026-11-13T09:17:08-03:00",
+  "huella": "045dbde0274826c9ffd1",
   "nombre": "v7 Cerebro",
-  "script": "apply_panel_probar_y_espera.py"
+  "script": "apply_cual_turno_y_horarios.py"
  },
  "NDwKeIgcZtFt736Q": {
   "commit": "5ac9ae3",
@@ -259,11 +259,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "S3DgPOyHg77M6SHQ": {
-  "commit": "2888a54",
-  "fecha": "2026-11-12T14:10:26-03:00",
-  "huella": "9bbe2805b6c250c3cb85",
+  "commit": "e8c1313",
+  "fecha": "2026-11-13T09:16:59-03:00",
+  "huella": "f005399bf1eb6b253937",
   "nombre": "v7 Agente Turnos",
-  "script": "apply_panel_probar_y_espera.py"
+  "script": "apply_cual_turno_y_horarios.py"
  },
  "S5U6tSipzlgFHCkf": {
   "commit": "5ac9ae3",
@@ -462,11 +462,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "mPISHj9allybzwoV": {
-  "commit": "2888a54",
-  "fecha": "2026-11-12T14:10:40-03:00",
-  "huella": "e266bf264c0cf1d57e9a",
+  "commit": "e8c1313",
+  "fecha": "2026-11-13T09:17:16-03:00",
+  "huella": "34fbcbfaf03570806c64",
   "nombre": "v7 Panel - probar Información",
-  "script": "apply_panel_probar_y_espera.py"
+  "script": "apply_cual_turno_y_horarios.py"
  },
  "moIPDqrnY0SPIve9": {
   "commit": "5ac9ae3",
@@ -581,18 +581,18 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "y8wIF1rR87bAAvYU": {
-  "commit": "2888a54",
-  "fecha": "2026-11-12T14:13:56-03:00",
-  "huella": "494621867ae1416e4568",
+  "commit": "e8c1313",
+  "fecha": "2026-11-13T09:17:11-03:00",
+  "huella": "9517ab3007126a4200ec",
   "nombre": "v7 Cerebro Agente",
-  "script": "correr.py"
+  "script": "apply_cual_turno_y_horarios.py"
  },
  "yjMpDQ3UH1tsZdDe": {
-  "commit": "2888a54",
-  "fecha": "2026-11-12T14:10:28-03:00",
-  "huella": "33e716dc7186c2f4dbe0",
+  "commit": "e8c1313",
+  "fecha": "2026-11-13T09:17:01-03:00",
+  "huella": "f6aba568ebafb377dd03",
   "nombre": "v7 Agente Pagos",
-  "script": "apply_panel_probar_y_espera.py"
+  "script": "apply_cual_turno_y_horarios.py"
  },
  "yop6TIVoKiWUxfEn": {
   "commit": "5ac9ae3",
@@ -602,11 +602,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "yrCuq7hj04ox3sad": {
-  "commit": "2888a54",
-  "fecha": "2026-11-12T14:10:31-03:00",
-  "huella": "2c4fade1ca618ff6e42b",
+  "commit": "e8c1313",
+  "fecha": "2026-11-13T09:17:05-03:00",
+  "huella": "3f83a40b3e49ae188605",
   "nombre": "v7 Agente Urgencias",
-  "script": "apply_panel_probar_y_espera.py"
+  "script": "apply_cual_turno_y_horarios.py"
  },
  "zFtNDRUlN8n2Na71": {
   "commit": "5ac9ae3",
