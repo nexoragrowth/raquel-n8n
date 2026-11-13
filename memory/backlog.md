@@ -1,8 +1,10 @@
 # Backlog — raquel-n8n
 
 ## ⇢ 2026-11-13 — conversación real (turno 18/11, "una hora antes")
-- [P1] `scripts/apply_cual_turno_y_horarios.py --apply` LISTO, falta "desplegá" (8 workflows: 4 agentes, cerebro, cerebro_agente, probador del panel, buscar_horarios; diff_vivo muestra solo eso). Después: repetir la conversación en sombra (tests/comparativa) y limpiar.
-- [P2] **Decide Lucas:** mensaje que va a Turnos y a la secretaria a la vez (3 casos en 11 días): hoy sale "Le paso con la secretaria…" ARRIBA de los horarios. Propuesta: horarios primero y al final "Lo demás se lo paso a la secretaria, que le responde por acá."
+- [x] 13/11: desplegado `apply_cual_turno_y_horarios.py` (8 workflows) y re-jugada la conversación en sombra: OK, sin restos.
+- [x] 13/11: Lucas aprobó y quedó desplegado el mensaje mixto (`apply_mensaje_mixto.py`): horarios primero, "Lo demás se lo paso a la secretaria, que le responde por acá." al final.
+- [P1] Subir a origin los commits del 13/11 (push 403 con la cuenta de esta compu; lo hace Lucas o se sube con `LucasEzequielSilva`). Hasta entonces la otra compu no despliega.
+- [P3] DERIVA_RESTO no es editable en el panel: si la clínica cambia DERIVA en Mensajes fijos, el mensaje mixto igual dice "Lo demás…". Sumarlo al panel (clave + `test_mensajes_panel_sync`) si lo piden.
 - [P3] Lista de espera: si la misma paciente queda anotada dos veces en pocos minutos, al grupo llegan dos FYI iguales (13/11). Juntar con el próximo cambio de `clinica_core`.
 
 ## ⇢ 2026-11-12 — Cerebro Agente y bot vivo
