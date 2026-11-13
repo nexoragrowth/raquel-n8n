@@ -19,6 +19,7 @@ const OrquestadorCore = (() => {
   // Textos fijos (los arma el código; ningún modelo los redacta). DERIVA es el mismo texto que ClinicaCore.TEXTOS.DERIVA (test).
   const TEXTOS = {
     DERIVA: 'Le paso con la secretaria para que lo atienda.',
+    DERIVA_RESTO: 'Lo demás se lo paso a la secretaria, que le responde por acá.',   // (13/11) al final de un mensaje que también trae horarios (componer)
     NO_ENTENDI: 'Disculpe, no le entendí bien. ¿Me lo puede escribir de otra forma? Puedo ayudarlo con turnos, pagos o información del consultorio.',
     PEDIR_TEXTO: 'Disculpe, no pude escuchar bien su audio. ¿Me lo puede escribir, por favor?',   // (28/10) antes decía "no puedo escuchar audios": es falso, los audios se transcriben; esto es solo si la transcripción falló
     PRESENTACION: 'Soy Asiri, la secretaria virtual de la Dra. Raquel.',
@@ -535,7 +536,13 @@ const OrquestadorCore = (() => {
     // (20/10, escalación real 382) Si la derivación la pidió TURNOS (p. ej. turno a < 48 h), primero va el porqué y al final "Le paso con la
     // secretaria" (antes salía al revés: "Le paso con la secretaria… / Su turno es en menos de 48 horas…").
     const turnosDeriva = !!(T && T.derivar) && reunion.derivar === true && !(T && T.readback);
-    let partes = unir(turnosDeriva ? [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', tTexto, dTexto] : [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', dTexto, tTexto]);
+    // (13/11, conversación real; Lucas aprobó el texto) Mensaje que va a la secretaria Y trae una parte de Turnos (horarios, lista de espera): "Le paso con
+    // la secretaria" arriba y los horarios abajo se leía contradictorio. Primero lo que resuelve Asiri y al final "Lo demás se lo paso a la secretaria…".
+    // DERIVA_RESTO no es editable en el panel (todavía): si la clínica cambió DERIVA, en este caso sale el estándar de DERIVA_RESTO.
+    // Con un read-back ("¿Procedo…?") queda como antes: la pregunta va AL FINAL para que el "sí" del paciente sea a eso (test C1).
+    const mixto = !turnosDeriva && !!dTexto && !!tTexto && !(T && T.readback) && !readbackEn(tTexto);
+    const dFinal = mixto && dTexto === TEXTOS.DERIVA ? TEXTOS.DERIVA_RESTO : dTexto;
+    let partes = unir(turnosDeriva || mixto ? [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', tTexto, dFinal] : [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', dTexto, tTexto]);
     const errores = agentes.filter((a) => res[a].error_tecnico);
     if (errores.length) {
       const detalle = errores.map((a) => res[a].error_detalle).filter(Boolean).map((d) => lim(d, 120)).join(' | ');
@@ -592,7 +599,7 @@ const OrquestadorCore = (() => {
     }
     // 7) Presentación en una conversación nueva (dato de 12 h; el menú ya la trae).
     if (e.conversacion_nueva && !esMenu && !/soy asiri/i.test(texto)) texto = TEXTOS.PRESENTACION + '\n\n' + texto;
-    return fin(texto, { datos_pago_agregados, ...(repeticion ? { repeticion: true } : {}), partes: { informacion: iTexto || null, pagos: pTexto || null, derivacion: dTexto || null, turnos: tTexto || null } });
+    return fin(texto, { datos_pago_agregados, ...(repeticion ? { repeticion: true } : {}), partes: { informacion: iTexto || null, pagos: pTexto || null, derivacion: dFinal || null, turnos: tTexto || null } });
   }
   return { AGENTES, FIJAS, TEXTOS, MENU, menuValido, menu, MENSAJES_EDITABLES, mensajeInvalido, mensajesDe, aplicarMensajes, parsear, despachar, pasosDe, codigo, textoTurnos, salidaTurnos, salidaPagos, salidaInformacion, salidaUrgencias, urgenciaPendiente, reunir, componer, norm };
 })();

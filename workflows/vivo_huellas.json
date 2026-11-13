@@ -525,11 +525,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "u4IZcQtdnfcQPCs8": {
-  "commit": "2888a54",
-  "fecha": "2026-11-12T14:15:06-03:00",
+  "commit": "5b943ef",
+  "fecha": "2026-11-13T09:21:27-03:00",
   "huella": "a5b9f07e99003c6eea9d",
   "nombre": "v7 Test (sombra)",
-  "script": "correr.py"
+  "script": "replay_alineadores.py"
  },
  "v6y5It2T4AwPUwQp": {
   "commit": "5ac9ae3",

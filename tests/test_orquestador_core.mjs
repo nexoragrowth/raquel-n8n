@@ -367,7 +367,7 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const plan = O.despachar(orq([{ a: 'turnos', pedido: 'pide turno a la mañana; turno vigente miércoles 18/11 15:40' }, { a: 'derivar_secretaria', cita: 'me tiene que dar los alineadores', motivo: 'entrega de alineadores' }]), {});
   const reu = O.reunir(plan, { turnos: a }, { texto_paciente: 'me tiene que dar los alineadores, o a la mañana?' });
   const c = O.componer(base({ plan, ofertas: YA, res: { turnos: a }, reunion: reu, derivar_res: { ok: true, derivado: true, texto_para_el_paciente: O.TEXTOS.DERIVA }, texto_paciente: 'me tiene que dar los alineadores, o a la mañana?' }));
-  t('CU1b el mensaje con la derivación ya no termina en "¿Cuál de estos turnos?\\n- (uno)"', c.texto === O.TEXTOS.DERIVA + '\n\n' + SIGUEN, c.texto);
+  t('CU1b el mensaje con la derivación ya no termina en "¿Cuál de estos turnos?\\n- (uno)" (y los horarios van primero: MX1)', c.texto === SIGUEN + '\n\n' + O.TEXTOS.DERIVA_RESTO, c.texto);
   const b = O.salidaTurnos({ output: '[NO_REPLY]', intermediateSteps: [paso('confirmar_turno', { ok: false, motivo: 'cita_no_vigente' })] }, { turnos: ['viernes 20/11 a las 09:50'] });
   t('CU2 (real 335555, "me lo cambiaron para el 20") la pregunta sola con un turno pasa a nombrarlo', b.texto === 'Su turno vigente es el viernes 20/11 a las 09:50.', b);
   const d = O.salidaTurnos({ output: 'MOSTRAR_TURNOS', intermediateSteps: [paso('gestionar_turno', { ok: false, motivo: 'cita_no_vista' })] }, { turnos: ['miércoles 4/11 a las 19:10'] });
@@ -380,7 +380,18 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   // (13/11, real 339767) con buscar_horarios mirando la agenda en otro mensaje: "ese día no hay" + lo ya ofrecido que sigue libre, no el bloque entero de nuevo.
   const g = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: false, motivo: 'sin_turnos' }, { desde: '2026-11-18', hasta: '2026-11-18' }),
     paso('buscar_horarios', { ok: true, sin_horarios_nuevos: true, ya_ofrecidos_en_rango: YA }, { desde: '2026-11-18' }), paso('lista_espera', { ok: true, texto_para_el_paciente: O.TEXTOS.ESPERA })] }, { turnos: UNO });
-  t('CU6 (real 339767) lista de espera + "Para ese día no hay…" + lo ya ofrecido, sin el bloque entero', g.texto === O.TEXTOS.ESPERA + '\n\nPara ese día no hay turnos disponibles.\n\n' + SIGUEN && !/Tenemos los próximos/.test(g.texto), g.texto); }
+  t('CU6 (real 339767) lista de espera + "Para ese día no hay…" + lo ya ofrecido, sin el bloque entero', g.texto === O.TEXTOS.ESPERA + '\n\nPara ese día no hay turnos disponibles.\n\n' + SIGUEN && !/Tenemos los próximos/.test(g.texto), g.texto);
+  // (13/11, Lucas aprobó) Mensaje que va a la secretaria Y a Turnos: primero lo de Turnos, al final "Lo demás se lo paso a la secretaria…".
+  const DR = { ok: true, derivado: true, texto_para_el_paciente: O.TEXTOS.DERIVA };
+  t('MX1 derivación + horarios: los horarios primero y "Lo demás…" al final; partes.derivacion es lo que salió', c.texto.endsWith(O.TEXTOS.DERIVA_RESTO) && !c.texto.includes(O.TEXTOS.DERIVA) && c.partes.derivacion === O.TEXTOS.DERIVA_RESTO, c);
+  const m2 = O.componer(base({ plan, ofertas: YA, res: { turnos: g }, reunion: reu, derivar_res: DR, texto_paciente: 'los alineadores los cambio cada 10 días' }));
+  t('MX2 (replay 13/11 mensaje 4) lista de espera + horarios + derivación: "Lo demás…" al final, una sola vez', m2.texto === g.texto + '\n\n' + O.TEXTOS.DERIVA_RESTO, m2.texto);
+  const m3 = O.componer(base({ plan, ofertas: YA, res: { turnos: a }, reunion: reu, derivar_res: DR, mensajes: { DERIVA: 'La secretaria le escribe enseguida por acá.' } }));
+  t('MX3 con DERIVA cambiado en el panel, el mensaje mixto igual lleva "Lo demás…" (DERIVA_RESTO no es editable)', m3.texto === SIGUEN + '\n\n' + O.TEXTOS.DERIVA_RESTO, m3.texto);
+  const pD = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'me tiene que dar los alineadores', motivo: 'entrega de alineadores' }]), {});
+  const m4 = O.componer(base({ plan: pD, res: {}, reunion: O.reunir(pD, {}, { texto_paciente: 'x' }), derivar_res: DR, mensajes: { DERIVA: 'La secretaria le escribe enseguida por acá.' } }));
+  t('MX4 sin parte de Turnos sigue saliendo DERIVA (y el del panel se aplica)', m4.texto === 'La secretaria le escribe enseguida por acá.', m4.texto);
+  t('MX5 DERIVA_RESTO no es pregunta ni "no hay" (no entra al corte de bucle) y no está entre los editables', !/\?/.test(O.TEXTOS.DERIVA_RESTO) && !/no hay/i.test(O.TEXTOS.DERIVA_RESTO) && !O.MENSAJES_EDITABLES.DERIVA_RESTO); }
 // (21/10, auditoría) confirmar_core: un turno de HOY cuya hora ya pasó no se confirma (el v6 confirmó dos así, con el comprobante de después de atenderse).
 { const Conf = require('../v7/confirmar_core.js');
   const rows = [{ id_cita_dentalink: 1, fecha_turno: '2026-10-21', hora_turno: '10:00:00', nombre_paciente: 'Ana' }, { id_cita_dentalink: 2, fecha_turno: '2026-10-21', hora_turno: '18:30:00', nombre_paciente: 'Ana' }];
