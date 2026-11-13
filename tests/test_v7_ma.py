@@ -140,7 +140,7 @@ def main():
     chequear("B1 Turnos: el texto para el paciente es el read-back de la herramienta (la paráfrasis del modelo se descarta)", a["error"] is None and a["salida"]["texto"] == RB and a["salida"]["estado"] == "readback_pendiente" and a["salida"]["texto_libre_descartado"], (a["error"], a["salida"]))
     chequear("B1b Turnos recibe CONTEXTO + PEDIDO DEL ORQUESTADOR; su system es su prompt (sin DATOS)", ag["text"] == "CONTEXTO X\n\nPEDIDO DEL ORQUESTADOR: responde a la confirmación pendiente" and ag["sistema"] == M.PROMPTS["turnos"], ag)
     chequear("B2 Turnos se cae: error técnico, sin texto (el cerebro decide con el libro)", R["B2"]["reps"][0]["salida"]["error_tecnico"] is True and not R["B2"]["reps"][0]["salida"]["texto"], R["B2"]["reps"][0]["salida"])
-    chequear("B3 PREGUNTA_CUAL_TURNO → la lista de turnos armada por código", R["B3"]["reps"][0]["salida"]["texto"] == "¿Cuál de estos turnos?\n- viernes 16/10 a las 09:10", R["B3"]["reps"][0]["salida"])
+    chequear("B3 PREGUNTA_CUAL_TURNO con UN solo turno → se nombra el turno armado por código (13/11: nunca '¿Cuál de estos turnos?' con uno)", R["B3"]["reps"][0]["salida"]["texto"] == "Su turno vigente es el viernes 16/10 a las 09:10.", R["B3"]["reps"][0]["salida"])
     R = correr(subs["pagos"], [{"id": "B4", "trigger": {**ent, "texto_paciente": "ya le gire lo d la consulta", "pedido": "avisa que pagó"},
                                 "agente": {"output": "Gracias! ¿Para quién era el pago?", "intermediateSteps": [paso("registrar_pago", {"ok": True, "texto_para_el_paciente": "Recibido. Dejé anotado su aviso de pago; la secretaria lo verifica en su horario de atención."})]}}])
     a = R["B4"]["reps"][0]

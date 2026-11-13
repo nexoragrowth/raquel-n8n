@@ -125,7 +125,11 @@ def main():
         esc("B3 sin turnos", {"desde": "", "hasta": ""}, {}, subwf={"Buscar horarios (sub-WF)": {"resultado": "SIN TURNOS"}}),
         esc("B4 la agenda falla", {"desde": "", "hasta": ""}, {}, subwf={"Buscar horarios (sub-WF)": {"error": {"message": "x"}}}),
         esc("B5 segundo bloque: se suma a lo ya ofrecido", {"desde": "2026-10-24", "hasta": ""}, {f"lotes:{TEL}": 1, f"ofertas:{TEL}": json.dumps([{"fecha": "2026-10-22", "hora": "09:20"}])}, subwf={"Buscar horarios (sub-WF)": {"bloque": "Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Martes 27 de octubre 8:00 , 10:40\n\nLe sirve alguno?"}}),
-        esc("B6 el modelo pide lo MISMO dos veces", {"desde": "", "hasta": ""}, {f"lotes:{TEL}": 2, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|", f"ofertas:{TEL}": OFERTAS}, subwf={"Buscar horarios (sub-WF)": {"bloque": "NO DEBE LLAMARSE"}}),
+        esc("B6 el modelo pide lo MISMO dos veces", {"desde": "", "hasta": ""}, {f"lotes:{TEL}": 2, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|#ex-2", f"ofertas:{TEL}": OFERTAS}, subwf={"Buscar horarios (sub-WF)": {"bloque": "NO DEBE LLAMARSE"}}),
+        # (13/11, real 339767) el MISMO rango en OTRO mensaje: se mira la agenda (antes se pegaba entero el bloque guardado)
+        esc("B10 mismo rango en otro mensaje", {"desde": "", "hasta": ""}, {f"lotes:{TEL}": 1, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|#ex-1", f"ofertas:{TEL}": json.dumps([{"fecha": "2026-10-22", "hora": h} for h in ("08:00", "09:20")] + [{"fecha": "2026-10-23", "hora": "09:10"}, {"fecha": "2026-11-02", "hora": "16:20"}] + [{"fecha": "2026-11-04", "hora": h} for h in ("15:00", "15:40")])}, subwf={"Buscar horarios (sub-WF)": {"bloque": BLOQUE}}),
+        esc("B11 mismo rango en otro mensaje con los 2 bloques ya dados", {"desde": "", "hasta": ""}, {f"lotes:{TEL}": 2, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|#ex-1", f"ofertas:{TEL}": OFERTAS}, subwf={"Buscar horarios (sub-WF)": {"bloque": "NO DEBE LLAMARSE"}}),
+        esc("B12 guardado viejo (sin ejecución) y mismo rango", {"desde": "", "hasta": ""}, {f"lotes:{TEL}": 1, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|", f"ofertas:{TEL}": json.dumps([{"fecha": "2026-10-22", "hora": h} for h in ("08:00", "09:20")] + [{"fecha": "2026-10-23", "hora": "09:10"}, {"fecha": "2026-11-02", "hora": "16:20"}] + [{"fecha": "2026-11-04", "hora": h} for h in ("15:00", "15:40")])}, subwf={"Buscar horarios (sub-WF)": {"bloque": BLOQUE}}),
         esc("B8 pide otra ventana y vuelve el MISMO bloque (sin horarios nuevos)", {"desde": "2026-10-08", "hasta": ""}, {f"lotes:{TEL}": 1, f"bloque:{TEL}": BLOQUE, f"bloque_req:{TEL}": "|",
             f"ofertas:{TEL}": json.dumps([{"fecha": "2026-10-22", "hora": h} for h in ("08:00", "09:20")] + [{"fecha": "2026-10-23", "hora": "09:10"}, {"fecha": "2026-11-02", "hora": "16:20"}] + [{"fecha": "2026-11-04", "hora": h} for h in ("15:00", "15:40")])},
             subwf={"Buscar horarios (sub-WF)": {"bloque": BLOQUE}}),
@@ -137,7 +141,7 @@ def main():
     ofertas = json.loads(x["redis_final"][f"ofertas:{TEL}"])
     chequear("B1 devuelve el bloque de la clínica tal cual y la nota para Asiri es interna (no parece un mensaje al paciente)", a["salida"]["bloque"] == BLOQUE and a["salida"]["para_asiri"].startswith("[Nota interna") and "tal cual" in a["salida"]["para_asiri"], a["salida"])
     chequear("B1 registra los 6 horarios ofrecidos con fecha ISO (lo único reservable)", len(ofertas) == 6 and ofertas[1] == {"fecha": "2026-10-22", "hora": "09:20"}, ofertas)
-    chequear("B1 guarda el bloque, el pedido, cuenta el lote y marca el bloque de ESTA ejecución (el código lo exige pegado)", x["redis_final"][f"bloque:{TEL}"] == BLOQUE and x["redis_final"][f"lotes:{TEL}"] == 1 and x["redis_final"][f"bloque_req:{TEL}"] == "|" and x["redis_final"][f"bloque_exec:{TEL}:ex-2"] == BLOQUE, x["redis_final"])
+    chequear("B1 guarda el bloque, el pedido, cuenta el lote y marca el bloque de ESTA ejecución (el código lo exige pegado)", x["redis_final"][f"bloque:{TEL}"] == BLOQUE and x["redis_final"][f"lotes:{TEL}"] == 1 and x["redis_final"][f"bloque_req:{TEL}"] == "|#ex-2" and x["redis_final"][f"bloque_exec:{TEL}:ex-2"] == BLOQUE, x["redis_final"])
     x = r["B2 tercer pedido: límite"]; a = x["reps"][0]
     chequear("B2 el tercer bloque no se busca (regla de la Dra.) y se avisa a Asiri qué hacer", a["salida"]["motivo"] == "limite_de_bloques" and not any(p["metodo"] == "executeWorkflow" for p in a["pedidos"]) and "FYI" in a["salida"]["para_asiri"], a["salida"])
     x = r["B3 sin turnos"]; chequear("B3 sin turnos: no inventa y no guarda ofertas", x["reps"][0]["salida"]["motivo"] == "sin_turnos" and f"ofertas:{TEL}" not in x["redis_final"], x["reps"][0]["salida"])
@@ -156,6 +160,16 @@ def main():
              and "bloque" not in {k for k in a["salida"] if k == "bloque"}, (a["error"], x["redis_final"].get(f"lotes:{TEL}"), a["salida"]))
     chequear("B8b (auditoría 21/10, real 320042) devuelve lo que la agenda dio AHORA en ese rango y ya se le había ofrecido (sigue libre): el texto lo nombra en vez de 'no hay'",
              a["salida"].get("ya_ofrecidos_en_rango") and {"fecha": "2026-10-22", "hora": "09:20"} in a["salida"]["ya_ofrecidos_en_rango"] and "ya_ofrecidos_en_rango" in a["salida"]["para_asiri"], a["salida"])
+    x = r["B10 mismo rango en otro mensaje"]; a = x["reps"][0]
+    chequear("B10 (real 339767) mismo rango en OTRO mensaje: consulta la agenda y, sin nada nuevo, devuelve lo ya ofrecido que sigue libre (no el bloque guardado entero) sin sumar lote",
+             a["error"] is None and any(p["metodo"] == "executeWorkflow" for p in a["pedidos"]) and a["salida"].get("sin_horarios_nuevos") is True and a["salida"].get("ya_ofrecidos_en_rango")
+             and "repetido" not in a["salida"] and x["redis_final"][f"lotes:{TEL}"] == 1, (a["error"], a["salida"], x["redis_final"].get(f"lotes:{TEL}")))
+    x = r["B11 mismo rango en otro mensaje con los 2 bloques ya dados"]; a = x["reps"][0]
+    chequear("B11 con los 2 bloques ya dados (regla de la Dra.), el mismo rango en otro mensaje sigue como antes: el bloque guardado, sin buscar ni avisar límite",
+             a["salida"].get("repetido") is True and a["salida"].get("bloque") == BLOQUE and not any(p["metodo"] == "executeWorkflow" for p in a["pedidos"]), a["salida"])
+    x = r["B12 guardado viejo (sin ejecución) y mismo rango"]; a = x["reps"][0]
+    chequear("B12 lo que quedó guardado antes del cambio (sin la ejecución) no se toma como del mismo mensaje: consulta la agenda",
+             any(p["metodo"] == "executeWorkflow" for p in a["pedidos"]) and a["salida"].get("sin_horarios_nuevos") is True, a["salida"])
     a = r["B9 el bloque vino en un formato que no se puede leer"]["reps"][0]
     chequear("B9 un bloque que no se puede leer es error técnico (no 'no hay' ni 'nada nuevo') y no se guarda", a["salida"].get("motivo") == "error_tecnico" and f"bloque_exec:{TEL}:ex-2" not in r["B9 el bloque vino en un formato que no se puede leer"]["redis_final"], a["salida"])
     a = r["B7 pedido distinto con 2 bloques ya contados"]["reps"][0]

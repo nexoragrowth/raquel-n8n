@@ -1,5 +1,10 @@
 # Backlog — raquel-n8n
 
+## ⇢ 2026-11-13 — conversación real (turno 18/11, "una hora antes")
+- [P1] `scripts/apply_cual_turno_y_horarios.py --apply` LISTO, falta "desplegá" (8 workflows: 4 agentes, cerebro, cerebro_agente, probador del panel, buscar_horarios; diff_vivo muestra solo eso). Después: repetir la conversación en sombra (tests/comparativa) y limpiar.
+- [P2] **Decide Lucas:** mensaje que va a Turnos y a la secretaria a la vez (3 casos en 11 días): hoy sale "Le paso con la secretaria…" ARRIBA de los horarios. Propuesta: horarios primero y al final "Lo demás se lo paso a la secretaria, que le responde por acá."
+- [P3] Lista de espera: si la misma paciente queda anotada dos veces en pocos minutos, al grupo llegan dos FYI iguales (13/11). Juntar con el próximo cambio de `clinica_core`.
+
 ## ⇢ 2026-11-12 — Cerebro Agente y bot vivo
 - [x] 12/11: desplegado `apply_arreglos_espejo.py` (5 workflows) y freno `guarda_vivo.py` + `diff_vivo.py`. Lo del 05/11 vino de la otra compu (merge 5ac9ae3, con sus tests).
 - [x] Rama subida 12/11 (2895946; scan sin secretos ni datos reales). La otra compu: `git pull` antes de trabajar. Sigue abierto SEG-02: pasar el repo a privado. Ojo: en esta compu gh tiene activa la cuenta `propmatchar` (sin permiso); se sube con `LucasEzequielSilva`.

@@ -149,18 +149,27 @@ def wf_buscar_horarios():
     g.redis_get("Redis GET ofertas", "'ofertas:' + $json.tel", "ofertas_raw", 220, 240)
     g.redis_get("Redis GET bloque", "'bloque:' + $('Entrada').first().json.tel", "bloque_raw", 440, 240)
     g.redis_get("Redis GET bloque_req", "'bloque_req:' + $('Entrada').first().json.tel", "req_raw", 660, 240)
+    # (13/11, real 339767) La caché es para el modelo que pide lo MISMO dos veces en el MISMO mensaje. Antes valía entre mensajes: la paciente preguntó otra
+    # vez por ese día y recibió entero el bloque de hacía 8 minutos, sin mirar la agenda. Ahora, en otro mensaje se consulta la agenda: si no hay nada nuevo,
+    # sale "Siguen libres los horarios que le ofrecí" con lo que la agenda dio AHORA. Si ya se dieron los 2 bloques (regla de la Dra.), queda como antes.
     g.code("¿Es el mismo pedido?", """const e = $('Entrada').first().json;
 const req = String(e.desde || '') + '|' + String(e.hasta || '');
 const cache = String($('Redis GET bloque').first().json.bloque_raw || '');
-const ultimo = String($('Redis GET bloque_req').first().json.req_raw || '');
-const hit = !!cache && ultimo === req;
+const guardado = String($('Redis GET bloque_req').first().json.req_raw || '');
+const corte = guardado.lastIndexOf('#');
+const ultimo = corte >= 0 ? guardado.slice(0, corte) : guardado;
+const mismo = !!cache && ultimo === req;
+const hit = mismo && corte >= 0 && guardado.slice(corte + 1) === String(e.exec_id_actual || '');
 let prev = []; try { prev = JSON.parse($('Redis GET ofertas').first().json.ofertas_raw || '[]') || []; } catch (x) { prev = []; }
-return [{ json: { hit, req, prev, resultado: hit ? { ok: true, repetido: true, bloque: cache, para_asiri: 'Este es el MISMO bloque que ya le ofreciste (no cuenta como uno nuevo). Si el paciente ya eligió un horario, NO lo pegues de nuevo: llamá proponer.' } : null } }];""", 880, 240)
+const repetido = { ok: true, repetido: true, bloque: cache, para_asiri: 'Este es el MISMO bloque que ya le ofreciste (no cuenta como uno nuevo). Si el paciente ya eligió un horario, NO lo pegues de nuevo: llamá proponer.' };
+return [{ json: { hit, mismo, req: req + '#' + String(e.exec_id_actual || ''), prev, repetido: mismo ? repetido : null, resultado: hit ? repetido : null } }];""", 880, 240)
     g.si("¿Repetido?", "$json.hit === true", 1100, 240)
     # (07/10) El lote se cuenta DESPUÉS, solo si el bloque trae horarios nuevos (antes se contaba al pedirlo).
     g.redis_get("Redis GET lotes", "'lotes:' + $('Entrada').first().json.tel", "lotes_raw", 1320, 300)
     g.code("Límite", """const prev = $('¿Es el mismo pedido?').first().json.prev || [];
 const n = Number($input.first().json.lotes_raw || 0) + 1;
+const repetido = $('¿Es el mismo pedido?').first().json.repetido;
+if (HorariosCore.limiteLotes(n) && repetido) return [{ json: { terminado: true, resultado: repetido } }];
 if (HorariosCore.limiteLotes(n)) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'limite_de_bloques', para_asiri: 'Ya se le ofrecieron dos bloques de horarios y no hay un tercero. No ofrezcas otro: decile con amabilidad que se lo dejás anotado a la clínica para que lo ayuden con otra fecha, y llamá avisar_grupo con nivel FYI.' } } }];
 return [{ json: { terminado: false, prev } }];""", 1540, 300, usar=("horarios_core",))
     g.si("¿Termina? (límite)", "$json.terminado === true", 1760, 300)

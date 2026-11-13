@@ -1,5 +1,10 @@
 # Estado actual — raquel-n8n
 
+## 2026-11-13 (mañana) — conversación real enredada: 2 arreglos listos, falta "desplegá"
+- Lucas pegó el chat de una paciente (turno mié 18/11 15:40; pidió una hora antes o "a las 7"; necesita los alineadores). Ejecuciones 339746, 339756, 339767, 339786 (06:48–07:18 Jujuy). Asiri: (1) ofreció diciembre; (2) "Le paso con la secretaria" + horarios + "¿Cuál de estos turnos? – (uno solo)"; (3) la anotó en lista de espera y le pegó el MISMO bloque entero otra vez; (4) "Ya le pasé su consulta": el chat quedó en manos de una persona (los dos avisos al grupo salieron ok).
+- Causas: la caché de buscar_horarios valía entre mensajes (339767 devolvió el bloque de 8 min antes sin mirar la agenda) y salidaTurnos pregunta "cuál" aunque haya un solo turno (4 veces en 11 días). Arreglados en el repo con tests (orquestador_core 208/208, herramientas 110/110, barrido offline verde) → `scripts/apply_cual_turno_y_horarios.py`. Simulación y diff_vivo: solo esos 8 workflows (+ v6 sombra, que difiere a propósito).
+- Pendiente de Lucas: "desplegá" y cómo redactar el mensaje mixto turnos + secretaria (backlog P2).
+
 ## 2026-11-12 (tarde, 14:10 Jujuy) — DESPLEGADO todo el bot: control de horas/montos de Información + opción A del panel (falta publicar el panel)
 - **Lucas: "desplegá".** `apply_panel_probar_y_espera.py --apply`: los 6 workflows con orquestador_core (backups `*_1794503425.json`) + creado y activo "v7 Panel - probar Información" (**mPISHj9allybzwoV**, en v7/ids.json). `diff_vivo`: los 15 del v7 y el probador = repo (solo difiere v6 Orquestador sombra, inactivo).
 - **Probado después:** humo del probador 200 ("Los sábados no se atiende…", 6,5 s) y 401 con secreto malo; precio con y sin notas de borrador 200 en 4–6 s; vacío 400. Sombra: r007 ×4 → "Esta tarde no se atiende; los jueves…" (4/4); lista de espera: vio horarios → anotado (2/2); sin horarios → le ofrece horarios (2/2). Sin restos (memoria de sombra 0, celulares sintéticos 0, notas reales de la clínica intactas: "Sin emojis").

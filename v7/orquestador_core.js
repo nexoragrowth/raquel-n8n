@@ -375,6 +375,9 @@ const OrquestadorCore = (() => {
     // (12/11) "Quería saber si tiene turno para el viernes" (pregunta por horarios LIBRES) a veces sale como MOSTRAR_TURNOS: sin turnos propios y con
     // horarios ofrecidos, no se agrega "No veo turnos vigentes con este número" (les llegaba a pacientes nuevos debajo de los horarios).
     if (!readback && !confSinTurno && cod === 'MOSTRAR_TURNOS' && (turnos.length || !bloques.some((b) => b.estado === 'bloque_ofrecido'))) partes.push(textoPregunta('MOSTRAR_TURNOS', turnos));
+    // (13/11, 4 mensajes reales del 02/11 al 13/11) "¿Cuál de estos turnos?" con UN solo turno no es una pregunta: salía debajo de "Su turno vigente es el X"
+    // (el mismo turno dos veces) o debajo de los horarios ofrecidos. Con uno solo: si el mensaje ya lleva otra parte de Turnos, no va; si no, se nombra el turno.
+    if (pregunta === 'CUAL_TURNO' && !readback && turnos.length === 1) pregunta = unir(partes).length ? null : 'MOSTRAR_TURNOS';
     const elegidos = [...new Set(bloques.filter((b) => b.estado === 'ya_ofrecidos').flatMap((b) => b.ya_ofrecidos.map((x) => x.fecha + ' ' + x.hora)))];
     if (pregunta === 'DATOS_NUEVO' && !readback && elegidos.length === 1) partes.push(`Para reservar el ${diaCorto(elegidos[0].slice(0, 10))} a las ${hCorta(elegidos[0].slice(11))} necesito nombre, apellido y DNI del paciente, en un solo mensaje.`);
     else if (pregunta && !readback) partes.push(textoPregunta(pregunta, turnos));

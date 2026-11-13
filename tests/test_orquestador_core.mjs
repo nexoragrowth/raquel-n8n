@@ -352,11 +352,35 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   const cc = O.componer(base({ plan, res: { turnos: T1 }, reunion: reu, texto_paciente: 'Confirmo' }));
   t('P4b el paciente recibe "no veo…" + la derivación, y reunir deriva (aviso a la clínica)', reu.derivar === true && cc.texto === 'No veo un turno para confirmar con este número de celular.\n\n' + O.TEXTOS.DERIVA, [reu, cc.texto]);
   const T2 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('confirmar_turno', { ok: false, motivo: 'sin_recordatorio' }), paso('ver_turnos', { ok: true, turnos: ['jueves 23/10 a las 10:00'] })] }, {});
-  t('P4c si tiene turnos, no deriva: pregunta cuál', !T2.derivar && /¿Cuál de estos turnos\?/.test(T2.texto), T2);
+  t('P4c si tiene UN turno, no deriva y se lo nombra (13/11: nunca "¿Cuál de estos turnos?" con uno solo)', !T2.derivar && T2.texto === 'Su turno vigente es el jueves 23/10 a las 10:00.', T2);
   const T3 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('confirmar_turno', { ok: false, motivo: 'sin_recordatorio' })] }, {});
   t('P4d sin ver_turnos en este mensaje (la lista vacía puede ser un error), no deriva por esto', !T3.derivar, T3);
   const p = O.despachar(orq([{ a: 'pagos', pedido: 'manda el comprobante' }]), { recordatorio_pendiente: true });
   t('P5 (v6: el comprobante como respuesta al recordatorio confirmaba) Turnos lo ve con la nota de que el pago de ese turno es un sí', !!p.turnos && /comprobante o aviso de pago/.test(p.turnos), p.turnos); }
+// (13/11, 4 mensajes reales del 02/11 al 13/11) "¿Cuál de estos turnos?" con UN solo turno: debajo de "Su turno vigente es el X" (el mismo turno dos
+// veces), debajo de los horarios ofrecidos, o sola. Con uno solo, si el mensaje ya lleva otra parte de Turnos no va; si no, se nombra el turno.
+{ const UNO = ['miércoles 18/11 a las 15:40'];
+  const YA = [{ fecha: '2026-12-03', hora: '08:00' }, { fecha: '2026-12-03', hora: '10:00' }, { fecha: '2026-12-04', hora: '09:10' }];
+  const SIGUEN = 'Siguen libres los horarios que le ofrecí:\n- jueves 3/12: 8:00 y 10:00\n- viernes 4/12: 9:10\n¿Le sirve alguno?';
+  const a = O.salidaTurnos({ output: 'PREGUNTA_CUAL_TURNO', intermediateSteps: [paso('buscar_horarios', { ok: true, sin_horarios_nuevos: true, ya_ofrecidos_en_rango: YA }, { desde: '2026-12-03', hasta: '2026-12-04' })] }, { turnos: UNO });
+  t('CU1 (real 339756) el modelo pregunta "cuál" con un solo turno y van los horarios ya ofrecidos: solo los horarios', a.texto === SIGUEN, a);
+  const plan = O.despachar(orq([{ a: 'turnos', pedido: 'pide turno a la mañana; turno vigente miércoles 18/11 15:40' }, { a: 'derivar_secretaria', cita: 'me tiene que dar los alineadores', motivo: 'entrega de alineadores' }]), {});
+  const reu = O.reunir(plan, { turnos: a }, { texto_paciente: 'me tiene que dar los alineadores, o a la mañana?' });
+  const c = O.componer(base({ plan, ofertas: YA, res: { turnos: a }, reunion: reu, derivar_res: { ok: true, derivado: true, texto_para_el_paciente: O.TEXTOS.DERIVA }, texto_paciente: 'me tiene que dar los alineadores, o a la mañana?' }));
+  t('CU1b el mensaje con la derivación ya no termina en "¿Cuál de estos turnos?\\n- (uno)"', c.texto === O.TEXTOS.DERIVA + '\n\n' + SIGUEN, c.texto);
+  const b = O.salidaTurnos({ output: '[NO_REPLY]', intermediateSteps: [paso('confirmar_turno', { ok: false, motivo: 'cita_no_vigente' })] }, { turnos: ['viernes 20/11 a las 09:50'] });
+  t('CU2 (real 335555, "me lo cambiaron para el 20") la pregunta sola con un turno pasa a nombrarlo', b.texto === 'Su turno vigente es el viernes 20/11 a las 09:50.', b);
+  const d = O.salidaTurnos({ output: 'MOSTRAR_TURNOS', intermediateSteps: [paso('gestionar_turno', { ok: false, motivo: 'cita_no_vista' })] }, { turnos: ['miércoles 4/11 a las 19:10'] });
+  t('CU3 (real 330189) "Su turno vigente es el X" + "¿Cuál de estos turnos? - X": queda una sola vez', d.texto === 'Su turno vigente es el miércoles 4/11 a las 19:10.', d);
+  const BL = 'Tenemos los próximos turnos disponibles:\nPor la mañana:\n* Viernes 27 de noviembre 8:30\n\nLe sirve alguno?';
+  const e = O.salidaTurnos({ output: 'MOSTRAR_TURNOS', intermediateSteps: [paso('buscar_horarios', { ok: true, bloque: BL }), paso('gestionar_turno', { ok: false, motivo: 'cita_no_vista' }), paso('ver_turnos', { ok: true, turnos: ['viernes 27/11 a las 09:10'] })] }, {});
+  t('CU4 (real 331594) horarios + "Su turno vigente…": sin la pregunta de uno debajo', e.texto === BL + '\n\nSu turno vigente es el viernes 27/11 a las 09:10.', e);
+  const f = O.salidaTurnos({ output: 'PREGUNTA_CUAL_TURNO', intermediateSteps: [paso('buscar_horarios', { ok: true, bloque: BL })] }, { turnos: ['viernes 16/10 a las 09:10', 'miércoles 4/11 a las 09:10'] });
+  t('CU5 con DOS turnos la pregunta sigue (es una pregunta de verdad)', f.texto === BL + '\n\n¿Cuál de estos turnos?\n- viernes 16/10 a las 09:10\n- miércoles 4/11 a las 09:10', f.texto);
+  // (13/11, real 339767) con buscar_horarios mirando la agenda en otro mensaje: "ese día no hay" + lo ya ofrecido que sigue libre, no el bloque entero de nuevo.
+  const g = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('buscar_horarios', { ok: false, motivo: 'sin_turnos' }, { desde: '2026-11-18', hasta: '2026-11-18' }),
+    paso('buscar_horarios', { ok: true, sin_horarios_nuevos: true, ya_ofrecidos_en_rango: YA }, { desde: '2026-11-18' }), paso('lista_espera', { ok: true, texto_para_el_paciente: O.TEXTOS.ESPERA })] }, { turnos: UNO });
+  t('CU6 (real 339767) lista de espera + "Para ese día no hay…" + lo ya ofrecido, sin el bloque entero', g.texto === O.TEXTOS.ESPERA + '\n\nPara ese día no hay turnos disponibles.\n\n' + SIGUEN && !/Tenemos los próximos/.test(g.texto), g.texto); }
 // (21/10, auditoría) confirmar_core: un turno de HOY cuya hora ya pasó no se confirma (el v6 confirmó dos así, con el comprobante de después de atenderse).
 { const Conf = require('../v7/confirmar_core.js');
   const rows = [{ id_cita_dentalink: 1, fecha_turno: '2026-10-21', hora_turno: '10:00:00', nombre_paciente: 'Ana' }, { id_cita_dentalink: 2, fecha_turno: '2026-10-21', hora_turno: '18:30:00', nombre_paciente: 'Ana' }];
