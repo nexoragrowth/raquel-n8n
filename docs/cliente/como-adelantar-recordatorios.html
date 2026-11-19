@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Cómo adelantar los recordatorios</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  @page { size: A4; margin: 14mm 14mm 12mm; }
+  :root { --tinta: #14171c; --suave: #5b6370; --linea: #e3e6ea; --fondo: #f6f7f9; --verde: #16a34a; --verde-f: #e8f6ee; --ambar: #b45309; --ambar-f: #fdf2e3; --gris-f: #eef0f3; --acento: #0f766e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, "Segoe UI", Arial, sans-serif; color: var(--tinta); font-size: 11.2pt; line-height: 1.42; background: #fff; }
+  h1 { font-size: 21pt; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--suave); margin: 0 0 12px; font-size: 10.5pt; }
+  .cuando { background: var(--fondo); border: 1px solid var(--linea); border-radius: 10px; padding: 9px 12px; margin-bottom: 12px; }
+  .cuando b { color: var(--acento); }
+  .grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 14px; align-items: start; }
+  ol { margin: 0; padding: 0; list-style: none; counter-reset: paso; display: grid; gap: 8px; }
+  ol li { counter-increment: paso; position: relative; padding-left: 34px; }
+  ol li::before { content: counter(paso); position: absolute; left: 0; top: 1px; width: 24px; height: 24px; border-radius: 50%; background: var(--acento); color: #fff; font-weight: 700; font-size: 10.5pt; display: grid; place-items: center; }
+  .k { display: inline-block; border: 1px solid var(--linea); background: #fff; border-radius: 6px; padding: 0 6px; font-weight: 600; font-size: 10pt; white-space: nowrap; }
+  .k.p { background: var(--acento); color: #fff; border-color: var(--acento); }
+  .tag { display: inline-block; border-radius: 999px; padding: 1px 7px; font-size: 8.8pt; font-weight: 600; white-space: nowrap; }
+  .ok { background: var(--verde-f); color: var(--verde); } .av { background: var(--ambar-f); color: var(--ambar); } .gr { background: var(--gris-f); color: var(--suave); }
+  /* maqueta de la pantalla */
+  .pantalla { border: 1px solid var(--linea); border-radius: 12px; padding: 11px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.03); font-size: 9.2pt; }
+  .pantalla .t { font-weight: 600; font-size: 10pt; margin-bottom: 6px; }
+  .fila-ctl { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .inp { border: 1px solid var(--linea); border-radius: 7px; padding: 3px 8px; background: var(--fondo); }
+  .btn { border: 1px solid var(--linea); border-radius: 7px; padding: 3px 8px; font-weight: 600; }
+  .btn.p { background: var(--acento); color: #fff; border-color: var(--acento); }
+  .res { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-bottom: 6px; }
+  .lista { border: 1px solid var(--linea); border-radius: 8px; overflow: hidden; }
+  .lista div { display: grid; grid-template-columns: 38px 1fr auto; gap: 6px; padding: 5px 8px; border-top: 1px solid var(--linea); align-items: center; }
+  .lista div:first-child { border-top: 0; }
+  .lista .h { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .nota { margin-top: 7px; background: var(--fondo); border-radius: 7px; padding: 5px 8px; color: var(--suave); }
+  .conf { margin-top: 7px; border: 1px solid #f0c88a; background: #fffaf2; border-radius: 8px; padding: 7px 8px; }
+  .conf p { margin: 0 0 5px; font-weight: 600; }
+  .marca { font-size: 8.5pt; color: var(--suave); margin-top: 4px; text-align: right; }
+  h2 { font-size: 12.5pt; margin: 14px 0 6px; }
+  .imp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .imp div { border: 1px solid var(--linea); border-radius: 9px; padding: 8px 10px; }
+  .imp b { display: block; margin-bottom: 2px; }
+  .etq { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; font-size: 10pt; }
+  .etq .tag { justify-self: start; }
+  footer { margin-top: 12px; color: var(--suave); font-size: 8.8pt; border-top: 1px solid var(--linea); padding-top: 6px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+  <h1>Cómo adelantar los recordatorios</h1>
+  <p class="sub">Panel de Asiri · Recordatorios · para feriados y fines de semana largos</p>
+
+  <div class="cuando"><b>¿Cuándo?</b> Cuando querés que los pacientes de un día reciban el aviso <b>antes de lo habitual</b>. Ejemplo: el lunes es feriado y querés confirmar los turnos del martes y del miércoles antes del fin de semana.</div>
+
+  <div class="grid">
+    <ol>
+      <li>Entrá al panel → <span class="k">Recordatorios</span> → bajá hasta <b>"Adelantar recordatorios de un día"</b>.</li>
+      <li>Elegí la <b>fecha de los turnos</b> que querés avisar (no la de hoy).</li>
+      <li>Tocá <span class="k">Simular (no envía)</span>. Vas a ver la lista de ese día y a quién le llega. <b>Todavía no se manda nada.</b></li>
+      <li>Si está bien, tocá <span class="k p">Adelantar ahora</span> y después <span class="k p">Sí, mandar ahora</span>. Dejá marcado <b>"No repetirlos"</b>.</li>
+      <li>Listo: te dice cuántos salieron. Con <b>"Ver cómo quedó"</b> se actualiza la lista.</li>
+      <li>¿Otra fecha más? Repetí desde el paso 2 con esa fecha.</li>
+    </ol>
+
+    <div>
+      <div class="pantalla">
+        <div class="t">⚡ Adelantar recordatorios de un día</div>
+        <div class="fila-ctl"><span class="inp">25/11/2026</span><span class="btn">👁 Simular (no envía)</span></div>
+        <div class="res"><b>Miércoles 25 de noviembre</b> <span class="tag ok">8 reciben el aviso</span> <span class="tag gr">2 no</span></div>
+        <div class="lista">
+          <div><span class="h">15:00</span><span>Ana Ejemplo</span><span class="tag gr">Ya confirmó</span></div>
+          <div><span class="h">15:40</span><span>Bruno Ejemplo</span><span class="tag ok">Le llega</span></div>
+          <div><span class="h">16:20</span><span>Carla Ejemplo</span><span class="tag ok">Le llega</span></div>
+          <div><span class="h">17:00</span><span>Diego Ejemplo</span><span class="tag av">Sin celular</span></div>
+          <div><span class="h">18:20</span><span>Eva Ejemplo</span><span class="tag gr">Anulado</span></div>
+        </div>
+        <div class="nota">Si no hacés nada, estos avisos salen solos el lunes 23 a las 08:00.</div>
+        <div class="conf"><p>Se van a mandar 8 avisos por WhatsApp ahora. No se puede deshacer.</p>☑ No repetirlos (suspende el aviso automático del lunes 23)<div style="margin-top:5px"><span class="btn p">Sí, mandar ahora</span> &nbsp;<span class="btn">Cancelar</span></div></div>
+      </div>
+      <div class="marca">Ejemplo con datos inventados</div>
+    </div>
+  </div>
+
+  <h2>Qué quiere decir cada etiqueta</h2>
+  <div class="etq">
+    <span class="tag ok">Le llega</span><span>Recibe el aviso con el día y la hora.</span>
+    <span class="tag av">Le llega de nuevo</span><span>Ya tuvo un aviso y no contestó: se le vuelve a mandar.</span>
+    <span class="tag av">Sin celular</span><span>No tiene celular en Dentalink: no le llega. Cargalo en su ficha o avisale vos.</span>
+    <span class="tag gr">Ya confirmó · Ya contestó · Anulado · Cambio de fecha</span><span>No se le manda.</span>
+  </div>
+
+  <h2>Importante</h2>
+  <div class="imp">
+    <div><b>No lo mandes también a mano.</b>Si lo adelantás desde el panel y además lo escribís por WhatsApp, al paciente le llegan dos.</div>
+    <div><b>Dejá marcado "No repetirlos".</b>Así el aviso automático de ese día no vuelve a salir para los que no contestaron.</div>
+    <div><b>Simular no manda nada.</b>Podés probar todas las veces que quieras: recién manda cuando tocás "Sí, mandar ahora".</div>
+    <div><b>Si algo no cierra, no lo mandes.</b>Escribile a Lucas con la fecha que querías adelantar.</div>
+  </div>
+
+  <footer><span>Asiri · Áurea Odontología Estética</span><span>Versión del 19/11/2026</span></footer>
+</body>
+</html>
