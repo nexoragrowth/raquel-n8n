@@ -111,6 +111,13 @@
   "nombre": "v7 Agente Informacion",
   "script": "apply_orquestador_contexto.py"
  },
+ "E2upFyrbaCqqO2r3": {
+  "commit": "876e6fe",
+  "fecha": "2026-11-19T14:08:16-03:00",
+  "huella": "dfae7948bf66eae8e34d",
+  "nombre": "Recordatorios programados (panel)",
+  "script": "crear_recordatorios_programados.py"
+ },
  "E4GMd7K1It0iPHVD": {
   "commit": "5ac9ae3",
   "fecha": "2026-11-12T08:44:45-03:00",
