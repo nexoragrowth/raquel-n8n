@@ -1,186 +1,121 @@
 <!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<title>Adelantar y programar recordatorios</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<html lang="es"><head><meta charset="utf-8">
+<title>Recordatorios: adelantar y programar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
 <style>
-  @page { size: A4; margin: 12mm 14mm 10mm; }
-  :root { --tinta: #14171c; --suave: #5b6370; --linea: #e3e6ea; --fondo: #f6f7f9; --verde: #15803d; --verde-f: #e8f6ee; --ambar: #b45309; --ambar-f: #fdf2e3; --rojo: #b91c1c; --rojo-f: #fdecec; --gris-f: #eef0f3; --acento: #0f766e; --acento-f: #e6f4f2; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: Inter, "Segoe UI", Arial, sans-serif; color: var(--tinta); font-size: 10.2pt; line-height: 1.36; background: #fff; }
-  .hoja { page-break-after: always; }
-  .hoja:last-child { page-break-after: auto; }
-  h1 { font-size: 20pt; margin: 0 0 2px; letter-spacing: -0.01em; text-wrap: balance; }
-  h2 { font-size: 14pt; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
-  h2 .n { width: 24px; height: 24px; border-radius: 6px; background: var(--acento); color: #fff; font-size: 11pt; display: grid; place-items: center; }
-  h3 { font-size: 11pt; margin: 9px 0 5px; }
-  .sub { color: var(--suave); margin: 0 0 11px; font-size: 10.2pt; }
-  /* cuál uso */
-  .elegir { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 11px; }
-  .elegir > div { border: 1px solid var(--linea); border-radius: 10px; padding: 9px 11px; background: var(--fondo); }
-  .elegir b.t { display: block; font-size: 11pt; color: var(--acento); margin-bottom: 2px; }
-  .elegir .ej { color: var(--suave); font-size: 9.6pt; margin-top: 3px; }
-  .grid { display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 14px; align-items: start; }
-  ol { margin: 0; padding: 0; list-style: none; counter-reset: paso; display: grid; gap: 5px; }
-  ol li { counter-increment: paso; position: relative; padding-left: 32px; }
-  ol li::before { content: counter(paso); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%; background: var(--acento); color: #fff; font-weight: 700; font-size: 10pt; display: grid; place-items: center; }
-  .k { display: inline-block; border: 1px solid var(--linea); background: #fff; border-radius: 6px; padding: 0 6px; font-weight: 600; font-size: 9.6pt; white-space: nowrap; }
-  .k.p { background: var(--acento); color: #fff; border-color: var(--acento); }
-  .tag { display: inline-block; border-radius: 999px; padding: 1px 7px; font-size: 8.6pt; font-weight: 600; white-space: nowrap; }
-  .ok { background: var(--verde-f); color: var(--verde); } .av { background: var(--ambar-f); color: var(--ambar); } .gr { background: var(--gris-f); color: var(--suave); } .er { background: var(--rojo-f); color: var(--rojo); }
-  /* maqueta */
-  .pantalla { border: 1px solid var(--linea); border-radius: 12px; padding: 9px; background: #fff; font-size: 8.6pt; }
-  .pantalla .t { font-weight: 600; font-size: 9.8pt; margin-bottom: 5px; }
-  .pantalla .et { color: var(--suave); font-size: 8.4pt; margin: 6px 0 3px; }
-  .fila-ctl { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
-  .inp { border: 1px solid var(--linea); border-radius: 7px; padding: 2px 7px; background: var(--fondo); font-variant-numeric: tabular-nums; }
-  .btn { border: 1px solid var(--linea); border-radius: 7px; padding: 2px 7px; font-weight: 600; white-space: nowrap; }
-  .btn.p { background: var(--acento); color: #fff; border-color: var(--acento); }
-  .res { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-bottom: 5px; }
-  .lista { border: 1px solid var(--linea); border-radius: 8px; overflow: hidden; }
-  .lista > div { display: grid; grid-template-columns: 36px 1fr auto; gap: 6px; padding: 4px 8px; border-top: 1px solid var(--linea); align-items: center; }
-  .lista > div:first-child { border-top: 0; }
-  .lista .h { font-weight: 600; font-variant-numeric: tabular-nums; }
-  .fecha { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--linea); border-radius: 8px; padding: 4px 8px; margin-bottom: 4px; }
-  .fecha b { margin-right: 6px; }
-  .radio { display: flex; gap: 6px; align-items: center; margin: 3px 0; }
-  .radio i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--suave); display: inline-block; flex: none; }
-  .radio i.on { border-color: var(--acento); background: radial-gradient(var(--acento) 45%, transparent 50%); }
-  .chk { display: flex; gap: 6px; align-items: flex-start; margin: 5px 0; }
-  .chk i { width: 10px; height: 10px; border-radius: 2px; background: var(--acento); flex: none; margin-top: 2px; }
-  .nota { margin-top: 6px; background: var(--fondo); border-radius: 7px; padding: 4px 8px; color: var(--suave); }
-  .conf { margin-top: 6px; border: 1px solid #f0c88a; background: #fffaf2; border-radius: 8px; padding: 6px 8px; }
-  .conf p { margin: 0 0 4px; font-weight: 600; }
-  .conf ul { margin: 0 0 4px; padding-left: 16px; }
-  .conf small { color: var(--suave); display: block; margin-bottom: 5px; }
-  .prog { border: 1px solid var(--linea); border-radius: 8px; overflow: hidden; }
-  .prog > div { padding: 3px 8px; border-top: 1px solid var(--linea); }
-  .prog > div:first-child { border-top: 0; }
-  .prog .l1 { display: flex; justify-content: space-between; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .prog .q { color: var(--suave); font-size: 8.2pt; }
-  .marca { font-size: 8.3pt; color: var(--suave); margin-top: 4px; text-align: right; }
-  .etq { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; font-size: 9.8pt; }
-  .etq .tag { justify-self: start; }
-  .imp { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-  .imp div { border: 1px solid var(--linea); border-radius: 9px; padding: 7px 9px; font-size: 9.9pt; }
-  .imp b { display: block; margin-bottom: 1px; }
-  .reglas { margin: 0; padding-left: 17px; font-size: 9.9pt; display: grid; gap: 2px; }
-  footer { margin-top: 8px; color: var(--suave); font-size: 8.6pt; border-top: 1px solid var(--linea); padding-top: 5px; display: flex; justify-content: space-between; }
-</style>
-</head>
-<body>
+  @page { size: A4; margin: 14mm 15mm 12mm; }
+  :root { --tinta:#12151a; --suave:#5d6470; --tenue:#8a909a; --linea:#e7e9ec; --fondo:#f5f6f7; --verde:#16a34a; --verde-v:#22c55e; --verde-f:#eaf7ef; --ambar:#f59e0b; --ambar-t:#b45309; --ambar-f:#fef4e2; --rojo:#dc2626; --rojo-f:#fdecec; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Plus Jakarta Sans","Segoe UI",Arial,sans-serif; color:var(--tinta); font-size:10.3pt; line-height:1.45; background:#fff; }
+  .hoja { page-break-after:always; display:flex; flex-direction:column; gap:7mm; min-height:270mm; }
+  .hoja:last-child { page-break-after:auto; }
+  .kicker { font-size:8pt; font-weight:700; letter-spacing:.14em; color:var(--verde); text-transform:uppercase; }
+  h1 { font-size:23pt; line-height:1.12; margin:2mm 0 2mm; letter-spacing:-.02em; font-weight:800; text-wrap:balance; }
+  .lead { margin:0; color:var(--suave); font-size:10.8pt; max-width:150mm; }
+  h2 { margin:0; font-size:15pt; letter-spacing:-.01em; display:flex; align-items:center; gap:3mm; font-weight:800; }
+  h2 .l { width:8mm; height:8mm; border-radius:2.4mm; background:var(--tinta); color:#fff; font-size:11pt; display:grid; place-items:center; }
+  h2 small { font-size:9.5pt; color:var(--tenue); font-weight:500; }
+  .cap { position:relative; margin:0; line-height:0; border-radius:3.2mm; overflow:visible; box-shadow:0 1.2mm 4mm rgba(16,20,26,.16), 0 0 0 .25mm rgba(16,20,26,.18); }
+  .cap img { width:100%; display:block; border-radius:3.2mm; }
+  .cap.pad { background:#15171b; padding:3.4mm 3.4mm 2mm; }
+  .cap.pad img { border-radius:0; }
+  .in { position:relative; }
+  .ring { position:absolute; border:.7mm solid var(--ambar); border-radius:2mm; box-shadow:0 0 0 .6mm rgba(245,158,11,.25); }
+  .badge { position:absolute; transform:translate(-50%,-50%); width:7mm; height:7mm; border-radius:50%; background:var(--ambar); color:#1a1205; font-weight:800; font-size:10.5pt; line-height:7mm; text-align:center; border:.6mm solid #fff; box-shadow:0 .6mm 1.6mm rgba(0,0,0,.3); }
+  .pasos { list-style:none; margin:0; padding:0; display:grid; gap:3.2mm; }
+  .pasos li { display:grid; grid-template-columns:7mm 1fr; gap:3mm; align-items:start; }
+  .pasos .n { width:7mm; height:7mm; border-radius:50%; background:var(--ambar); color:#1a1205; font-weight:800; font-size:10pt; display:grid; place-items:center; }
+  .pasos .t { display:block; font-size:10.6pt; }
+  .pasos .d { color:var(--suave); }
+  .k { display:inline-block; background:var(--verde-v); color:#fff; border-radius:1.6mm; padding:0 1.8mm; font-weight:700; font-size:9.4pt; white-space:nowrap; line-height:1.55; }
+  .k.o { background:#1b1e24; color:#e8eaee; }
+  .nota { background:var(--fondo); border-radius:2.6mm; padding:2.6mm 3.4mm; color:var(--suave); font-size:9.6pt; }
+  .nota b { color:var(--tinta); }
+  .donde { display:grid; grid-template-columns:52mm 1fr; gap:7mm; align-items:center; }
+  .eleccion { display:grid; gap:2.6mm; }
+  .op { border:.3mm solid var(--linea); border-radius:3mm; padding:3mm 3.6mm; display:grid; grid-template-columns:1fr auto; gap:1mm 3mm; align-items:center; }
+  .op .q { font-weight:700; }
+  .op .r { color:var(--suave); font-size:9.5pt; grid-column:1; }
+  .op .ir { grid-row:1 / span 2; grid-column:2; font-weight:700; font-size:9.4pt; color:var(--verde); white-space:nowrap; }
+  .a2 { display:grid; grid-template-columns:1.16fr .84fr; gap:7mm; align-items:start; }
+  .col { display:grid; gap:5mm; align-content:start; }
+  .b2 { display:grid; grid-template-columns:1fr 1fr; gap:6mm; align-items:start; }
+  .estados { display:grid; grid-template-columns:auto 1fr; gap:1.8mm 3mm; font-size:9.3pt; align-items:center; }
+  .estados div { display:contents; }
+  .estados .pill { justify-self:start; }
+  .pill { display:inline-block; border-radius:99px; padding:.3mm 2.4mm; font-size:8.4pt; font-weight:700; white-space:nowrap; flex:none; }
+  .p-am { background:var(--ambar-f); color:var(--ambar-t); } .p-ok { background:var(--verde-f); color:var(--verde); } .p-gr { background:#eef0f2; color:var(--suave); } .p-er { background:var(--rojo-f); color:var(--rojo); }
+  .tips { display:grid; grid-template-columns:repeat(3,1fr); gap:4mm; }
+  .tips div { border-top:.6mm solid var(--tinta); padding-top:2mm; font-size:9.4pt; color:var(--suave); }
+  .tips b { display:block; color:var(--tinta); font-size:10pt; margin-bottom:.6mm; }
+  .lista-b { display:grid; grid-template-columns:1fr 1fr; gap:6mm; align-items:center; }
+  footer { margin-top:auto; display:flex; justify-content:space-between; color:var(--tenue); font-size:8pt; border-top:.3mm solid var(--linea); padding-top:2mm; }
+  .mini { font-size:8pt; color:var(--tenue); }
+</style></head><body>
 
 <section class="hoja">
-  <h1>Adelantar y programar los recordatorios</h1>
-  <p class="sub">Panel de Asiri · Recordatorios · para feriados, puentes y cuando quieran confirmar antes</p>
-
-  <div class="elegir">
-    <div><b class="t">⚡ Adelantar: manda AHORA</b>Un día de turnos por vez. Sale apenas confirmás.<div class="ej">Ej.: “mandá ya los avisos de los turnos del miércoles”.</div></div>
-    <div><b class="t">🗓 Programar: manda MÁS TARDE</b>Varios días de turnos juntos, a la hora que elijas. Lo manda el servidor solo: no hace falta tener nada abierto.<div class="ej">Ej.: “mañana a las 08:00 mandá los del miércoles y los del jueves”.</div></div>
+  <div>
+    <div class="kicker">Guía rápida · Panel de Asiri</div>
+    <h1>Recordatorios: adelantar y programar</h1>
+    <p class="lead">Asiri manda solo el aviso de cada turno a las 08:00. Para feriados, puentes o cuando quieren confirmar antes, hay dos opciones en el panel.</p>
   </div>
 
-  <h2><span class="n">1</span>Adelantar recordatorios de un día</h2>
-  <div class="grid">
-    <ol>
-      <li>Entrá al panel → <span class="k">Recordatorios</span> → bajá hasta <b>“Adelantar recordatorios de un día”</b>.</li>
-      <li>Elegí la <b>fecha de los turnos</b> que querés avisar (no la de hoy).</li>
-      <li>Tocá <span class="k p">Adelantar ahora</span>. Ves la lista de ese día y a quién le llega. <b>Todavía no se manda nada.</b> (Si solo querés mirar, tocá <span class="k">Simular (no envía)</span>.)</li>
-      <li>Si está bien, tocá <span class="k p">Sí, mandar ahora</span>. Dejá marcado <b>“No repetirlos”</b>.</li>
-      <li>Listo: te dice cuántos salieron. Con <b>“Ver cómo quedó”</b> se actualiza la lista.</li>
-      <li>¿Otra fecha? Repetí desde el paso 2, o usá <b>Programar</b> (página 2) para mandarlas juntas.</li>
-    </ol>
-    <div>
-      <div class="pantalla">
-        <div class="t">⚡ Adelantar recordatorios de un día</div>
-        <div class="fila-ctl"><span class="inp">09/12/2026</span><span class="btn">👁 Simular (no envía)</span><span class="btn p">⚡ Adelantar ahora</span></div>
-        <div class="res"><b>Miércoles 9 de diciembre</b> <span class="tag ok">8 reciben el aviso</span> <span class="tag gr">2 no</span></div>
-        <div class="lista">
-          <div><span class="h">15:00</span><span>Ana Ejemplo</span><span class="tag gr">Ya confirmó</span></div>
-          <div><span class="h">15:40</span><span>Bruno Ejemplo</span><span class="tag ok">Le llega</span></div>
-          <div><span class="h">16:20</span><span>Carla Ejemplo</span><span class="tag av">Le llega de nuevo</span></div>
-          <div><span class="h">17:00</span><span>Diego Ejemplo</span><span class="tag av">Sin celular</span></div>
-          <div><span class="h">18:20</span><span>Eva Ejemplo</span><span class="tag gr">Anulado</span></div>
-        </div>
-        <div class="nota">Si no hacés nada, estos avisos salen solos el lunes 7 a las 08:00.</div>
-        <div class="conf"><p>Se van a mandar 8 avisos por WhatsApp ahora. No se puede deshacer.</p>☑ No repetirlos (suspende el aviso automático del lunes 7)<div style="margin-top:5px"><span class="btn p">Sí, mandar ahora</span> &nbsp;<span class="btn">Cancelar</span></div></div>
-      </div>
-      <div class="marca">Ejemplo con datos inventados</div>
+  <div class="donde">
+    <figure class="cap"><img src="guia-recordatorios/menu.png" alt=""><span class="ring" style="left:4.23%;top:57.82%;width:91.57%;height:21.14%"></span><span class="badge" hidden style="left:4.23%;top:57.82%"></span></figure>
+    <div class="eleccion">
+      <div><b class="t">Dónde está:</b> en el menú de la izquierda, <b>Recordatorios</b>. Bajando, vas a ver las dos secciones.</div>
+      <div class="op"><span class="q">¿Lo querés mandar ya?</span><span class="r">Una fecha de turnos, sale en el momento.</span><span class="ir">A · Adelantar →</span></div>
+      <div class="op"><span class="q">¿Lo dejás listo para más tarde, o son varias fechas?</span><span class="r">Lo manda el servidor solo a la hora que elijas.</span><span class="ir">B · Programar →</span></div>
     </div>
   </div>
 
-  <h3>Qué quiere decir cada etiqueta (Adelantar y Programar usan las mismas)</h3>
-  <div class="etq">
-    <span class="tag ok">Le llega</span><span>Recibe el aviso con el día y la hora.</span>
-    <span class="tag av">Le llega de nuevo</span><span>Ya tuvo un aviso y no contestó: se le vuelve a mandar.</span>
-    <span class="tag av">Sin celular</span><span>No tiene celular en Dentalink: no le llega. Cargalo en su ficha o avisale vos.</span>
-    <span class="tag gr">Ya confirmó · Ya contestó · Anulado · Cambio de fecha</span><span>No se le manda.</span>
+  <h2><span class="l">A</span>Adelantar: mandar ahora <small>sección «Adelantar recordatorios de un día»</small></h2>
+  <div class="a2">
+    <div class="col">
+      <figure class="cap "><div class="in"><img src="guia-recordatorios/1a_adelantar.png" alt=""><span class="ring" style="left:2.17%;top:60.19%;width:27.40%;height:18.83%"></span><span class="badge" style="left:2.17%;top:60.19%">1</span><span class="ring" style="left:55.65%;top:60.68%;width:26.39%;height:17.85%"></span><span class="badge" style="left:55.65%;top:60.68%">2</span></div></figure>
+      <ol class="pasos">
+        <li><span class="n">1</span><div><b class="t">Elegí la fecha de los turnos</b><span class="d">La del día que querés avisar, no la de hoy.</span></div></li>
+        <li><span class="n">2</span><div><b class="t">Tocá <span class="k">Adelantar ahora</span></b><span class="d">Aparece la lista: a quién le llega y a quién no (ya confirmó, anulado, sin celular). Todavía no se mandó nada.</span></div></li>
+        <li><span class="n">3</span><div><b class="t">Si está bien, tocá <span class="k">Sí, mandar ahora</span></b><span class="d">Dejá marcado <b>No repetirlos</b> y listo: te dice cuántos salieron.</span></div></li>
+      </ol>
+      <div class="nota"><b>¿Solo querés mirar?</b> Tocá <span class="k o">Simular (no envía)</span>: muestra la misma lista sin mandar nada.</div>
+    </div>
+    <figure class="cap "><div class="in"><img src="guia-recordatorios/1b_adelantar_confirmar.png" alt=""><span class="ring" style="left:4.25%;top:90.62%;width:27.17%;height:6.18%"></span><span class="badge" style="left:4.25%;top:90.62%">3</span></div></figure>
   </div>
-
-  <h3>Importante</h3>
-  <div class="imp">
-    <div><b>No lo mandes también a mano.</b>Si lo mandás desde el panel y además lo escribís por WhatsApp, al paciente le llegan dos.</div>
-    <div><b>Dejá marcado “No repetirlos”.</b>Así el aviso automático de ese día no vuelve a salir para los que no contestaron.</div>
-    <div><b>Simular no manda nada.</b>Probá todas las veces que quieras: recién manda con “Sí, mandar ahora” o “Sí, programar”.</div>
-    <div><b>Si algo no cierra, no lo mandes.</b>Escribile a Lucas con la fecha que querías avisar.</div>
+  <div class="tips">
+    <div><b class="t">No lo mandes también a mano</b>Si sale del panel y además lo escribís por WhatsApp, al paciente le llegan dos.</div>
+    <div><b class="t">Antes del día del turno</b>Los avisos tienen que salir antes del turno. Para cambiar la hora: cancelá y programá de nuevo.</div>
+    <div><b class="t">Si algo no cierra, no lo mandes</b>Escribile a Lucas con la fecha que querías avisar.</div>
   </div>
-  <footer><span>Asiri · Áurea Odontología Estética</span><span>Página 1 de 2 · versión del 19/11/2026</span></footer>
+  <footer><span>Asiri · Áurea Odontología Estética</span><span class="mini">Capturas del panel con nombres inventados</span><span>1 / 2</span></footer>
 </section>
 
 <section class="hoja">
-  <h2><span class="n">2</span>Programar recordatorios (varias fechas, para más tarde)</h2>
-  <p class="sub">Ejemplo: es jueves 3 y querés que <b>mañana viernes 4 a las 08:00</b> salgan juntos los avisos de los turnos del <b>miércoles 9</b> y del <b>jueves 10</b>.</p>
-  <div class="grid">
-    <ol>
-      <li>En <span class="k">Recordatorios</span>, bajá hasta <b>“Programar recordatorios”</b>.</li>
-      <li><b>Fechas de los turnos:</b> elegí una fecha y tocá <span class="k">+ Agregar</span>. Repetí con cada fecha (hasta 10). Con la ✕ sacás una.</li>
-      <li><b>Cuándo mandarlos:</b> dejá <b>“A la hora de siempre”</b> (mañana a las 08:00; si mañana es sábado o domingo, el lunes) o elegí <b>“Otro día y hora”</b>.</li>
-      <li>Dejá marcado <b>“No repetirlos”</b>.</li>
-      <li>Tocá <span class="k">3. Simular (no envía)</span>: al lado de cada fecha aparece cuántos reciben el aviso. Tocá la etiqueta para ver la lista.</li>
-      <li>Tocá <span class="k p">4. Programar</span>, revisá el resumen y tocá <span class="k p">Sí, programar</span>.</li>
-      <li>Aparece en <b>“Envíos programados”</b> como <span class="tag av">Programado</span>. Ya podés cerrar el panel: <b>lo manda el servidor solo</b>.</li>
-    </ol>
-    <div>
-      <div class="pantalla">
-        <div class="t">🗓 Programar recordatorios</div>
-        <div class="et">1. Fechas de los turnos a avisar</div>
-        <div class="fila-ctl"><span class="inp">dd/mm/aaaa</span><span class="btn">+ Agregar</span></div>
-        <div class="fecha"><span><b>Miércoles 9 de diciembre</b><span class="tag ok">8 de 10 reciben el aviso</span></span><span>✕</span></div>
-        <div class="fecha"><span><b>Jueves 10 de diciembre</b><span class="tag ok">6 de 7 reciben el aviso</span></span><span>✕</span></div>
-        <div class="et">2. Cuándo mandarlos</div>
-        <div class="radio"><i class="on"></i><span>A la hora de siempre: <b>viernes 4 de diciembre a las 08:00</b></span></div>
-        <div class="radio"><i></i><span>Otro día y hora</span></div>
-        <div class="chk"><i></i><span>No repetirlos: si salen todos, se suspende el aviso automático de esas fechas.</span></div>
-        <div class="fila-ctl"><span class="btn">👁 3. Simular (no envía)</span><span class="btn p">4. Programar</span></div>
-        <div class="conf"><p>El viernes 4 de diciembre a las 08:00 se van a mandar 14 avisos:</p><ul><li>Miércoles 9 de diciembre: 8 avisos</li><li>Jueves 10 de diciembre: 6 avisos</li></ul><small>Justo antes de mandar, el servidor vuelve a mirar la agenda: si alguien confirmó o canceló mientras tanto, no se le manda.</small><span class="btn p">Sí, programar</span> &nbsp;<span class="btn">Cancelar</span></div>
-        <div class="et">Envíos programados</div>
-        <div class="prog">
-          <div><div class="l1"><b>Turnos del miércoles 9 de diciembre</b><span class="tag av">Programado</span></div><div class="l1"><span class="q">se manda el vie 04-12 08:00</span><span>✕ Cancelar</span></div></div>
-          <div><div class="l1"><b>Turnos del jueves 10 de diciembre</b><span class="tag av">Programado</span></div><div class="l1"><span class="q">se manda el vie 04-12 08:00</span><span>✕ Cancelar</span></div></div>
-        </div>
-      </div>
-      <div class="marca">Ejemplo con datos inventados</div>
+  <h2><span class="l">B</span>Programar: dejarlo listo para más tarde <small>sección «Programar recordatorios»</small></h2>
+  <p class="lead" style="margin-top:-3mm">Ejemplo: hoy dejás programado que el <b>lunes 30 a las 08:00</b> salgan los avisos de los turnos del <b>miércoles 2</b> y del <b>jueves 3</b>.</p>
+  <div class="b2">
+    <figure class="cap "><div class="in"><img src="guia-recordatorios/2a_programar.png" alt=""><span class="ring" style="left:2.17%;top:25.68%;width:45.00%;height:9.21%"></span><span class="badge" style="left:2.17%;top:25.68%">1</span><span class="ring" style="left:2.17%;top:67.32%;width:56.40%;height:9.56%"></span><span class="badge" style="left:2.17%;top:67.32%">2</span><span class="ring" style="left:2.17%;top:87.51%;width:30.79%;height:9.21%"></span><span class="badge" style="left:2.17%;top:87.51%">3</span><span class="ring" style="left:31.83%;top:87.72%;width:33.89%;height:8.80%"></span><span class="badge" style="left:31.83%;top:87.72%">4</span></div></figure>
+    <figure class="cap "><div class="in"><img src="guia-recordatorios/2b_programar_confirmar.png" alt=""><span class="ring" style="left:4.25%;top:89.04%;width:23.86%;height:6.95%"></span><span class="badge" style="left:4.25%;top:89.04%">5</span></div></figure>
+  </div>
+  <ol class="pasos" style="grid-template-columns:1fr 1fr; column-gap:7mm">
+    <li><span class="n">1</span><div><b class="t">Agregá cada fecha de turnos</b><span class="d">Elegila y tocá <b>+ Agregar</b>. Podés sumar varias (con la ✕ sacás una).</span></div></li>
+    <li><span class="n">4</span><div><b class="t">Tocá <span class="k">4. Programar</span></b><span class="d">Te muestra el resumen: cuándo sale y cuántos avisos.</span></div></li>
+    <li><span class="n">2</span><div><b class="t">Elegí cuándo mandarlos</b><span class="d"><b>A la hora de siempre</b> (mañana 08:00) u <b>Otro día y hora</b>.</span></div></li>
+    <li><span class="n">5</span><div><b class="t">Tocá <span class="k">Sí, programar</span></b><span class="d">Listo. Podés cerrar el panel: lo manda el servidor solo.</span></div></li>
+    <li><span class="n">3</span><div><b class="t">Tocá <span class="k o">3. Simular (no envía)</span></b><span class="d">Al lado de cada fecha ves cuántos reciben el aviso.</span></div></li>
+    <li><span class="n">6</span><div><b class="t">Queda en «Envíos programados»</b><span class="d">¿Te equivocaste? Tocá <b>Cancelar</b> mientras diga Programado.</span></div></li>
+  </ol>
+  <div class="lista-b">
+    <figure class="cap pad"><div class="in"><img src="guia-recordatorios/3_lista.png" alt=""><span class="ring" style="left:83.60%;top:29.46%;width:14.20%;height:11.58%"></span><span class="badge" style="left:100.00%;top:35.25%">6</span></div></figure>
+    <div class="estados">
+      <div><span class="pill p-am">Programado</span>Espera la hora. Se puede cancelar.</div>
+      <div><span class="pill p-ok">Enviado</span>Salieron todos.</div>
+      <div><span class="pill p-am">Enviando…</span>Está saliendo ahora.</div>
+      <div><span class="pill p-gr">Cancelado</span>No se mandó nada.</div>
+      <div><span class="pill p-er">Revisar</span>No salieron todos: avisale a Lucas.</div>
+      <div><span class="pill p-er">No salió a tiempo</span>No se mandó nada.</div>
     </div>
   </div>
-
-  <h3>Qué quiere decir cada estado de “Envíos programados”</h3>
-  <div class="etq">
-    <span class="tag av">Programado</span><span>Espera la hora elegida. Todavía se puede <b>Cancelar</b>.</span>
-    <span class="tag av">Enviando…</span><span>Está saliendo ahora. Ya no se puede cancelar.</span>
-    <span class="tag ok">Enviado</span><span>Salieron todos (o no había a quién mandarle, o ya se habían mandado antes por otro lado).</span>
-    <span class="tag gr">Cancelado</span><span>No se mandó nada. Dice quién lo canceló.</span>
-    <span class="tag er">Revisar</span><span>No salieron todos o no se pudo leer la agenda. <b>No lo mandes a mano todavía:</b> escribile a Lucas con la fecha.</span>
-    <span class="tag er">No salió a tiempo</span><span>Pasaron 12 horas de la hora elegida, o ya llegó el día del turno, y no se mandó. No salió nada.</span>
-  </div>
-
-  <h3>Reglas que el panel cuida solo</h3>
-  <ul class="reglas">
-    <li>Los avisos tienen que salir <b>antes del día del turno</b>, y al menos 3 minutos después de ahora.</li>
-    <li>Una sola programación por fecha. <b>¿Querés cambiar la hora?</b> Cancelá esa fecha y programala de nuevo.</li>
-    <li>Si para esa fecha <b>ya se mandaron avisos</b> (por ejemplo con Adelantar), el servidor no los repite.</li>
-    <li>Programar no reemplaza al aviso de todos los días: los días normales siguen saliendo solos a las 08:00.</li>
-  </ul>
-  <footer><span>Asiri · Áurea Odontología Estética</span><span>Página 2 de 2 · versión del 19/11/2026</span></footer>
+  <footer><span>Asiri · Áurea Odontología Estética</span><span class="mini">Versión del 19/11/2026</span><span>2 / 2</span></footer>
 </section>
-</body>
-</html>
+</body></html>
