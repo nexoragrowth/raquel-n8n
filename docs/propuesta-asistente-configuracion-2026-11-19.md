@@ -136,6 +136,13 @@ El asistente es la **puerta única**: la misma pantalla de chat habla con todas 
 4. **[Confirmar]** (solo doctora/admin) → se cambia **un solo dato**, todo se actualiza, queda en el historial con **Deshacer**.
 5. El asistente verifica después: vuelve a leer los textos resueltos y confirma "Listo: 9 de 9 textos muestran $60.000".
 
+**Probado el 19/11 (solo sombra, sin tocar producción) — con los textos reales y con el modelo real:**
+- **Hallazgo clave:** de las 10 menciones de "$50.000" en los 9 textos, **8 son la consulta y 2 son la devolución** (hoy valen lo mismo). Un reemplazo "por valor" las habría mezclado: el día que la consulta cambie, la devolución cambiaría sola. Por eso son **dos datos separados** (`precio_consulta`, `precio_devolucion`) y la migración **clasifica cada mención por contexto** (la pista más cercana antes del monto) y deja **para revisar** lo dudoso en vez de adivinar.
+- **Clasificador contra los 9 textos reales** (`v7/datos_core.js`, `tests/test_datos_core.mjs` 55/55): 10 de 10 menciones bien atribuidas, **0 dudosas**, y la ida y vuelta es **idéntica** en los 9 textos (resolver con los valores de hoy devuelve el texto original). El test encontró un error mío de diseño (la palabra "diagnóstico" está en las dos descripciones, no sirve de pista) y quedó corregido.
+- **Con el modelo real, en sombra** (clon temporal del cerebro en el espacio de pruebas apagado, restaurado y verificado idéntico al terminar; nada escrito en la base): con `precio_consulta = 60.000` y `precio_devolucion = 50.000`, "¿cuánto sale la primera consulta?" → **$60.000**; el mensaje de 3 pedidos (precio + alias + turnos) → **$60.000** y los datos de pago y horarios intactos; "¿y la devolución?" → **$50.000**. Un solo dato cambió y el otro no se movió.
+- **Lo que NO prueba todavía:** el camino de los avisos de turno (workflow aparte, tiene el precio fijo en el código) ni el v6; eso es la Fase 2.
+- **Hallazgo aparte (error del bot de hoy):** ante "quiero pagar la consulta, ¿cuánto transfiero y a dónde?", el especialista de Pagos **registra un "aviso de pago" que nadie hizo** y no dice el monto. En 9 días reales: 32 avisos registrados, **30 reales y 2 falsos** (una consulta de cómo pagar y una promesa de pago). Está en el backlog.
+
 Sin esa migración previa, "cambiar el precio en todos lados" sería un reemplazo de texto sobre 9 entradas más código: frágil y fácil de dejar inconsistente. Por eso la lista de precios única va **antes** del chat de precios.
 
 ## 5. Los dos niveles y por qué se separan
