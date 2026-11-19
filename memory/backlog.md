@@ -1,9 +1,17 @@
 # Backlog — raquel-n8n
 
+## ⇢ 2026-11-19 (tarde) — Programar recordatorios
+- [x] Desplegado: tabla `recordatorios_programados`, workflow `E2upFyrbaCqqO2r3` (cada 2 min), panel con Simular + Programar (ver current-state 14:20).
+- [ ] P1 vie 20/11 08:00: confirmar "Suspendido hoy" en Recordatorios y borrar `nLF8NI6viUdzD0CH`.
+- [ ] P2 Secreto en el webhook `trigger-recordatorios-manual` (hoy sin secreto; lo usan Adelantar y Programados): agregar header y cargarlo en el panel y en E2upFyrbaCqqO2r3 en el mismo paso.
+- [ ] P3 Alerta al grupo si una programación queda en "error" o "vencido" (hoy solo se ve en la pantalla).
+- [ ] P3 Simular en "Programar" puede mostrar "Le llega de nuevo", pero si esa fecha ya tiene avisos enviados el servidor NO manda ninguno (`decidir`: ya > 0 → no dispara, queda "Enviado"). Raro en la práctica (Programar se usa para adelantar). Opciones: que el panel avise "esta fecha ya tiene avisos enviados: no se va a mandar" o que el servidor mande solo a los que faltan. Decide Lucas.
+- [x] 19/11 PDF completo `docs/cliente/como-adelantar-y-programar-recordatorios.pdf` (2 págs: Adelantar + Programar, estados y reglas; datos inventados).
+
 ## ⇢ 2026-11-19 (mediodía) — paciente nueva: el orquestador derivó una reserva que Turnos ya tenía lista
 - Caso real (ejec. 344370, 10:32 Jujuy): con nombre y DNI, el plan fue Turnos + derivar_secretaria ("Pasar a gestionar_turno con datos"); el paciente recibió "Le paso con la secretaria…" + "¿Procedo con la reserva?"; la secretaria intervino (10:35), el "sí" de la paciente cayó en modo humano y la secretaria cargó el turno a mano (UNA sola cita en Dentalink, verificado). 1 de 75 mensajes reales desde el 13/11, con paciente nuevo.
 - Causas: el contexto del orquestador traía instrucciones de herramientas que él no tiene ("pasalos a gestionar_turno", del v7 de un solo agente; el Cerebro Agente ya tenía un parche que nunca se llevó al vivo) y el único ejemplo del prompt emparejaba turnos con derivar_secretaria. El prompt NO está inflado (≈880 tokens).
-- [ ] **Listo SIN desplegar** (`scripts/apply_orquestador_contexto.py`, 7 workflows; simulación y diff_vivo = solo esto): contexto_orq solo con hechos, ejemplo del prompt de un paso (3.542 < tope 3.550), red por código en despachar y componer. Tests OR1–OR10, Z18d, barrido verde. Sombra con el modelo real ×3 OK; queja + turno sigue derivando. **Falta "desplegá".**
+- [x] **DESPLEGADO 19/11** (Lucas: "desplegá"; 140bc6c; `scripts/apply_orquestador_contexto.py`, 7 workflows): contexto_orq solo con hechos, ejemplo del prompt de un paso (3.542 < tope 3.550), red por código en despachar y componer. Tests OR1–OR10, Z18d, barrido verde. Sombra con el modelo real ×3 OK; queja + turno sigue derivando.
 - [P2] Mensajes del paciente que llegan durante el modo humano no se guardan en la memoria (el "sí" de esta paciente no figura).
 - [P1 — decisión de la Dra.] Precio: la secretaria dijo $60.000 el 16/11 y el 19/11 10:38; el resto de los mensajes a mano (incluso el 19/11 09:02) y el bot dicen $50.000.
 
