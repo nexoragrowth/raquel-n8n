@@ -135,6 +135,16 @@ const OrquestadorCore = (() => {
       }
       // (B6) UNA llamada por sub-agente y por mensaje: los pedidos repetidos van juntos en el mismo pedido.
       for (const a of AGENTES) if (pedidos[a]) plan[a] = [...new Set(pedidos[a])].join(' / ');
+      // (13/11, 2 conversaciones reales: "Y <hermano> tb" tras avisar una urgencia y "Muchas gracias / No hay problema" tras atenderse) El orquestador dijo
+      // "responde a la confirmación pendiente" sin que hubiera NINGUNA: Turnos confirmó un turno que nadie pidió confirmar, y al otro le mostró el turno
+      // de esa mañana. Red por ESTADO: sin recordatorio abierto, sin read-back que el paciente vio y sin propuesta de la clínica, ese pedido no tiene a qué
+      // responder y no va a Turnos. Solo con el dato explícito (recordatorio_abierto === false): quien no lo pasa queda como antes.
+      const CONF_PENDIENTE = 'responde a la confirmacion pendiente';
+      const sinNada = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s."'«»*`]+$/g, '').replace(/^[\s"'«»*`]+/g, '');
+      if (c.recordatorio_abierto === false && !c.prop_pendiente && !c.propuesta_clinica && plan.turnos && sinNada(plan.turnos) === CONF_PENDIENTE) {
+        plan.turnos = null; plan.confirmacion_inexistente = true;
+        if (!fijas.size && !AGENTES.some((a) => plan[a])) { fijas.add('no_reply'); plan.motivo = 'sin_confirmacion_pendiente'; }
+      }
       // (20/10, prueba en vivo) "cuánto sale la consulta y pasame el alias": el orquestador mandó TODO a Información (sin Pagos) e Información, por el alias,
       // dijo FUERA_DE_ALCANCE → derivó y se perdió también el precio. Red por código sobre el PEDIDO (texto del orquestador, no del paciente): si menciona
       // los datos para transferir y no hay paso de Pagos, Pagos entra igual.
@@ -263,6 +273,7 @@ const OrquestadorCore = (() => {
       if (o.ok === true && o.readback_text) return { texto: String(o.readback_text).trim(), estado: 'confirmado' };
       if (o.motivo === 'varios_recordatorios' && Array.isArray(o.fechas) && o.fechas.length) return { texto: '¿Cuál de estos turnos confirma?\n' + lista(o.fechas), estado: 'pregunta' };
       if (['sin_recordatorio', 'sin_turno_en_esa_fecha', 'cita_no_vigente', 'cita_cambio'].includes(o.motivo)) return { pregunta: 'CUAL_TURNO', estado: 'pregunta', motivo: o.motivo };
+      if (o.motivo === 'turno_pasado') return { estado: 'turno_pasado' };   // (13/11) ya pasó o ya atendido: no se tocó nada y no hay nada que decirle
       return { error_tecnico: true, estado: 'error' };
     }
     if (p.tool === 'lista_espera') return o.texto_para_el_paciente ? { texto: o.texto_para_el_paciente, estado: 'espera' } : { error_tecnico: true, estado: 'error' };
@@ -343,6 +354,9 @@ const OrquestadorCore = (() => {
     // logradas van al mensaje (no solo la última); si confirmar_turno ya hizo SU pregunta con la lista, no se suma otra pregunta en el mismo mensaje.
     const confOk = r.filter((x) => x.tool === 'confirmar_turno' && x.texto && x.estado === 'confirmado');
     const confPregunto = !!(c && c.texto && c.estado === 'pregunta');
+    // (13/11, conversación real: "Ya asistí" → Asiri confirmó el turno de esa mañana, ya atendido) Quiso "confirmar" un turno que ya pasó: no se le muestran
+    // turnos ni se le pregunta cuál; si no hay otra cosa para decirle, silencio (estaba comentando o agradeciendo).
+    const confPasado = !confOk.length && r.some((x) => x.tool === 'confirmar_turno' && x.estado === 'turno_pasado');
     if (confOk.length) for (const x of confOk) partes.push(x.texto);
     // (21/10, auditoría; el v6 escalaba "paciente confirma pero no tiene turno activo") Quiso confirmar y ver_turnos (de ESTE mensaje: si no se
     // llamó, una lista vacía puede ser un error de consulta) no encontró ningún turno con este celular: se le dice y la confirmación va a la secretaria.
@@ -372,10 +386,11 @@ const OrquestadorCore = (() => {
     }
     if (ef && ef.pregunta && !readback && !(g && g.texto)) pregunta = pregunta || ef.pregunta;
     // (05/11, revisión B3) si la propuesta de la clínica ya se deriva, no se suma una pregunta del modelo ("¿Para quién…?" + "Le paso con la secretaria").
-    if (!readback && !pregunta && !confPregunto && !confSinTurno && cod && cod.startsWith('PREGUNTA_') && !r.some((x) => x.estado === 'staff_derivado')) pregunta = cod.slice('PREGUNTA_'.length);
+    if (!readback && !pregunta && !confPregunto && !confSinTurno && !confPasado && cod && cod.startsWith('PREGUNTA_') && !r.some((x) => x.estado === 'staff_derivado')) pregunta = cod.slice('PREGUNTA_'.length);
+    if (confPasado && pregunta === 'CUAL_TURNO') pregunta = null;
     // (12/11) "Quería saber si tiene turno para el viernes" (pregunta por horarios LIBRES) a veces sale como MOSTRAR_TURNOS: sin turnos propios y con
     // horarios ofrecidos, no se agrega "No veo turnos vigentes con este número" (les llegaba a pacientes nuevos debajo de los horarios).
-    if (!readback && !confSinTurno && cod === 'MOSTRAR_TURNOS' && (turnos.length || !bloques.some((b) => b.estado === 'bloque_ofrecido'))) partes.push(textoPregunta('MOSTRAR_TURNOS', turnos));
+    if (!readback && !confSinTurno && !confPasado && cod === 'MOSTRAR_TURNOS' && (turnos.length || !bloques.some((b) => b.estado === 'bloque_ofrecido'))) partes.push(textoPregunta('MOSTRAR_TURNOS', turnos));
     // (13/11, 4 mensajes reales del 02/11 al 13/11) "¿Cuál de estos turnos?" con UN solo turno no es una pregunta: salía debajo de "Su turno vigente es el X"
     // (el mismo turno dos veces) o debajo de los horarios ofrecidos. Con uno solo: si el mensaje ya lleva otra parte de Turnos, no va; si no, se nombra el turno.
     if (pregunta === 'CUAL_TURNO' && !readback && turnos.length === 1) pregunta = unir(partes).length ? null : 'MOSTRAR_TURNOS';
@@ -395,7 +410,7 @@ const OrquestadorCore = (() => {
       : (g && g.estado === 'ya_en_agenda') ? 'ya_en_agenda'
       : (c && c.estado === 'confirmado') ? 'confirmado' : (bloques.length && !(pregunta && !bloques.some((b) => b.estado === 'bloque_ofrecido'))) ? 'bloque_ofrecido' : pregunta ? 'pregunta' : fuera ? 'fuera_de_alcance'
       : derivar && !texto ? 'derivar'
-      : cod === '[NO_REPLY]' && !texto ? 'no_reply' : texto ? 'respondido' : error_tecnico ? 'error' : 'nada';
+      : (cod === '[NO_REPLY]' || confPasado) && !texto ? 'no_reply' : texto ? 'respondido' : error_tecnico ? 'error' : 'nada';
     // (05/11) avisos que traen las herramientas (hoy: el FYI de "la agenda ya estaba como la propuso la clínica"); los manda la Salida del cerebro.
     const avisos = r.map((x) => x.aviso).filter(Boolean);
     return { ...base, texto, estado, readback: !!readback, fuera_de_alcance: fuera, urgencia: cod === 'URGENCIA', derivar, error_tecnico, ...(avisos.length ? { avisos } : {}), ...(sinPropuesta && derivar === sinPropuesta ? { sin_propuesta: true } : {}) };

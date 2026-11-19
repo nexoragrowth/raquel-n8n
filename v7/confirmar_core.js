@@ -8,6 +8,7 @@ const ConfirmarCore = (() => {
   const vigente = (t) => ![1, 14].includes(Number(t.id_estado)) && Number(t.estado_anulacion || 0) === 0;
   const no = (motivo, para_asiri, extra) => ({ ok: false, motivo, para_asiri, ...(extra || {}) });
   const ESTADO_CONFIRMADO = 18;   // "Confirmado por WhatsApp" (el que usa el v6)
+  const ESTADO_ATENDIDO = 2;      // "Atendido": lo pone la clínica después de la consulta. Asiri NUNCA lo pisa (13/11, caso real: lo pisó con 18).
 
   const sinTildes = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const primerNombre = (s) => String(s || '').trim().split(/\s+/)[0] || '';
@@ -43,11 +44,18 @@ const ConfirmarCore = (() => {
     if (nom && sel.length > 1) { const x = sel.filter((c) => sinTildes(c.nombre) === nom); if (x.length) sel = x; }
     if (sel.length) return { ok: true, cands: sel, cand: sel[0] };
     if (fecha && Array.isArray(turnosVistos)) {
-      const t = turnosVistos.find((x) => (x.fecha === fecha || x.fecha === invertida(fecha)) && vigente(x) && (!h || normHora(x.hora_inicio) === h));
+      // (13/11, conversación real: "Ya asistí" a las 17 h → se confirmó el turno de ESE día a las 11 h, que la clínica ya había marcado Atendido)
+      // Por la agenda vale la misma regla que por el recordatorio: un turno que ya pasó (o ya atendido) no se confirma.
+      const pasado = (x) => String(x.fecha) < hoyISO || (ahora && String(x.fecha) === hoyISO && normHora(x.hora_inicio) && normHora(x.hora_inicio) <= ahora)
+        || Number(x.id_estado) === ESTADO_ATENDIDO;
+      const delDia = turnosVistos.filter((x) => (x.fecha === fecha || x.fecha === invertida(fecha)) && vigente(x) && (!h || normHora(x.hora_inicio) === h));
+      const t = delDia.find((x) => !pasado(x));
       if (t) { const c = { cita_id: Number(t.id), paciente_id: Number(t.id_paciente) || null, fecha: t.fecha, hora: normHora(t.hora_inicio), nombre: '', origen: 'agenda' }; return { ok: true, cands: [c], cand: c }; }
+      if (delDia.length) return { fin: no('turno_pasado', 'Ese turno ya pasó: no hay nada que confirmar y no se tocó la agenda. No le hables de ese turno; si agradece o comenta, [NO_REPLY].') };
     }
     if (!abiertas.length && !fecha) {
-      return { fin: no('sin_recordatorio', 'No hay un recordatorio pendiente. Llamá a ver_turnos; si el paciente tiene un turno vigente que quiere confirmar, llamá a confirmar_turno con su fecha (YYYY-MM-DD).') };
+      // (13/11, caso real: "Y <hermano> tb" tras avisar una urgencia → el modelo, siguiendo esta nota, confirmó un turno que nadie pidió confirmar)
+      return { fin: no('sin_recordatorio', 'No hay un recordatorio pendiente: NO confirmes nada. Solo si el paciente dijo con todas las letras que confirma o que va a ir a un turno suyo (por ejemplo "confirmo el del martes"), llamá a confirmar_turno con la fecha de ese turno (YYYY-MM-DD). Si agradece, comenta o habla de otra cosa: [NO_REPLY].') };
     }
     return { fin: no('sin_turno_en_esa_fecha', 'No encuentro un turno pendiente de confirmar en esa fecha. Mostrale sus turnos con ver_turnos.') };
   }
@@ -58,6 +66,8 @@ const ConfirmarCore = (() => {
     const coincide = Number(d.id) === cand.cita_id && d.fecha === cand.fecha && (!cand.hora || normHora(d.hora_inicio) === cand.hora) && (!cand.paciente_id || Number(d.id_paciente) === cand.paciente_id);
     if (!coincide) return { fin: no('cita_cambio', 'El turno cambió desde el recordatorio: no se confirmó nada. Mostrale sus turnos con ver_turnos.') };
     if (!vigente(d)) return { fin: no('cita_no_vigente', 'Ese turno ya no está vigente (anulado). No lo confirmes; ofrecé reprogramarlo si corresponde.') };
+    // (13/11) Red por la agenda real: si la clínica ya lo marcó Atendido, no se cambia nada (aunque las redes de arriba fallen).
+    if (Number(d.id_estado) === ESTADO_ATENDIDO) return { fin: no('turno_pasado', 'Ese turno ya fue atendido: no hay nada que confirmar y no se tocó la agenda. No le hables de ese turno; si agradece o comenta, [NO_REPLY].') };
     return { ok: true, ya: Number(d.id_estado) === ESTADO_CONFIRMADO };
   }
   // resp = respuesta cruda de PUT /citas/{id} {id_estado: 18}
@@ -103,6 +113,6 @@ const ConfirmarCore = (() => {
     }
     return { ok: true, ya: oks.every((r) => r.ya === true), escribio: oks.some((r) => r.escribio === true || r.ya === true), readback_text: texto, parcial: fallas.length > 0, aviso, cands: oks.map((r) => r.cand) };
   }
-  return { elegir, verificar, evaluarConfirmacion, mensaje, resumir, ESTADO_CONFIRMADO };
+  return { elegir, verificar, evaluarConfirmacion, mensaje, resumir, ESTADO_CONFIRMADO, ESTADO_ATENDIDO };
 })();
 if (typeof module !== 'undefined') module.exports = ConfirmarCore;

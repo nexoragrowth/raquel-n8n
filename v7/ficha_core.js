@@ -55,6 +55,13 @@ const FichaCore = (() => {
     const vistos = new Set();
     return out.filter((t) => (vistos.has(t.id) ? false : (vistos.add(t.id), true)));
   }
+  // (13/11, conversación real: a las 15 h Asiri le dijo "Su turno vigente es el viernes 13/11 a las 11:00" a una paciente que ya se había atendido a esa hora)
+  // Lo que se le MUESTRA a Asiri como vigente: sin los de hoy cuya hora ya pasó ni los que la clínica marcó Atendido (id_estado 2). turnos_vistos (Redis)
+  // los sigue teniendo: así confirmar_turno reconoce "ese turno ya pasó" y no contesta, en vez de "no veo su turno". ahoraHM = 'HH:MM' de Jujuy.
+  function visibles(turnos, hoyISO, ahoraHM) {
+    const hm = /^\d{2}:\d{2}$/.test(String(ahoraHM || '')) ? ahoraHM : '';
+    return (turnos || []).filter((t) => Number(t.id_estado) !== 2 && !(hm && t.fecha === hoyISO && String(t.hora_inicio || '') && String(t.hora_inicio) <= hm));
+  }
   // Texto para Asiri (nunca ids): "viernes 16/10 a las 09:10 (Dana)"
   const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   function resumenTurnos(fichas, turnos) {
@@ -67,6 +74,6 @@ const FichaCore = (() => {
     const lim = 48 * 60 * 60 * 1000;
     return (turnos || []).filter((t) => { const ms = Date.parse(`${t.fecha}T${t.hora_inicio || '00:00'}:00-03:00`); return Number.isFinite(ms) && ms - ahoraMs < lim; });
   }
-  return { fichasDeRespuesta, estadoInicial, elegir, turnosVistos, resumenTurnos, menos48h };
+  return { fichasDeRespuesta, estadoInicial, elegir, turnosVistos, visibles, resumenTurnos, menos48h };
 })();
 if (typeof module !== 'undefined') module.exports = FichaCore;

@@ -56,11 +56,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "7RqTApkvVavRmq3R": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:42-03:00",
-  "huella": "a760e1be8be9d2a2ed9f",
+  "commit": "5084a69",
+  "fecha": "2026-11-17T10:18:03-03:00",
+  "huella": "8bdcf1613eab8afe33aa",
   "nombre": "Recordatorio de Turno 48HS - Dra. Raquel",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_crons_timezone.py"
  },
  "9E5Lse6TDJ74wpsM": {
   "commit": "5ac9ae3",
@@ -105,11 +105,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "DhuxFBF6vrzDrkBK": {
-  "commit": "7a4b466",
-  "fecha": "2026-11-13T09:26:53-03:00",
-  "huella": "d9b3033e1c834cccbb60",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:51:58-03:00",
+  "huella": "e6ebe0bdfad519f238a0",
   "nombre": "v7 Agente Informacion",
-  "script": "apply_mensaje_mixto.py"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "E4GMd7K1It0iPHVD": {
   "commit": "5ac9ae3",
@@ -210,11 +210,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "MJ38kSTRZDPgPCCy": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:49-03:00",
-  "huella": "b8c23e97e0fbd1530998",
+  "commit": "5084a69",
+  "fecha": "2026-11-17T10:18:06-03:00",
+  "huella": "91c302b6169907e8ade5",
   "nombre": "Áurea — Reportero Semanal",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_crons_timezone.py"
  },
  "MvwET1EiyOinNgw0": {
   "commit": "5ac9ae3",
@@ -224,11 +224,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "NBHzj8ar2XuSvyIY": {
-  "commit": "7a4b466",
-  "fecha": "2026-11-13T09:26:58-03:00",
-  "huella": "69368e1253e1b1ae7eec",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:52:03-03:00",
+  "huella": "f55c34c202c45bc393e0",
   "nombre": "v7 Cerebro",
-  "script": "apply_mensaje_mixto.py"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "NDwKeIgcZtFt736Q": {
   "commit": "5ac9ae3",
@@ -245,11 +245,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "QsGBGkZdGu5gTdBf": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:50-03:00",
-  "huella": "03755c7ae657d3f3c562",
+  "commit": "5084a69",
+  "fecha": "2026-11-17T10:18:05-03:00",
+  "huella": "934dc9239aec0a1f2c37",
   "nombre": "Áurea — Daily Summary Recordatorios",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_crons_timezone.py"
  },
  "RBbTTcvBzDm7gmN7": {
   "commit": "5ac9ae3",
@@ -259,11 +259,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "S3DgPOyHg77M6SHQ": {
-  "commit": "7a4b466",
-  "fecha": "2026-11-13T09:26:50-03:00",
-  "huella": "4fa680bc2375564f94e5",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:51:55-03:00",
+  "huella": "f8ae1bd96e79929787b1",
   "nombre": "v7 Agente Turnos",
-  "script": "apply_mensaje_mixto.py"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "S5U6tSipzlgFHCkf": {
   "commit": "5ac9ae3",
@@ -301,11 +301,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "UMjT5Fb8BGun0cVj": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:52-03:00",
-  "huella": "fc29cfd811cb88677cb9",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:52:09-03:00",
+  "huella": "c3cef962e76841484913",
   "nombre": "v7 Tool - confirmar_una",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "UxdAuycDHMejecSr": {
   "commit": "5ac9ae3",
@@ -343,11 +343,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "ZHGzacebRHAFQ7wn": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:54-03:00",
-  "huella": "243d0f8de647335ad631",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:41:39-03:00",
+  "huella": "bdf8a20649ceb0b6148b",
   "nombre": "v7 Tool - ver_turnos",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "ZUJmfoKzIC7bpCoJ": {
   "commit": "5ac9ae3",
@@ -371,11 +371,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "cdiBTgcABItdgQ9y": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:55-03:00",
-  "huella": "ee4174e90da8b8be329e",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:52:11-03:00",
+  "huella": "7008a2fe1be7529b5a81",
   "nombre": "v7 Tool - confirmar_turno",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "cip3czHqhLdaDgPd": {
   "commit": "5ac9ae3",
@@ -462,11 +462,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "mPISHj9allybzwoV": {
-  "commit": "7a4b466",
-  "fecha": "2026-11-13T09:27:02-03:00",
-  "huella": "9eae5c55605b09eec542",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:52:08-03:00",
+  "huella": "a2ebef53ea273deecab3",
   "nombre": "v7 Panel - probar Información",
-  "script": "apply_mensaje_mixto.py"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "moIPDqrnY0SPIve9": {
   "commit": "5ac9ae3",
@@ -483,11 +483,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "pCYZUmIxZjqbOG1L": {
-  "commit": "5ac9ae3",
-  "fecha": "2026-11-12T08:44:59-03:00",
-  "huella": "8377149dc854654912dc",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:41:40-03:00",
+  "huella": "73f15662dc0b2b48ab9e",
   "nombre": "v7 Tool - elegir_ficha",
-  "script": "guarda_vivo.py --aceptar"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "pP8Qzu2mR7g0pDzf": {
   "commit": "5ac9ae3",
@@ -525,11 +525,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "u4IZcQtdnfcQPCs8": {
-  "commit": "7a4b466",
-  "fecha": "2026-11-13T09:29:38-03:00",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:50:25-03:00",
   "huella": "a5b9f07e99003c6eea9d",
   "nombre": "v7 Test (sombra)",
-  "script": "replay_alineadores.py"
+  "script": "replay_confirmar.py"
  },
  "v6y5It2T4AwPUwQp": {
   "commit": "5ac9ae3",
@@ -581,18 +581,18 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "y8wIF1rR87bAAvYU": {
-  "commit": "7a4b466",
-  "fecha": "2026-11-13T09:27:00-03:00",
-  "huella": "760ced0a5284182651b8",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:52:06-03:00",
+  "huella": "36357533753ef8e62b0d",
   "nombre": "v7 Cerebro Agente",
-  "script": "apply_mensaje_mixto.py"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "yjMpDQ3UH1tsZdDe": {
-  "commit": "7a4b466",
-  "fecha": "2026-11-13T09:26:52-03:00",
-  "huella": "9e4a1f454ca1c6efafd8",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:51:57-03:00",
+  "huella": "07b6bc36ce571b4af7bc",
   "nombre": "v7 Agente Pagos",
-  "script": "apply_mensaje_mixto.py"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "yop6TIVoKiWUxfEn": {
   "commit": "5ac9ae3",
@@ -602,11 +602,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "yrCuq7hj04ox3sad": {
-  "commit": "7a4b466",
-  "fecha": "2026-11-13T09:26:55-03:00",
-  "huella": "fb67c4f855522be353eb",
+  "commit": "05fa46a",
+  "fecha": "2026-11-19T02:52:00-03:00",
+  "huella": "5f3a27721d4f0b8750a0",
   "nombre": "v7 Agente Urgencias",
-  "script": "apply_mensaje_mixto.py"
+  "script": "apply_confirmar_sin_pedido.py"
  },
  "zFtNDRUlN8n2Na71": {
   "commit": "5ac9ae3",

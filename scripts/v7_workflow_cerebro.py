@@ -128,14 +128,14 @@ const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && 
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null,
     propuesta_clinica: propuesta_staff ? { texto: propuesta_staff.texto, horas: (ahoraMs - propuesta_staff.ms) / 3600000 } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), comprobante_marcado, staff_reciente, charla_de_la_clinica, recordatorio_pendiente, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
+return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), comprobante_marcado, staff_reciente, charla_de_la_clinica, recordatorio_pendiente, recordatorio_abierto: rec.length > 0, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
   propuesta_staff_json: propuesta_staff ? JSON.stringify(propuesta_staff) : '', propuesta_clinica: !!propuesta_staff,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
 
 JS_DESPACHO = """const ctx = $('Armar contexto').first().json;
 let o = {}; try { o = $('Orquestador').first().json || {}; } catch (x) { o = { error: 'sin salida' }; }
-return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '', comprobante_marcado: ctx.comprobante_marcado === true, staff_reciente: ctx.staff_reciente === true, propuesta_clinica: ctx.propuesta_clinica === true }) }];"""
+return [{ json: OrquestadorCore.despachar(o, { prop_pendiente: ctx.prop_pendiente === true, charla_de_la_clinica: ctx.charla_de_la_clinica === true, recordatorio_pendiente: ctx.recordatorio_pendiente === true, recordatorio_abierto: ctx.recordatorio_abierto === true, audio_transcripto: ctx.audio_transcripto === true, cita_audio: ctx.cita_audio || '', comprobante_marcado: ctx.comprobante_marcado === true, staff_reciente: ctx.staff_reciente === true, propuesta_clinica: ctx.propuesta_clinica === true }) }];"""
 
 JS_RES = """const r = (n) => { try { const x = $(n); return x.isExecuted ? (x.first().json || null) : null; } catch (y) { return null; } };
 const res = { turnos: r('Agente Turnos'), pagos: r('Agente Pagos'), informacion: r('Agente Información'), urgencias: r('Agente Urgencias') };

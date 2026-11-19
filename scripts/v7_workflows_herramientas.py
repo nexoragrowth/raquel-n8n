@@ -38,9 +38,11 @@ const esc = EscenarioPrueba.leer($('Redis GET escenario').first().json.escenario
 const resps = esc ? estado.fichas.map((f) => ({ data: esc.citas[String(f.id)] || [] })) : $input.all().map((i) => i.json);
 if (resps.some((r) => r && r.error)) return [{ json: { terminado: true, resultado: { ok: false, motivo: 'error_tecnico', para_asiri: 'No pude consultar los turnos en la agenda. Decíselo con sinceridad y avisá a la clínica con avisar_grupo (ACCION); no inventes turnos.' } } }];
 const turnos = FichaCore.turnosVistos(estado.fichas, resps, hoy);
+const ahoraHM = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Argentina/Jujuy', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+const vis = FichaCore.visibles(turnos, hoy, ahoraHM);   // (13/11) sin los de hoy ya pasados ni los Atendidos
 const varias = estado.fichas.length > 1;
-return [{ json: { terminado: false, turnos, resultado: { ok: true, varias_fichas: varias, ficha_elegida: estado.elegida !== null, paciente_elegido: estado.elegida !== null ? ((estado.fichas.find((f) => f.id === estado.elegida) || {}).nombre || null) : null, pacientes: varias ? estado.fichas.map((f) => f.nombre) : undefined, turnos: FichaCore.resumenTurnos(estado.fichas, turnos),
-  turnos_menos_48h: FichaCore.resumenTurnos(estado.fichas, FichaCore.menos48h(turnos, Date.now())),
+return [{ json: { terminado: false, turnos, resultado: { ok: true, varias_fichas: varias, ficha_elegida: estado.elegida !== null, paciente_elegido: estado.elegida !== null ? ((estado.fichas.find((f) => f.id === estado.elegida) || {}).nombre || null) : null, pacientes: varias ? estado.fichas.map((f) => f.nombre) : undefined, turnos: FichaCore.resumenTurnos(estado.fichas, vis),
+  turnos_menos_48h: FichaCore.resumenTurnos(estado.fichas, FichaCore.menos48h(vis, Date.now())),
   para_asiri: varias && estado.elegida === null ? 'Este celular tiene varias fichas: preguntá para quién es (nombre o DNI) y llamá a elegir_ficha antes de proponer cualquier cambio.' : 'Estos son los turnos vigentes. No muestres ids.' } } }];""", 2200, 360, usar=("ficha_core", "escenario_core"))
     g.si("¿Termina? (turnos)", "$json.terminado === true", 2420, 360)
     g.redis_set("Redis SET turnos_vistos", "'turnos_vistos:' + $('Entrada').first().json.tel", "JSON.stringify($('Armar turnos').first().json.turnos)", 7200, 2640, 420)

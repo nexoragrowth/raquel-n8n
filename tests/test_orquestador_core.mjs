@@ -401,6 +401,55 @@ t('M4 el texto de derivación es el mismo en el cerebro y en la herramienta de c
   t('CF-H2 si el único es de hoy y ya pasó: no hay nada para confirmar', !!e2.fin, e2);
   const e3 = Conf.elegir(rows, null, '', '2026-10-21', '', '');
   t('CF-H3 sin la hora actual se comporta como antes (todos los de hoy)', e3.ok && e3.cands.length === 2, e3); }
+// (13/11, 2 conversaciones reales) Confirmar SIN que nadie lo pidiera: "Y <hermano> tb" tras avisar una urgencia → se confirmó el turno del hermano; "Ya asistí"
+// a las 17 h → se confirmó (pisando "Atendido") el turno de esa mañana; "Muchas gracias / No hay problema" → "Su turno vigente es el viernes 13/11 a las 11:00".
+{ const Conf = require('../v7/confirmar_core.js'); const F = require('../v7/ficha_core.js');
+  const CANNED = 'responde a la confirmación pendiente';
+  const sinNada = { recordatorio_abierto: false };
+  const q1 = O.despachar(orq([{ a: 'turnos', pedido: CANNED }]), sinNada);
+  t('SC1 "Y <hermano> tb" sin recordatorio, read-back ni propuesta: no va a Turnos y es silencio', !q1.turnos && q1.fija === 'no_reply' && q1.confirmacion_inexistente === true && !q1.hay_agentes, q1);
+  const q2 = O.despachar(orq([{ a: 'turnos', pedido: CANNED }]), { recordatorio_abierto: true });
+  t('SC2 con un recordatorio abierto (aunque después haya escrito la secretaria) sigue yendo a Turnos', q2.turnos === CANNED && !q2.fija, q2);
+  const q3 = O.despachar(orq([{ a: 'turnos', pedido: CANNED }]), { recordatorio_abierto: false, propuesta_clinica: true });
+  t('SC3 con una propuesta de la clínica sin responder sigue yendo a Turnos', q3.turnos === CANNED, q3);
+  const q4 = O.despachar(orq([{ a: 'turnos', pedido: CANNED }]), { recordatorio_abierto: false, prop_pendiente: true });
+  t('SC4 con un read-back que el paciente vio sigue yendo a Turnos', q4.turnos === CANNED, q4);
+  const q5 = O.despachar(orq([{ a: 'turnos', pedido: CANNED }]), {});
+  t('SC5 quien no pasa el dato (panel, agente único) queda como antes', q5.turnos === CANNED, q5);
+  const q6 = O.despachar(orq([{ a: 'turnos', pedido: 'confirma asistencia del martes 17/11' }]), sinNada);
+  t('SC6 un pedido con datos (no la frase fija) sigue yendo a Turnos (si no corresponde lo frena confirmar_turno)', q6.turnos === 'confirma asistencia del martes 17/11', q6);
+  const q7 = O.despachar(orq([{ a: 'turnos', pedido: 'Responde a la confirmación pendiente.' }, { a: 'derivar_secretaria', cita: 'y <hermano> también', motivo: 'x' }]), sinNada);
+  t('SC7 (mayúscula y punto) si además derivó, la derivación queda: solo se saca el pedido sin destino', !q7.turnos && q7.fija === 'derivar', q7);
+  const q8 = O.despachar(orq([{ a: 'turnos', pedido: CANNED }, { a: 'pagos', pedido: 'pide el alias' }]), sinNada);
+  t('SC8 con otro agente en el mismo mensaje: ese sigue y no hay silencio', !q8.turnos && q8.pagos === 'pide el alias' && !q8.fija, q8);
+  // confirmar_turno por la agenda (sin recordatorio): turnos ya pasados o Atendidos no se confirman
+  const vistos = [{ id: 99001, id_paciente: 99002, fecha: '2026-11-13', hora_inicio: '11:00', id_estado: 2, estado_anulacion: 0 }];
+  const c1 = Conf.elegir([], vistos, '2026-11-13', '2026-11-13', '11:00', 'Paciente', '17:11');
+  t('SC9 "Ya asistí" a las 17:11 → el turno de las 11:00 ya pasó: turno_pasado, sin candidato', !!c1.fin && c1.fin.motivo === 'turno_pasado' && /NO_REPLY/.test(c1.fin.para_asiri), c1);
+  const vistos2 = [{ id: 1, id_paciente: 1, fecha: '2026-11-13', hora_inicio: '18:30', id_estado: 15, estado_anulacion: 0 }];
+  const c2 = Conf.elegir([], vistos2, '2026-11-13', '2026-11-13', '', '', '17:11');
+  t('SC10 uno de hoy que todavía no pasó sí se confirma', c2.ok && c2.cand.cita_id === 1, c2);
+  const c3 = Conf.elegir([], [{ ...vistos2[0], id_estado: 2 }], '2026-11-13', '2026-11-13', '', '', '09:00');
+  t('SC11 uno marcado Atendido no se confirma aunque la hora no haya pasado', !!c3.fin && c3.fin.motivo === 'turno_pasado', c3);
+  const c4 = Conf.elegir([], [{ id: 2, id_paciente: 1, fecha: '2026-11-18', hora_inicio: '16:20', id_estado: 15, estado_anulacion: 0 }], '2026-11-18', '2026-11-13', '', '', '16:01');
+  t('SC12 un turno futuro por la agenda se sigue pudiendo confirmar (con la fecha que dijo el paciente)', c4.ok && c4.cand.cita_id === 2, c4);
+  const c5 = Conf.elegir([], [], '', '2026-11-13', '', '', '16:01');
+  t('SC13 sin recordatorio: la nota al agente ya no lo invita a confirmar por su cuenta', !!c5.fin && c5.fin.motivo === 'sin_recordatorio' && /NO confirmes nada/.test(c5.fin.para_asiri) && /NO_REPLY/.test(c5.fin.para_asiri), c5);
+  const v1 = Conf.verificar({ cita_id: 99001, paciente_id: 99002, fecha: '2026-11-13', hora: '11:00' }, { data: { id: 99001, id_paciente: 99002, fecha: '2026-11-13', hora_inicio: '11:00:00', id_estado: 2, estado_anulacion: 0 } });
+  t('SC14 red por la agenda real: si Dentalink dice Atendido, no se pisa', !!v1.fin && v1.fin.motivo === 'turno_pasado', v1);
+  const v2 = Conf.verificar({ cita_id: 1, paciente_id: 1, fecha: '2026-11-18', hora: '16:20' }, { data: { id: 1, id_paciente: 1, fecha: '2026-11-18', hora_inicio: '16:20:00', id_estado: 15, estado_anulacion: 0 } });
+  t('SC15 "Notificado por WhatsApp" se sigue confirmando', v2.ok === true && v2.ya === false, v2);
+  // Turnos: si lo que quiso confirmar ya pasó, silencio (ni "Su turno vigente es…" ni "¿Cuál de estos turnos?")
+  const s1 = O.salidaTurnos({ output: 'MOSTRAR_TURNOS', intermediateSteps: [paso('confirmar_turno', c1.fin, { fecha: '2026-11-13' })] }, { turnos: [] });
+  t('SC16 confirmar un turno ya pasado → silencio, sin mostrar turnos', !s1.texto && s1.estado === 'no_reply', s1);
+  const s2 = O.salidaTurnos({ output: 'PREGUNTA_CUAL_TURNO', intermediateSteps: [paso('confirmar_turno', c1.fin, { fecha: '2026-11-13' })] }, { turnos: ['martes 1/12 a las 10:40', 'jueves 3/12 a las 08:00'] });
+  t('SC17 ídem aunque el agente quiera preguntar cuál: no se le pregunta', !s2.texto && s2.estado === 'no_reply', s2);
+  const s3 = O.salidaTurnos({ output: '[LISTO]', intermediateSteps: [paso('confirmar_turno', c1.fin, { fecha: '2026-11-13' }), paso('confirmar_turno', { ok: true, readback_text: 'Perfecto, su turno del martes 17/11 a las 08:00 está confirmado.' }, {})] }, {});
+  t('SC18 si en el mismo mensaje confirmó otro turno de verdad, ese sale', s3.texto === 'Perfecto, su turno del martes 17/11 a las 08:00 está confirmado.' && s3.estado === 'confirmado', s3);
+  // Lo que se le muestra a Asiri como "vigente"
+  const tv = [{ id: 1, fecha: '2026-11-13', hora_inicio: '11:00', id_estado: 2 }, { id: 2, fecha: '2026-11-13', hora_inicio: '18:30', id_estado: 15 }, { id: 3, fecha: '2026-11-13', hora_inicio: '12:00', id_estado: 15 }, { id: 4, fecha: '2026-11-20', hora_inicio: '09:40', id_estado: 15 }];
+  t('SC19 a las 15:18 no se muestran el de las 11 (Atendido) ni el de las 12 (pasó); sí el de las 18:30 y el del 20/11', F.visibles(tv, '2026-11-13', '15:18').map((x) => x.id).join() === '2,4', F.visibles(tv, '2026-11-13', '15:18'));
+  t('CP20 sin la hora actual solo saca los Atendidos', F.visibles(tv, '2026-11-13', '').map((x) => x.id).join() === '2,3,4'); }
 
 // (28/10) AUDIOS: el v6 transcribía y el v7 recibe "[AUDIO] <transcripción>". Caso real 27/10 12:18: una paciente preguntó por la tomografía con o sin braquets
 // (audio transcripto) y Asiri contestó "no puedo escuchar audios". "Pedir el texto" solo vale si el audio llegó SIN transcripción.

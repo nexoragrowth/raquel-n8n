@@ -1,11 +1,34 @@
 # Backlog — raquel-n8n
 
+## ⇢ 2026-11-19 — feriado lun 23/11: recordatorios "programados" y fáciles (pedido de Lucas)
+- [x] 19/11: desplegado `apply_confirmar_sin_pedido.py` (Lucas: "desplegá"), re-jugado en sombra, sin residuos (ver current-state). Falta de Lucas: `restaurar_estado_cita.py --cita 9492 --estado 2 --apply` (la cita de la paciente ya atendida, del 13/11, sigue en 18).
+- Hechos verificados (workflow vivo `7RqTApkvVavRmq3R` + Dentalink en vivo): cron `0 8 * * 1-5` hora Jujuy (corrió 08:00:13 el 18/11); fecha objetivo = hoy + 2 días hábiles lun–vie, sin feriados. Jue 19 → lun 23 (0 turnos); vie 20 → mar 24 (6 alcanzados); lun 23 (feriado, el cron corre igual) → mié 25 (9).
+- El panel YA tiene "Adelantar recordatorios de un día" y "Suspender un día" (`/recordatorios`). Trampa: Adelantar no le avisa al cron → el viernes los que no contestaron reciben un 2.º mensaje (`Chequear Ya Recordado` solo mira confirmado/cancelado). La pantalla lo dice bien ("a quien no contestó, sí se le vuelve a mandar": es una función, no se cambia); el comentario de `actions.ts` ("se saltea solo") es falso. El camino manual manda el texto normal de 72 h con la fecha escrita.
+- **Diseño "Días sin atención" (lo que Lucas pidió: se carga una vez y queda programado):** la clínica marca en el panel los días que no atiende (feriados, puentes, vacaciones); el cálculo cuenta 2 días hábiles SALTEÁNDOLOS y el Gate no corre en un día cerrado → cada día hábil se recuerda una sola vez y el jueves pasa solo a avisar el martes. Los feriados nacionales vienen sugeridos con un toque ("¿cerramos el lunes 23?"); la pantalla muestra el efecto en claro ("los turnos del martes 24 se recuerdan el jueves 19 a las 08:00 · 6 pacientes"). Si se carga cuando la corrida ya pasó, ofrece "enviar ahora los que faltan" (usa el webhook manual con `id_paciente_filter`, sin tocar el workflow). Vista previa + "Adelantar" quedan como red de seguridad.
+  - [x] Hecho y probado offline (SIN desplegar): `recordatorios/fecha_manana.js` (+ copia congelada del vivo `fecha_manana.vivo_2026-11-19.js`), `recordatorios/gate_dias_cerrados.sql` (base: Gate VIVO de hoy, sin `precio_contenido`; ojo: `gate_leer_config.sql` es el del cambio de consultas que nunca se aplicó), `tests/test_recordatorios_dias_cerrados.js` 27/27 (sin días cerrados = idéntico al vivo todos los días 2026–2027; propiedad "cada día hábil se recuerda exactamente una vez" en 7 calendarios).
+  - [ ] **P1** Migración `alter table recordatorios_config add column dias_cerrados date[] not null default '{}'` (aditiva; ANTES del workflow: el Gate falla abierto si falta la columna). `scripts/apply_recordatorios_dias_cerrados.py` (backup PRE/POST + guarda_vivo + prueba del SQL en transacción revertida; solo toca "Gate - Leer config" y "Fecha Mañana"). Pantalla del panel: sección "Días sin atención" + sugerencias de feriados nacionales (verificar la lista con el decreto antes de cargarla) + vista previa. Todo con OK de Lucas antes de desplegar (toca el workflow que "no se toca").
+  - Decisión de no tocar: el anti-duplicado del workflow (la pantalla promete reenviar a quien no contestó).
+- [P3] Renombrar el nodo "Diario 9AM Arg (cron 0 14 UTC)" (corre a las 08:00 Jujuy) y corregir "9 AM / 24h y 72h" en `.claude/CLAUDE.md`: hoy solo hay recordatorio de ~72 h.
+- [P3] Paciente ya atendida que comenta "es el de hoy" / "ya asistí" recibe "No veo turnos vigentes con este número de celular" (cierto pero sobra): lo ideal es silencio. Mirar en `salidaTurnos` cuando el único motivo es que no hay turnos futuros y el mensaje no pregunta nada.
+
+## ⇢ 2026-11-17 — recordatorios salen 09:00 en vez de 08:00 (cambio de horario de Europa)
+- [x] 2026-11-17 10:18: aplicado `apply_crons_timezone.py` (Recordatorios `0 8 * * 1-5`, Daily Summary `30 9 * * *`, Reportero `0 10 * * 1`, todos con tz Jujuy). Los de cada 15/30 min no dependen de la hora; Retención y Logger ya tenían tz.
+- [P1] Mié 18/11: confirmar que Recordatorios corrió 08:00 ART (11:00Z) y el Daily Summary 09:30 (12:30Z).
+- [P2] El panel no muestra los recordatorios del bot: Evolution GO no devuelve por webhook lo que se manda por la API → no llegan a `mensajes_entrantes_live`. Sí quedan en `n8n_chat_histories` y `recordatorios_enviados`. Ver de qué lee el chat del panel (repo nexora-whatsapp-agent).
+
 ## ⇢ 2026-11-13 — conversación real (turno 18/11, "una hora antes")
 - [x] 13/11: desplegado `apply_cual_turno_y_horarios.py` (8 workflows) y re-jugada la conversación en sombra: OK, sin restos.
 - [x] 13/11: Lucas aprobó y quedó desplegado el mensaje mixto (`apply_mensaje_mixto.py`): horarios primero, "Lo demás se lo paso a la secretaria, que le responde por acá." al final.
 - [x] 13/11: commits del día subidos a origin (6c3e94b). En esta compu: `gh auth switch -h github.com -u LucasEzequielSilva` → `git push` → volver a `propmatchar`.
 - [P3] DERIVA_RESTO no es editable en el panel: si la clínica cambia DERIVA en Mensajes fijos, el mensaje mixto igual dice "Lo demás…". Sumarlo al panel (clave + `test_mensajes_panel_sync`) si lo piden.
 - [P3] Lista de espera: si la misma paciente queda anotada dos veces en pocos minutos, al grupo llegan dos FYI iguales (13/11). Juntar con el próximo cambio de `clinica_core`.
+
+## ⇢ 2026-11-13 (tarde) — confirmaciones que nadie pidió
+- [P1] Desplegar `apply_confirmar_sin_pedido.py` (falta "desplegá") → después re-jugar en sombra "Y <hermano> tb", "Muchas gracias / No hay problema", "Es el de hoy" y "Ya asistí" y limpiar.
+- [P1] Devolver las 2 citas confirmadas por error con `restaurar_estado_cita.py` (9492 → 2 Atendido, 9309 → 15 Notificado). Escritura en Dentalink: la autoriza Lucas.
+- [P1] Avisarle a la secretaria: la mamá que avisó del alambrito (ejec. 340306/340311, 16:01) escribió "Y <hermano> tb" después del alambrito de la hermana (¿al hermano también se le salió algo?); el triaje solo avisó lo de la hermana.
+- [P2] Carrera: un mensaje que llega mientras se procesa una urgencia no la ve en su contexto (13/11: filas del triaje guardadas 3 s después de que arrancó el cerebro del 2.º mensaje). Mirar junto con K (Gate Humano / candado) en la entrada O155.
+- [P3] 12/11 (18:18 Jujuy): "Trataré de saldarlo a la brevedad" → "Dejé anotado su aviso de pago" (Pagos tomó una promesa como aviso). Revisar el prompt/red de Pagos.
 
 ## ⇢ 2026-11-12 — Cerebro Agente y bot vivo
 - [x] 12/11: desplegado `apply_arreglos_espejo.py` (5 workflows) y freno `guarda_vivo.py` + `diff_vivo.py`. Lo del 05/11 vino de la otra compu (merge 5ac9ae3, con sus tests).
