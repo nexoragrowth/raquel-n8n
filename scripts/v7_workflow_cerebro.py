@@ -128,7 +128,11 @@ const charla_de_la_clinica = !!(primero && primero.fuente === 'wa_outbound') && 
 const contexto = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
   { conversacion_nueva, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null,
     propuesta_clinica: propuesta_staff ? { texto: propuesta_staff.texto, horas: (ahoraMs - propuesta_staff.ms) / 3600000 } : null });
-return [{ json: { contexto, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), comprobante_marcado, staff_reciente, charla_de_la_clinica, recordatorio_pendiente, recordatorio_abierto: rec.length > 0, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
+// (19/11) El ORQUESTADOR lee los mismos datos SIN instrucciones de herramientas (no las tiene); los agentes siguen con `contexto`, idéntico a antes.
+const contexto_orq = HistorialCore.mensajeAgente(hist, e.texto, ahora, rec, e.pushName || '', ident,
+  { conversacion_nueva, solo_hechos: true, confirmacion_pendiente: prop_pendiente ? { texto: propE.readback_text, minutos: Math.max(0, Math.round((ahoraMs - Number(propE.creada_ms || ahoraMs)) / 60000)) } : null,
+    propuesta_clinica: propuesta_staff ? { texto: propuesta_staff.texto, horas: (ahoraMs - propuesta_staff.ms) / 3600000 } : null });
+return [{ json: { contexto, contexto_orq, sistema_orq: PROMPT_ORQ, datos_info, datos_pago, menu: OrquestadorCore.menu(kb['dir:menu_bienvenida'] || ''), anuncio: kb['40'] || '', consulta: kb['21'] || '', mensajes, audio_transcripto, cita_audio: audio_cuerpo.slice(0, 300), comprobante_marcado, staff_reciente, charla_de_la_clinica, recordatorio_pendiente, recordatorio_abierto: rec.length > 0, ultimo_asiri, repeticiones, conversacion_nueva, prop_pendiente,
   propuesta_staff_json: propuesta_staff ? JSON.stringify(propuesta_staff) : '', propuesta_clinica: !!propuesta_staff,
   textos_paciente: JSON.stringify(textos_paciente.slice(-20)), turnos_json: JSON.stringify(ident && ident.ok === true && Array.isArray(ident.turnos) ? ident.turnos : []),
   hist_n: hist.length, rec_n: rec.length, con_notas: !!notas } }];"""
@@ -220,7 +224,7 @@ def wf_cerebro(esfuerzo=ESFUERZO_PRODUCCION):
     g.redis_get("Redis GET propuesta (entrada)", f"'propuesta:' + {E}.phone", "prop_entrada_raw", 825, 420)
     g._nodo("Armar contexto", "n8n-nodes-base.code", 2, {"jsCode": "const PROMPT_ORQ = " + json.dumps(PROMPT_ORQ, ensure_ascii=False) + ";\n"
             + "".join((V7 / f"{m}.js").read_text(encoding="utf-8").rstrip() + "\n" for m in ("historial_core", "agenda_core", "orquestador_core")) + JS_CONTEXTO}, 880, 300)
-    g.cadena("Orquestador", f"{CTX}.contexto", f"{CTX}.sistema_orq", 1100, 300)
+    g.cadena("Orquestador", f"({CTX}.contexto_orq || {CTX}.contexto)", f"{CTX}.sistema_orq", 1100, 300)
     g.modelo("Modelo Orquestador", "gpt-5-mini", esfuerzo, 1100, 560)
     g.conectar_ai("Modelo Orquestador", "Orquestador", "ai_languageModel")
     _code_con(g, "Despacho", JS_DESPACHO, 1320, 300, ("orquestador_core",))

@@ -26,4 +26,5 @@ REGLAS
 - Precio de la consulta, turnos, horarios y datos para pagar NUNCA son derivar_secretaria.
 
 RESPONDÉ SOLO ESTE JSON, sin texto antes ni después:
-{"pasos":[{"a":"turnos","pedido":"..."},{"a":"derivar_secretaria","cita":"...","motivo":"..."}]}
+{"pasos":[{"a":"turnos","pedido":"..."}]}
+Derivar: {"a":"derivar_secretaria","cita":"...","motivo":"..."}

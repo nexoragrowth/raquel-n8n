@@ -271,7 +271,9 @@ def main():
     chequear("Z17 (B7) Turnos se cayó después de escribir: el paciente recibe el éxito del libro, no un error", a["salida"]["texto"] == EXITO and "inconveniente" not in a["salida"]["texto"], a["salida"])
     a = R["Z18 historial_json + recordatorio (sombra retrospectiva)"]["reps"][0]
     o = llamados(a, "Orquestador")[0]["entradas"]["text"]; i = llamados(a, "Agente Información")[0]["entradas"]
-    chequear("Z18 con historial_json usa ese historial; el recordatorio entra sin pedir confirmación", "PACIENTE: Hola, mi DNI es 35.123.456" in o and "RECORDATORIOS YA ENVIADOS (sin respuesta; NO le pidas que confirme" in o, o)
+    chequear("Z18 con historial_json usa ese historial; el recordatorio entra sin pedir confirmación", "PACIENTE: Hola, mi DNI es 35.123.456" in o and "RECORDATORIOS YA ENVIADOS (sin respuesta)" in o, o)
+    # (19/11) el ORQUESTADOR ve los datos sin instrucciones de herramientas (no las tiene); los AGENTES siguen recibiendo la instrucción completa
+    chequear("Z18d el orquestador no recibe nombres de herramientas; el agente sí recibe la instrucción de confirmar", not any(h in o for h in ("confirmar_turno", "gestionar_turno", "elegir_ficha")) and "RECORDATORIOS YA ENVIADOS (sin respuesta; NO le pidas que confirme" in str(i.get("contexto", "")), [o[:200], str(i.get("contexto", ""))[:200]])
     chequear("Z18b los mensajes del paciente (para verificar el DNI) salen del MISMO historial (historial_json), no de la base", "Hola, mi DNI es 35.123.456" in json.loads(i["textos_paciente"]), i["textos_paciente"])
     chequear("Z18c Información recibe los DATOS (precio, obra social) SIN los datos bancarios, y las notas del panel solo como tono", "$50.000" in i["datos"] and "No trabajamos con ninguna obra social" in i["datos"] and "dra.raquel.aurea" not in i["datos"] and "Laura Raquel" not in i["datos"] and "nunca agregan temas" in i["datos"] and "Hablar con calidez" in i["datos"], i["datos"])
     a = R["Z21 precio en conversación nueva"]["reps"][0]

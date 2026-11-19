@@ -118,6 +118,10 @@ const OrquestadorCore = (() => {
   }
   const PIDE_DATOS_PAGO = /\balias\b|\bcbu\b|\bcvu\b|datos\s+(?:para\s+(?:transferir|la\s+transferencia|pagar)|bancarios|de\s+(?:la\s+)?cuenta|de\s+pago)|n[uú]mero\s+de\s+cuenta/i;
   // ctx: { prop_pendiente: hay una confirmación guardada, vigente, que el paciente VIO (estado, no texto) }
+  const sinTildes = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // Lo que la secretaria SÍ tiene que ver aunque venga junto a un turno (si aparece, la derivación se respeta).
+  const FUERA_DE_TURNOS = /presupuest|queja|reclam|deuda|debe|cuota|financ|obra social|reintegro|factur|estudio|documento|radiograf|baja|proveedor|dolar|clinic[ao]|tratamiento/;
+  const HERRAMIENTAS_RE = /\b(gestionar_turno|buscar_horarios|elegir_ficha|confirmar_turno|confirmar_una|ver_turnos|registrar_pago|datos_pago|lista_espera|aceptar_propuesta_clinica|derivar_triaje)\b/;
   function despachar(salida, ctx) {
     const c = ctx || {};
     const p = parsear(salida);
@@ -149,6 +153,17 @@ const OrquestadorCore = (() => {
       // dijo FUERA_DE_ALCANCE → derivó y se perdió también el precio. Red por código sobre el PEDIDO (texto del orquestador, no del paciente): si menciona
       // los datos para transferir y no hay paso de Pagos, Pagos entra igual.
       if (!plan.pagos && ['informacion', 'turnos'].some((a) => PIDE_DATOS_PAGO.test(plan[a] || ''))) { plan.pagos = 'pide los datos para transferir'; plan.pagos_por_codigo = true; }
+      // (19/11, caso real: paciente nueva dio nombre y DNI para reservar) El orquestador mandó el pedido a Turnos Y además a la secretaria con el motivo
+      // "Solicita sacar turno… Pasar a gestionar_turno con datos": la secretaria intervino en una reserva que Turnos ya tenía lista. Red por código: si hay
+      // paso de Turnos y la derivación es por lo MISMO (turno, reserva, horario) sin nada que Asiri no atienda, la derivación se descarta.
+      if (plan.turnos && fijas.has('derivar_secretaria')) {
+        const m = sinTildes(plan.motivo + ' ' + plan.cita);
+        if (/turno|reserv|horario|agend|gestionar_turno|cita/.test(m) && !FUERA_DE_TURNOS.test(m)) {
+          fijas.delete('derivar_secretaria'); plan.derivacion_descartada = plan.motivo || plan.cita || 'misma_peticion_que_turnos'; plan.cita = ''; plan.motivo = '';
+        }
+      }
+      // Un nombre de herramienta interna nunca le llega a la secretaria (es una nota del modelo para sí mismo).
+      if (HERRAMIENTAS_RE.test(plan.motivo)) plan.motivo = 'Pedido del paciente (ver el chat)';
       if (fijas.has('pasar_a_humano')) { plan.fija = 'humano'; plan.turnos = plan.pagos = plan.informacion = null; }   // la urgencia, si la hay, se conserva
       else if (fijas.has('derivar_secretaria')) plan.fija = 'derivar';
       const hayAgente = AGENTES.some((a) => plan[a]);
@@ -556,8 +571,10 @@ const OrquestadorCore = (() => {
     // DERIVA_RESTO no es editable en el panel (todavía): si la clínica cambió DERIVA, en este caso sale el estándar de DERIVA_RESTO.
     // Con un read-back ("¿Procedo…?") queda como antes: la pregunta va AL FINAL para que el "sí" del paciente sea a eso (test C1).
     const mixto = !turnosDeriva && !!dTexto && !!tTexto && !(T && T.readback) && !readbackEn(tTexto);
-    const dFinal = mixto && dTexto === TEXTOS.DERIVA ? TEXTOS.DERIVA_RESTO : dTexto;
-    let partes = unir(turnosDeriva || mixto ? [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', tTexto, dFinal] : [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', dTexto, tTexto]);
+    // (19/11) Con un read-back ("¿Procedo…?") el "Le paso con la secretaria" de arriba contradecía la pregunta: va "Lo demás se lo paso…" y la pregunta sigue AL FINAL.
+    const conReadback = !!dTexto && !!(T && T.readback) && dTexto === TEXTOS.DERIVA;
+    const dFinal = (mixto || conReadback) && dTexto === TEXTOS.DERIVA ? TEXTOS.DERIVA_RESTO : dTexto;
+    let partes = unir(turnosDeriva || mixto ? [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', tTexto, dFinal] : [iTexto, pTexto, urgFallo ? TEXTOS.URG_FALLO : '', dFinal, tTexto]);
     const errores = agentes.filter((a) => res[a].error_tecnico);
     if (errores.length) {
       const detalle = errores.map((a) => res[a].error_detalle).filter(Boolean).map((d) => lim(d, 120)).join(' | ');

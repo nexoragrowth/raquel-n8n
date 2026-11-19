@@ -125,7 +125,7 @@ const base = (o) => ({ execId: 'ex1', texto_paciente: 'mensaje', libros: [], ofe
 { const plan = O.despachar(orq([{ a: 'turnos', pedido: 'x' }, { a: 'pagos', pedido: 'y' }, { a: 'informacion', pedido: 'z' }, { a: 'derivar_secretaria', cita: 'en dolares', motivo: 'dólares' }]), {});
   const c = O.componer(base({ plan, prop: PROP, res: { turnos: T_RB, pagos: P_DAT, informacion: I_PRE }, reunion: { derivar: true }, derivar_res: { ok: true, texto_para_el_paciente: Clin.TEXTOS.DERIVA } }));
   const i = (x) => c.texto.indexOf(x);
-  t('C1 orden fijo: Información → Pagos (+ datos) → derivación → Turnos, y el read-back AL FINAL', i('$50.000') < i('Le paso los datos') && i('Le paso los datos') < i('Alias: dra.raquel.aurea') && i('Alias') < i('Le paso con la secretaria') && i('Le paso con la secretaria') < i('Le confirmo') && c.texto.endsWith(RB), c.texto);
+  t('C1 orden fijo: Información → Pagos (+ datos) → derivación → Turnos, y el read-back AL FINAL; (19/11) con read-back la derivación dice "Lo demás…", no "Le paso con la secretaria"', i('$50.000') < i('Le paso los datos') && i('Le paso los datos') < i('Alias: dra.raquel.aurea') && i('Alias') < i(O.TEXTOS.DERIVA_RESTO) && i(O.TEXTOS.DERIVA_RESTO) < i('Le confirmo') && !c.texto.includes(Clin.TEXTOS.DERIVA) && c.texto.endsWith(RB), c.texto);
   t('C2 con read-back no va la oferta fija de Información (no dos preguntas)', !c.texto.includes('¿Quiere que le busque un turno') && (c.texto.match(/\?/g) || []).length === 1, c.texto);
   t('C3 los datos bancarios van DENTRO de la parte de Pagos (no después del "¿Procedo…?")', c.partes.pagos.endsWith(DATOS) && !c.partes.turnos.includes('Alias'), c.partes); }
 { const plan = O.despachar(orq([{ a: 'menu_bienvenida' }]), {});
@@ -636,6 +636,39 @@ console.log('\nPROPUESTA DE LA CLÍNICA (05/11, incidente José 331590/331596)')
   const se = O.salidaTurnos({ error: 'Received tool input did not match expected schema\n\n✖ Expected string, received boolean\n  → at confirma' }, {});
   const c4 = O.componer(base({ plan: planT, res: { turnos: se }, reunion: {}, texto_paciente: 'Dale hagamos el cambio' }));
   t('PS28 error de esquema: el [ACCIÓN] trae el detalle técnico (antes solo "no pudo completar")', se.error_detalle && c4.avisos.some((a) => /no pudo completar \(turnos\).*Detalle técnico: Received tool input did not match/.test(a.texto.replace(/\n/g, ' '))), c4.avisos); }
+
+// ---- (19/11, caso real: paciente nueva dio nombre y DNI) el orquestador mandó el pedido a Turnos Y a la secretaria ("Pasar a gestionar_turno con datos") ----
+{ const H = require('../v7/historial_core.js');
+  const MOT = 'Solicita sacar turno Viernes 4 de diciembre 9:10. Pasar a gestionar_turno con datos.';
+  const p1 = O.despachar(orq([{ a: 'turnos', pedido: 'Sacar turno Viernes 4 de diciembre 9:10 - Paciente: Ana Prueba, DNI 30111222' }, { a: 'derivar_secretaria', cita: 'Ana Prueba 30111222', motivo: MOT }]), {});
+  t('OR1 Turnos + derivación por el MISMO turno: la derivación se descarta y Turnos sigue', p1.turnos && p1.fija !== 'derivar' && !!p1.derivacion_descartada && p1.motivo === '', p1);
+  const p2 = O.despachar(orq([{ a: 'turnos', pedido: 'quiere turno' }, { a: 'derivar_secretaria', cita: 'y además estoy muy disconforme', motivo: 'queja por la atención de la última vez' }]), {});
+  t('OR2 Turnos + queja: la derivación SE RESPETA (es otra cosa)', p2.turnos && p2.fija === 'derivar' && !p2.derivacion_descartada, p2);
+  const p3 = O.despachar(orq([{ a: 'turnos', pedido: 'quiere turno' }, { a: 'derivar_secretaria', cita: 'cuánto sale el tratamiento', motivo: 'pide presupuesto del tratamiento de brackets y un turno' }]), {});
+  t('OR3 Turnos + presupuesto (aunque mencione "turno"): la derivación SE RESPETA', p3.fija === 'derivar', p3);
+  const p4 = O.despachar(orq([{ a: 'turnos', pedido: 'quiere turno' }, { a: 'derivar_secretaria', cita: 'en dólares', motivo: 'pagar el turno en dólares' }]), {});
+  t('OR4 Turnos + pago en dólares: la derivación SE RESPETA', p4.fija === 'derivar', p4);
+  const p5 = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'hola', motivo: 'Pasar a gestionar_turno con datos' }]), {});
+  t('OR5 un nombre de herramienta nunca llega a la secretaria como motivo', p5.fija === 'derivar' && !/gestionar_turno/.test(p5.motivo), p5);
+  const p6 = O.despachar(orq([{ a: 'derivar_secretaria', cita: 'quiero un turno', motivo: 'sacar turno' }]), {});
+  t('OR6 sin paso de Turnos la derivación no se toca (la red es solo para el pedido duplicado)', p6.fija === 'derivar' && p6.motivo === 'sacar turno', p6);
+  // componer: read-back + derivación legítima → "Lo demás…" y la pregunta al final
+  const c7 = O.componer(base({ plan: p2, prop: PROP, res: { turnos: T_RB }, reunion: { derivar: true }, derivar_res: { ok: true, texto_para_el_paciente: Clin.TEXTOS.DERIVA } }));
+  t('OR7 read-back + derivación: "Lo demás se lo paso a la secretaria…" ANTES y el "¿Procedo?" al final; nunca "Le paso con la secretaria"', c7.texto.includes(O.TEXTOS.DERIVA_RESTO) && !c7.texto.includes(Clin.TEXTOS.DERIVA) && c7.texto.endsWith(RB), c7.texto);
+  // contexto del orquestador: solo hechos (sin herramientas); el de los agentes, idéntico a antes
+  const HER = /gestionar_turno|elegir_ficha|confirmar_turno|buscar_horarios/;
+  const nuevo = { ok: false, motivo: 'sin_ficha' };
+  t('OR8 paciente nuevo: el orquestador ve el hecho sin "pasalos a gestionar_turno"; el agente lo sigue viendo', !HER.test(H.identidad(nuevo, true)) && H.identidad(nuevo, true).startsWith('Paciente NUEVO') && /gestionar_turno/.test(H.identidad(nuevo)), [H.identidad(nuevo, true), H.identidad(nuevo)]);
+  const fam = (extra) => ({ ok: true, varias_fichas: true, pacientes: ['Ana', 'Beto'], turnos: ['martes 24/11 a las 10:00 (Ana)'], turnos_menos_48h: ['martes 24/11 a las 10:00 (Ana)'], ...extra });
+  for (const [n, id] of [['un dueño', fam({})], ['sin elegir', fam({ turnos: [], turnos_menos_48h: [] })], ['elegida', fam({ ficha_elegida: true, paciente_elegido: 'Ana' })]]) {
+    t(`OR9 varias fichas (${n}): el orquestador ve los datos SIN herramientas`, !HER.test(H.identidad(id, true)) && H.identidad(id, true).includes('Pacientes con este celular: Ana, Beto'), H.identidad(id, true));
+    t(`OR9b varias fichas (${n}): sin soloHechos es IDÉNTICO a antes (mismo texto que identidad(x))`, H.identidad(id) === H.identidad(id, false) && H.identidad(id) === H.identidad(id, undefined));
+  }
+  const msj = H.mensajeAgente(['PACIENTE: hola'], 'quiero turno', 'jueves 2026-11-19 10:31', ['martes 24/11 10:00'], 'Ana', nuevo, { solo_hechos: true, conversacion_nueva: false });
+  const msjA = H.mensajeAgente(['PACIENTE: hola'], 'quiero turno', 'jueves 2026-11-19 10:31', ['martes 24/11 10:00'], 'Ana', nuevo, { conversacion_nueva: false });
+  t('OR10 mensaje del orquestador: ninguna herramienta en todo el contexto (datos, recordatorios)', !HER.test(msj) && msj.includes('RECORDATORIOS YA ENVIADOS (sin respuesta): martes 24/11 10:00') && msj.includes('MENSAJE ACTUAL DEL PACIENTE:\nquiero turno'), msj);
+  t('OR10b mensaje de los agentes: igual que antes (con confirmar_turno y gestionar_turno)', /confirmar_turno/.test(msjA) && /gestionar_turno/.test(msjA));
+}
 
 console.log(`\n${total - fallas}/${total} ${fallas ? 'FALLAS: ' + fallas : 'TODO OK'}`);
 process.exit(fallas ? 1 : 0);
