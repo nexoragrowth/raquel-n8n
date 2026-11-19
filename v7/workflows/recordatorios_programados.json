@@ -1,0 +1,580 @@
+{
+ "name": "Recordatorios programados (panel)",
+ "nodes": [
+  {
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "cronExpression",
+       "expression": "*/2 * * * *"
+      }
+     ]
+    }
+   },
+   "id": "947d488c-a5b3-4dee-aa72-dc9df8b9c2fa",
+   "name": "Cada 2 minutos",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "update public.recordatorios_programados set\n  estado = case when estado = 'enviando' then 'error' else 'vencido' end,\n  resultado = coalesce(resultado, '{}'::jsonb) || jsonb_build_object('motivo', case when estado = 'enviando' then 'se cortó a mitad del envío: revisar' else 'no se mandó a tiempo' end)\nwhere (estado = 'pendiente' and (fecha_turno <= (now() at time zone 'America/Argentina/Jujuy')::date or enviar_el < now() - interval '12 hours'))\n   or (estado = 'enviando' and ejecutado_at < now() - interval '30 minutes')\nreturning id",
+    "options": {}
+   },
+   "id": "64c8813f-060a-48f0-a893-d8b830e3aa3a",
+   "name": "Vencer viejos",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    220,
+    0
+   ],
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "alwaysOutputData": true,
+   "executeOnce": true
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "with c as (\n  select id from public.recordatorios_programados\n  where estado = 'pendiente' and enviar_el <= now()\n  order by enviar_el, id\n  for update skip locked\n  limit 1\n)\nupdate public.recordatorios_programados p set estado = 'enviando', ejecutado_at = now()\nfrom c where p.id = c.id\nreturning p.id, to_char(p.fecha_turno, 'YYYY-MM-DD') as fecha_turno, p.no_repetir",
+    "options": {}
+   },
+   "id": "40a06469-876c-4ea1-9ea5-d8f65dca9775",
+   "name": "Tomar uno",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    440,
+    0
+   ],
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "alwaysOutputData": true,
+   "executeOnce": true
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict"
+     },
+     "conditions": [
+      {
+       "id": "30281267-d14b-4a10-a6f7-cb28eb1b9e5e",
+       "leftValue": "={{ Number($json.id) > 0 }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "339b4c3e-3d39-49d8-b879-0ec1d05f69ea",
+   "name": "¿Hay uno?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    660,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "select to_jsonb(c) as cfg from public.recordatorios_config c where id = 1",
+    "options": {}
+   },
+   "id": "36450719-bee7-4614-89c2-10e016ff827b",
+   "name": "Config",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    880,
+    0
+   ],
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "alwaysOutputData": true,
+   "executeOnce": true
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "select count(*)::int as ya from public.recordatorios_enviados where fecha_turno = $1::date",
+    "options": {
+     "queryReplacement": "={{ [$('Tomar uno').first().json.fecha_turno] }}"
+    }
+   },
+   "id": "238553cd-3930-4fed-8918-28e4561769a0",
+   "name": "Ya enviados",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    1100,
+    0
+   ],
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "alwaysOutputData": true,
+   "executeOnce": true
+  },
+  {
+   "parameters": {
+    "method": "GET",
+    "url": "={{ 'https://api.dentalink.healthatom.com/api/v1/sucursales/1/citas' }}",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "options": {
+     "timeout": 8000
+    },
+    "sendQuery": true,
+    "queryParameters": {
+     "parameters": [
+      {
+       "name": "q",
+       "value": "={{ JSON.stringify({ fecha: { eq: $('Tomar uno').first().json.fecha_turno }, id_estado: { neq: 1 } }) }}"
+      }
+     ]
+    }
+   },
+   "id": "ead71e76-1c9d-4450-87be-ca06df7c24b9",
+   "name": "Citas del día",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1320,
+    0
+   ],
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "TwN6eBWsydjMdsCM",
+     "name": "Header Auth account 3"
+    }
+   },
+   "alwaysOutputData": true,
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "// recordatorios/programados.js — lógica PURA del workflow \"Recordatorios programados\" (n8n). Se inlinea en sus nodos Code.\n// Mismas reglas que el envío del 19/11 a las 08:01 (workflow de un solo uso, verificado en vivo): contar lo esperado con el filtro del workflow de avisos,\n// no disparar si ya hay avisos de esa fecha, verificar después y suspender la corrida automática SOLO si salieron todos.\nconst ProgramadosCore = (() => {\n  const ISO = /^\\d{4}-\\d{2}-\\d{2}$/;\n  const sumar = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };\n  const finde = (iso) => { const w = new Date(iso + 'T12:00:00Z').getUTCDay(); return w === 0 || w === 6; };\n\n  // Citas de Dentalink de ESA fecha → cuántas recibirían el aviso (mismo filtro que \"Solo citas activas\": no anuladas, ni 18, ni 14).\n  function esperado(respuestaDentalink) {\n    const r = respuestaDentalink || {};\n    const data = Array.isArray(r.data) ? r.data : null;\n    if (data === null) return { ok: false, motivo: 'Dentalink no devolvió datos' };\n    const hayMas = !!(r.links && !Array.isArray(r.links) && r.links.next);\n    const n = data.filter((c) => Number(c.estado_anulacion || 0) !== 1 && ![18, 14].includes(Number(c.id_estado || 0))).length;\n    return { ok: !hayMas, esperado: n, hay_mas: hayMas, motivo: hayMas ? 'hay más de una página de citas' : 'ok' };\n  }\n\n  // ¿Se dispara? Solo si no había avisos de esa fecha (si alguien ya lo mandó, no se repite) y hay algo para mandar.\n  function decidir(ya, est) {\n    if (!est || est.ok !== true) return { disparar: false, motivo: (est && est.motivo) || 'no se pudo contar' };\n    if (Number(ya) > 0) return { disparar: false, motivo: 'ya había avisos enviados para esa fecha' };\n    if (est.esperado === 0) return { disparar: false, motivo: 'no hay turnos para avisar' };\n    return { disparar: true, motivo: 'ok' };\n  }\n\n  // Día de la corrida AUTOMÁTICA que avisa esa fecha: el día hábil 2 lugares antes (lunes a viernes, salteando los días cerrados).\n  // Idéntico a recordatorios/fecha_manana.js y al panel (lib/recordatorios/dias-sin-atencion.ts: diaDeEnvio).\n  function diaDeCorrida(fechaTurno, cerrados) {\n    const c = new Set((cerrados || []).map((d) => String(d).slice(0, 10)));\n    const habil = (d) => !finde(d) && !c.has(d);\n    if (!ISO.test(String(fechaTurno)) || !habil(fechaTurno)) return null;\n    let d = fechaTurno;\n    for (let n = 0; n < 2; ) { d = sumar(d, -1); if (habil(d)) n++; }\n    return d;\n  }\n\n  // Después del envío: salió todo si se registraron al menos tantos avisos como se esperaban. Solo así se suspende la corrida automática,\n  // y solo si esa corrida todavía no pasó (hoyJujuy, horaJujuy, horaEnvio).\n  function cerrar({ ya, est, enviados, disparado, noRepetir, fechaTurno, cerrados, hoy, hora, horaEnvio }) {\n    const e = est && est.ok === true ? Number(est.esperado) || 0 : 0;\n    let estado; let salioTodo;\n    if (disparado) { salioTodo = e > 0 && Number(enviados) >= e; estado = salioTodo ? 'enviado' : 'error'; }\n    else if (Number(ya) > 0) { salioTodo = true; estado = 'enviado'; }            // ya estaba mandado por otra vía: no se repite\n    else if (est && est.ok === true && e === 0) { salioTodo = false; estado = 'enviado'; }   // no había nada para mandar\n    else { salioTodo = false; estado = 'error'; }\n    const corrida = diaDeCorrida(fechaTurno, cerrados);\n    const corridaPendiente = !!corrida && (corrida > hoy || (corrida === hoy && Number(hora) < Number(horaEnvio)));\n    const suspender = noRepetir === true && salioTodo && corridaPendiente ? corrida : null;\n    return { estado, suspender, resultado: { esperado: e, enviados: Number(enviados) || 0, ya: Number(ya) || 0, disparado: !!disparado, corrida, suspendido: suspender, salio_todo: salioTodo, motivo: (est && est.motivo) || '' } };\n  }\n\n  return { esperado, decidir, diaDeCorrida, cerrar };\n})();\nif (typeof module !== 'undefined') module.exports = ProgramadosCore;\nconst ya = Number($('Ya enviados').first().json.ya || 0);\nconst est = ProgramadosCore.esperado($('Citas del día').first().json);\nreturn [{ json: { ...ProgramadosCore.decidir(ya, est), ya, est } }];"
+   },
+   "id": "59abeb49-64ff-4547-8150-42ed0166640b",
+   "name": "Decidir",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1540,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict"
+     },
+     "conditions": [
+      {
+       "id": "dbf80815-50ec-4a4b-9542-42cade10ccf5",
+       "leftValue": "={{ $json.disparar === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "3020a790-a1ae-4055-818b-cd3239f586a0",
+   "name": "¿Disparar?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    1760,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://n8n.raquelrodriguez.com.ar/webhook/trigger-recordatorios-manual",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ fecha_target: $('Tomar uno').first().json.fecha_turno }) }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "id": "cc83cc40-b11c-4412-b9a3-5f97cac1fca1",
+   "name": "Disparar avisos",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1980,
+    -120
+   ],
+   "alwaysOutputData": true,
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "resume": "timeInterval",
+    "amount": 90,
+    "unit": "seconds"
+   },
+   "id": "b62eefdc-b0e3-4041-b5ce-0c02c89f6675",
+   "name": "Esperar",
+   "type": "n8n-nodes-base.wait",
+   "typeVersion": 1.1,
+   "position": [
+    2200,
+    -120
+   ],
+   "webhookId": "09d730648741c564"
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "select count(*)::int as enviados from public.recordatorios_enviados where fecha_turno = $1::date",
+    "options": {
+     "queryReplacement": "={{ [$('Tomar uno').first().json.fecha_turno] }}"
+    }
+   },
+   "id": "ecc8fe37-cca2-4d11-bbe9-05abe82a9505",
+   "name": "Verificar",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    2420,
+    0
+   ],
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "alwaysOutputData": true,
+   "executeOnce": true
+  },
+  {
+   "parameters": {
+    "jsCode": "// recordatorios/programados.js — lógica PURA del workflow \"Recordatorios programados\" (n8n). Se inlinea en sus nodos Code.\n// Mismas reglas que el envío del 19/11 a las 08:01 (workflow de un solo uso, verificado en vivo): contar lo esperado con el filtro del workflow de avisos,\n// no disparar si ya hay avisos de esa fecha, verificar después y suspender la corrida automática SOLO si salieron todos.\nconst ProgramadosCore = (() => {\n  const ISO = /^\\d{4}-\\d{2}-\\d{2}$/;\n  const sumar = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };\n  const finde = (iso) => { const w = new Date(iso + 'T12:00:00Z').getUTCDay(); return w === 0 || w === 6; };\n\n  // Citas de Dentalink de ESA fecha → cuántas recibirían el aviso (mismo filtro que \"Solo citas activas\": no anuladas, ni 18, ni 14).\n  function esperado(respuestaDentalink) {\n    const r = respuestaDentalink || {};\n    const data = Array.isArray(r.data) ? r.data : null;\n    if (data === null) return { ok: false, motivo: 'Dentalink no devolvió datos' };\n    const hayMas = !!(r.links && !Array.isArray(r.links) && r.links.next);\n    const n = data.filter((c) => Number(c.estado_anulacion || 0) !== 1 && ![18, 14].includes(Number(c.id_estado || 0))).length;\n    return { ok: !hayMas, esperado: n, hay_mas: hayMas, motivo: hayMas ? 'hay más de una página de citas' : 'ok' };\n  }\n\n  // ¿Se dispara? Solo si no había avisos de esa fecha (si alguien ya lo mandó, no se repite) y hay algo para mandar.\n  function decidir(ya, est) {\n    if (!est || est.ok !== true) return { disparar: false, motivo: (est && est.motivo) || 'no se pudo contar' };\n    if (Number(ya) > 0) return { disparar: false, motivo: 'ya había avisos enviados para esa fecha' };\n    if (est.esperado === 0) return { disparar: false, motivo: 'no hay turnos para avisar' };\n    return { disparar: true, motivo: 'ok' };\n  }\n\n  // Día de la corrida AUTOMÁTICA que avisa esa fecha: el día hábil 2 lugares antes (lunes a viernes, salteando los días cerrados).\n  // Idéntico a recordatorios/fecha_manana.js y al panel (lib/recordatorios/dias-sin-atencion.ts: diaDeEnvio).\n  function diaDeCorrida(fechaTurno, cerrados) {\n    const c = new Set((cerrados || []).map((d) => String(d).slice(0, 10)));\n    const habil = (d) => !finde(d) && !c.has(d);\n    if (!ISO.test(String(fechaTurno)) || !habil(fechaTurno)) return null;\n    let d = fechaTurno;\n    for (let n = 0; n < 2; ) { d = sumar(d, -1); if (habil(d)) n++; }\n    return d;\n  }\n\n  // Después del envío: salió todo si se registraron al menos tantos avisos como se esperaban. Solo así se suspende la corrida automática,\n  // y solo si esa corrida todavía no pasó (hoyJujuy, horaJujuy, horaEnvio).\n  function cerrar({ ya, est, enviados, disparado, noRepetir, fechaTurno, cerrados, hoy, hora, horaEnvio }) {\n    const e = est && est.ok === true ? Number(est.esperado) || 0 : 0;\n    let estado; let salioTodo;\n    if (disparado) { salioTodo = e > 0 && Number(enviados) >= e; estado = salioTodo ? 'enviado' : 'error'; }\n    else if (Number(ya) > 0) { salioTodo = true; estado = 'enviado'; }            // ya estaba mandado por otra vía: no se repite\n    else if (est && est.ok === true && e === 0) { salioTodo = false; estado = 'enviado'; }   // no había nada para mandar\n    else { salioTodo = false; estado = 'error'; }\n    const corrida = diaDeCorrida(fechaTurno, cerrados);\n    const corridaPendiente = !!corrida && (corrida > hoy || (corrida === hoy && Number(hora) < Number(horaEnvio)));\n    const suspender = noRepetir === true && salioTodo && corridaPendiente ? corrida : null;\n    return { estado, suspender, resultado: { esperado: e, enviados: Number(enviados) || 0, ya: Number(ya) || 0, disparado: !!disparado, corrida, suspendido: suspender, salio_todo: salioTodo, motivo: (est && est.motivo) || '' } };\n  }\n\n  return { esperado, decidir, diaDeCorrida, cerrar };\n})();\nif (typeof module !== 'undefined') module.exports = ProgramadosCore;\nconst fila = $('Tomar uno').first().json;\nconst d = $('Decidir').first().json;\nconst enviados = Number($('Verificar').first().json.enviados || 0);\nconst cfg = ($('Config').first().json || {}).cfg || {};\nconst ahora = new Date(Date.now() - 3 * 3600 * 1000);\nconst r = ProgramadosCore.cerrar({ ya: d.ya, est: d.est, enviados, disparado: d.disparar === true, noRepetir: fila.no_repetir === true,\n  fechaTurno: fila.fecha_turno, cerrados: Array.isArray(cfg.dias_cerrados) ? cfg.dias_cerrados : [], hoy: ahora.toISOString().slice(0, 10),\n  hora: ahora.getUTCHours(), horaEnvio: Number(cfg.hora_envio || 8) });\nreturn [{ json: { id: fila.id, ...r } }];"
+   },
+   "id": "a1c4e273-22e2-485a-b01d-96644082ade7",
+   "name": "Cerrar",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2640,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict"
+     },
+     "conditions": [
+      {
+       "id": "135dcfd4-bae0-4b0f-88f0-d70f0e1cbad1",
+       "leftValue": "={{ !!$json.suspender }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "02f09004-884b-461f-bb51-729ddc79123f",
+   "name": "¿Suspender?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    2860,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "update public.recordatorios_config set dias_suspendidos = (select coalesce(array_agg(distinct d order by d), '{}'::date[]) from unnest(coalesce(dias_suspendidos, '{}'::date[]) || array[$1::date]) as d), updated_at = now(), updated_by = 'programado-panel' where id = 1 returning dias_suspendidos",
+    "options": {
+     "queryReplacement": "={{ [$json.suspender] }}"
+    }
+   },
+   "id": "f581f44d-a00c-4a83-b6b5-e72c75bcaab5",
+   "name": "Suspender corrida",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    3080,
+    -120
+   ],
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "alwaysOutputData": true,
+   "executeOnce": true
+  },
+  {
+   "parameters": {
+    "operation": "executeQuery",
+    "query": "update public.recordatorios_programados set estado = $1, resultado = $2::jsonb where id = $3::bigint returning id, estado",
+    "options": {
+     "queryReplacement": "={{ [$('Cerrar').first().json.estado, JSON.stringify($('Cerrar').first().json.resultado), $('Cerrar').first().json.id] }}"
+    }
+   },
+   "id": "61b3e122-3056-467e-adba-d9a3bef6fa5d",
+   "name": "Guardar resultado",
+   "type": "n8n-nodes-base.postgres",
+   "typeVersion": 2.5,
+   "position": [
+    3300,
+    0
+   ],
+   "credentials": {
+    "postgres": {
+     "id": "TpYhZX4UT61xAKSV",
+     "name": "Postgres Supabase Nexora v3"
+    }
+   },
+   "alwaysOutputData": true,
+   "executeOnce": true
+  }
+ ],
+ "connections": {
+  "Cada 2 minutos": {
+   "main": [
+    [
+     {
+      "node": "Vencer viejos",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Vencer viejos": {
+   "main": [
+    [
+     {
+      "node": "Tomar uno",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Tomar uno": {
+   "main": [
+    [
+     {
+      "node": "¿Hay uno?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "¿Hay uno?": {
+   "main": [
+    [
+     {
+      "node": "Config",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Config": {
+   "main": [
+    [
+     {
+      "node": "Ya enviados",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Ya enviados": {
+   "main": [
+    [
+     {
+      "node": "Citas del día",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Citas del día": {
+   "main": [
+    [
+     {
+      "node": "Decidir",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Decidir": {
+   "main": [
+    [
+     {
+      "node": "¿Disparar?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "¿Disparar?": {
+   "main": [
+    [
+     {
+      "node": "Disparar avisos",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Verificar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Disparar avisos": {
+   "main": [
+    [
+     {
+      "node": "Esperar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Esperar": {
+   "main": [
+    [
+     {
+      "node": "Verificar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Verificar": {
+   "main": [
+    [
+     {
+      "node": "Cerrar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Cerrar": {
+   "main": [
+    [
+     {
+      "node": "¿Suspender?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "¿Suspender?": {
+   "main": [
+    [
+     {
+      "node": "Suspender corrida",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Guardar resultado",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Suspender corrida": {
+   "main": [
+    [
+     {
+      "node": "Guardar resultado",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "timezone": "America/Argentina/Jujuy",
+  "errorWorkflow": "yop6TIVoKiWUxfEn"
+ },
+ "staticData": null
+}
