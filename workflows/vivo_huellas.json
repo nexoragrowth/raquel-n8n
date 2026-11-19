@@ -105,11 +105,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "DhuxFBF6vrzDrkBK": {
-  "commit": "05fa46a",
-  "fecha": "2026-11-19T02:51:58-03:00",
-  "huella": "e6ebe0bdfad519f238a0",
+  "commit": "fcd93c6",
+  "fecha": "2026-11-19T11:15:44-03:00",
+  "huella": "d0be13b90d4dc297bac2",
   "nombre": "v7 Agente Informacion",
-  "script": "apply_confirmar_sin_pedido.py"
+  "script": "apply_orquestador_contexto.py"
  },
  "E4GMd7K1It0iPHVD": {
   "commit": "5ac9ae3",
@@ -224,11 +224,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "NBHzj8ar2XuSvyIY": {
-  "commit": "05fa46a",
-  "fecha": "2026-11-19T02:52:03-03:00",
-  "huella": "f55c34c202c45bc393e0",
+  "commit": "fcd93c6",
+  "fecha": "2026-11-19T11:15:48-03:00",
+  "huella": "f307cfbb2b523d5cb7d4",
   "nombre": "v7 Cerebro",
-  "script": "apply_confirmar_sin_pedido.py"
+  "script": "apply_orquestador_contexto.py"
  },
  "NDwKeIgcZtFt736Q": {
   "commit": "5ac9ae3",
@@ -259,11 +259,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "S3DgPOyHg77M6SHQ": {
-  "commit": "05fa46a",
-  "fecha": "2026-11-19T02:51:55-03:00",
-  "huella": "f8ae1bd96e79929787b1",
+  "commit": "fcd93c6",
+  "fecha": "2026-11-19T11:15:41-03:00",
+  "huella": "ea4beaf9b5b499d42c1d",
   "nombre": "v7 Agente Turnos",
-  "script": "apply_confirmar_sin_pedido.py"
+  "script": "apply_orquestador_contexto.py"
  },
  "S5U6tSipzlgFHCkf": {
   "commit": "5ac9ae3",
@@ -462,11 +462,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "mPISHj9allybzwoV": {
-  "commit": "05fa46a",
-  "fecha": "2026-11-19T02:52:08-03:00",
-  "huella": "a2ebef53ea273deecab3",
+  "commit": "fcd93c6",
+  "fecha": "2026-11-19T11:15:53-03:00",
+  "huella": "9f0868edb224a1fe2fad",
   "nombre": "v7 Panel - probar Información",
-  "script": "apply_confirmar_sin_pedido.py"
+  "script": "apply_orquestador_contexto.py"
  },
  "moIPDqrnY0SPIve9": {
   "commit": "5ac9ae3",
@@ -474,6 +474,13 @@
   "huella": "d2710e8bdff550ea7ea5",
   "nombre": "v7 Cerebro (minimal)",
   "script": "guarda_vivo.py --aceptar"
+ },
+ "nLF8NI6viUdzD0CH": {
+  "commit": "48067a7",
+  "fecha": "2026-11-19T03:51:43-03:00",
+  "huella": "ef477d41b63762b96028",
+  "nombre": "Aviso martes 24/11 (programado 19/11 08:01, un solo uso)",
+  "script": "prog_aviso_martes.py"
  },
  "oTsmB6IfCtelz6KL": {
   "commit": "5ac9ae3",
@@ -525,11 +532,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "u4IZcQtdnfcQPCs8": {
-  "commit": "05fa46a",
-  "fecha": "2026-11-19T02:50:25-03:00",
+  "commit": "3a80945",
+  "fecha": "2026-11-19T11:07:37-03:00",
   "huella": "a5b9f07e99003c6eea9d",
   "nombre": "v7 Test (sombra)",
-  "script": "replay_confirmar.py"
+  "script": "prueba_orq_clon.py"
  },
  "v6y5It2T4AwPUwQp": {
   "commit": "5ac9ae3",
@@ -581,18 +588,18 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "y8wIF1rR87bAAvYU": {
-  "commit": "05fa46a",
-  "fecha": "2026-11-19T02:52:06-03:00",
-  "huella": "36357533753ef8e62b0d",
+  "commit": "fcd93c6",
+  "fecha": "2026-11-19T11:15:51-03:00",
+  "huella": "48277c05d55d63a12a59",
   "nombre": "v7 Cerebro Agente",
-  "script": "apply_confirmar_sin_pedido.py"
+  "script": "apply_orquestador_contexto.py"
  },
  "yjMpDQ3UH1tsZdDe": {
-  "commit": "05fa46a",
-  "fecha": "2026-11-19T02:51:57-03:00",
-  "huella": "07b6bc36ce571b4af7bc",
+  "commit": "fcd93c6",
+  "fecha": "2026-11-19T11:15:42-03:00",
+  "huella": "dee446b2d4d07d1ebcd0",
   "nombre": "v7 Agente Pagos",
-  "script": "apply_confirmar_sin_pedido.py"
+  "script": "apply_orquestador_contexto.py"
  },
  "yop6TIVoKiWUxfEn": {
   "commit": "5ac9ae3",
@@ -602,11 +609,11 @@
   "script": "guarda_vivo.py --aceptar"
  },
  "yrCuq7hj04ox3sad": {
-  "commit": "05fa46a",
-  "fecha": "2026-11-19T02:52:00-03:00",
-  "huella": "5f3a27721d4f0b8750a0",
+  "commit": "fcd93c6",
+  "fecha": "2026-11-19T11:15:45-03:00",
+  "huella": "13647b61596285dcb88a",
   "nombre": "v7 Agente Urgencias",
-  "script": "apply_confirmar_sin_pedido.py"
+  "script": "apply_orquestador_contexto.py"
  },
  "zFtNDRUlN8n2Na71": {
   "commit": "5ac9ae3",
