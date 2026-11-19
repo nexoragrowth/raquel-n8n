@@ -1,7 +1,7 @@
 # Propuesta: Asistente de configuración para la clínica (chat de IA en el panel) + "Días sin atención"
 
-Versión 2 · 19/11/2026 (ampliada por pedido de Lucas: autónomo, conversacional de punta a punta, precios con propagación, experiencia premium) · Para decidir: Lucas · Estado: **propuesta, nada de esto está desplegado**.
-Pendiente de integrar: el análisis de plataforma, costos y diseños alternativos que está corriendo en segundo plano (secciones 7.3, 8 y 10 se ajustan con sus números).
+Versión 3 · 19/11/2026 (v2: ampliada por pedido de Lucas; v3: ajustada con el análisis de 18 agentes, sección 13) · Para decidir: Lucas · Estado: **propuesta, nada de esto está desplegado**.
+El análisis de plataforma, costos y diseños alternativos terminó: **sección 13** (lo que cambia respecto de las secciones anteriores).
 
 ---
 
@@ -299,3 +299,59 @@ Pendientes de seguridad que **no** son de esta propuesta pero conviene no olvida
 - **Bot (subido a GitHub, SIN desplegar):** `recordatorios/fecha_manana.js` y `recordatorios/gate_dias_cerrados.sql` (base: el Gate vivo de hoy), con copias congeladas del código vivo y `tests/test_recordatorios_dias_cerrados.js` (27/27).
 - **Panel (en la compu, sin commitear, SIN desplegar):** `lib/recordatorios/dias-sin-atencion.ts` (lógica pura), `tests/recordatorios-dias.test.mjs` (8/8, incluye la comparación con el nodo real del bot), acciones `cerrarDiasAction` / `cerrarRangoAction` / `abrirDiaAction` y `adelantarRecordatoriosAction` con "no repetir el aviso" (tipado correcto). **Falta la pantalla**: se pausó hasta aprobar esta propuesta.
 - **Verificado el 19/11:** el panel y el bot calculan lo mismo en más de 600 días comparados; las sugerencias de feriados salen de fuentes oficiales (Resolución 164/2025 y Ley 27.399).
+
+---
+
+## 13. Resultado del análisis (18 agentes: mapa del sistema, historial de fallas, plataforma, 3 diseños y 3 críticas adversariales)
+
+Las cifras salen de agentes que leyeron las notas del proyecto: son **orientativas** (las dos listas de incidentes se pisan en parte y vienen de la etapa de construcción). Los diseños puntuaron así en las críticas (1 a 10): **Guardia 7 / 6,5 / 7**, Producto 6 / 5,5 / 5,5, **Autónomo 4 / 3,5 / 3,5**.
+
+### 13.1 Lo que dicen los datos
+
+- Se revisaron unos 67 incidentes (con duplicados entre las dos listas). **44 se arreglaron cambiando código**, 5 con prompts y solo ~9 con datos o configuración. Conclusión: **el chat de configuración (nivel 1) no reduce las fallas; reduce los pedidos a Lucas**. Son dos beneficios distintos y conviene no confundirlos.
+- **Alrededor de la mitad (35) los causó un cambio o una prueba hecha por una IA.** Por eso un agente que despliega solo es justo la tubería que más daño hizo.
+- **Solo 1 de 67 lo detectó una alerta automática**; 33 los encontró una auditoría de Claude, 15 Lucas mirando y 10 un aviso de la clínica. Hoy la detección depende de una persona preguntando "¿estuvo todo bien?".
+- Un agente con frenos y pruebas podría arreglar ~49 de 67, pero **en todos esos casos quien despliega es una persona**; 28 requirieron una decisión de Lucas.
+- Lo que hoy frena los errores de una IA (el clasificador de permisos de la sesión y tu "desplegá") **no viaja al sistema**: cualquier agente embebido tiene que traer frenos propios.
+
+### 13.2 Veredicto de las tres críticas
+
+Las tres lentes (paciente y ataque, operación después de febrero, factibilidad) coinciden:
+1. **Construir el nivel 1 ya**, con la base del diseño "Guardia": chat que solo propone, la persona confirma, el servidor ejecuta.
+2. **Nada de despliegue automático** de código, prompts o workflows. El agente **detecta, investiga y deja un borrador**; despliega una persona técnica o el código se congela.
+3. **La detección va afuera del VPS** (cuando el VPS cae, cae junto con lo que lo vigila: pasó del 16 al 19/10 y del 09 al 11/11), con solo lectura y alertas por **dos canales**.
+4. El diseño "Autónomo" **no se construye** (despliega solo justo lo "invisible", que es lo que más daño silencioso hizo).
+
+### 13.3 Qué cambia en la propuesta
+
+| Cambio | Por qué |
+|---|---|
+| **Fase 0b, prerrequisitos de seguridad, antes de dar poder al chat:** repo del bot privado, historial purgado y claves rotadas (SEG-02, 03, 16); **secreto en el webhook de "adelantar"** (hoy cualquiera con la dirección puede disparar el envío de avisos); límite de intentos y revocación de sesión del panel | El chat vive en el proceso del panel, que tiene todas las llaves; una sesión robada dura 7 días y no tiene límite de intentos |
+| **El chat nunca manda WhatsApp ni escribe en Dentalink en la v1.** "Adelantar" queda fuera del chat hasta tener secreto, cantidad en la vista previa y "no repetir" | Es la única acción irreversible y la única con efecto directo en pacientes |
+| **Validador de frases peligrosas en TODO texto que llega al paciente** (mensajes fijos y conocimiento, no solo "directrices"); alias, CBU, dirección, horarios y precio con demora y aviso previo | Hoy el control solo existe en directrices y cubre unas 15 expresiones; "vengan sin turno" no se frenaría |
+| **Interruptor del bot: probar de punta a punta qué apaga cada palanca** (el `/bot off` por WhatsApp y el interruptor del panel son cosas distintas) antes de que una tarjeta diga qué queda funcionando; nunca afirmar "no apaga el triaje de urgencias" sin esa prueba | Una tarjeta que miente sobre un riesgo del paciente es peor que no tenerla |
+| **Medir el uso antes de construir todo:** la memoria dice que la clínica no usa el panel y que la bandeja de Atención está sin uso. Primer paso de 2 semanas: Días sin atención de punta a punta + un chat mínimo de lectura con 3 propuestas (cerrar, abrir, suspender) + bitácora de pedidos reales. Si no lo usan, el canal es **WhatsApp con comandos fijos** (`/cerrar 23/11`, `/estado`, como el `/bot off` que ya usan) | Es la suposición más débil del proyecto: que alguien lo use |
+| **Nivel 2 = guardia de detección, no reparación:** detectores por código con prueba contra datos reales y 14 días en modo informe; después un investigador de solo lectura sobre datos estructurados (sin texto de pacientes mientras no haya contrato SEG-17). Detecta invariantes de la agenda, por ejemplo "una cita pasó de Atendido a Confirmado por WhatsApp por escritura del bot" (el caso del 13/11) | Es la forma de ver errores de contenido sin mandar conversaciones a un proveedor |
+| **Después de febrero:** una **persona nombrada, con suplente y tiempo de respuesta**, para las alertas críticas y los arreglos. Si no existe, las alertas dicen "no hay soporte" y qué hacer, y el código queda **congelado**. Cuentas (Anthropic, OpenAI, GitHub, VPS, dominio, Supabase, Dentalink) a nombre de la clínica o de un responsable, con vencimientos calendarizados | Sin esto el nivel 2 no tiene a quién avisarle |
+| Costo de modelo: **unos US$13 a 30 por mes** (estimado, sin medir; hasta US$100 a 170 con uso intenso), con tope duro. **Lo caro son las horas humanas**, no los tokens | Se mide desde la primera semana con el campo de uso |
+| Reventa: el nivel 1 sí, a mediano plazo; el panel hoy es de una sola clínica y no entra en las semanas que quedan. Los términos de Anthropic parecen no permitir cobrar el uso del modelo por cuenta de terceros: se vendería un servicio con tope (verificar antes de prometer precio) | Evita comprometer algo que no se puede cumplir |
+
+### 13.4 La comparación que faltaba: no construir nada
+
+Alternativa base para febrero: **congelar la lógica del bot**, dejar los monitores y contratar un técnico por horas con el mismo flujo local de hoy. Es mucho más simple y elimina la fuente de la mitad de los incidentes (cambios de IA). Lo que no resuelve: que la clínica no puede configurar nada sola (feriados, textos, precio). Por eso el **nivel 1 sigue valiendo la pena** aunque el nivel 2 se descarte.
+
+### 13.5 Primer paso recomendado (2 semanas)
+
+1. **Días 1 a 3:** verificar la versión de n8n; migración idempotente de `dias_cerrados`; una sola versión del Gate; subir lo que está sin subir.
+2. **Días 4 a 7:** desplegar la columna y los dos nodos de Recordatorios con los frenos de siempre, y después la pantalla Días sin atención con los feriados 2026–2027 precargados, el efecto escrito y los próximos avisos.
+3. **Días 8 a 12:** chat mínimo `/asistente` con herramientas de lectura y 3 propuestas (cerrar, abrir, suspender); bitácora de pedidos reales.
+4. **Medir:** ¿lo usan? ¿qué piden? Con eso se decide el resto (panel, WhatsApp, o frenar).
+
+### 13.6 Decisiones que se suman
+
+| # | Decisión | Recomendación |
+|---|---|---|
+| D14 | Canal: ¿panel, WhatsApp con comandos, o los dos? | Empezar midiendo con el panel y dejar los comandos de WhatsApp como plan B barato |
+| D15 | ¿Quién atiende alertas y aprueba arreglos técnicos después del 28/02? | Nombrar a una persona con suplente, o congelar el código; sin eso no se construye el nivel 2 |
+| D16 | ¿A nombre de quién quedan las cuentas pagas? | De la clínica o de un responsable, con vencimientos calendarizados |
+| D17 | Prerrequisitos de seguridad (repo privado, claves, secreto del webhook) | Hacerlos antes de exponer poder al chat; son de Lucas por tocar cuentas |
